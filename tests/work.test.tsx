@@ -1555,6 +1555,8 @@ const open = async ($: Parameters<Parameters<typeof test>[1]>[0]) => {
 
 test('helpers: renumbering, sections, references and the exact-duplicate rule', async () => {
   const used = new Set(['t1', 't2'])
+  // A new ID skips the reserved IDs of the files still to come.
+  expect(renumberLines(['- [ ] #T1 A'], new Set(['t1']), new Set(['t2', 't3'])).pairs).toEqual([{ from: 'T1', to: 'T4' }])
   const out = renumberLines(['- [ ] #T1 Docs', '- [x] #T7 Kept', '- [~] No id', '- note, see #T1 and #T7'], used)
   expect(out.lines).toEqual(['- [ ] #T8 Docs', '- [x] #T7 Kept', '- [~] No id', '- note, see #T8 and #T7'])
   expect(applyRenames('#T1 and #T10 and #T3', { t1: 'T3', t3: 'T4' })).toBe('#T3 and #T10 and #T4')

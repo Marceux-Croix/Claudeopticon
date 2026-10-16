@@ -549,9 +549,10 @@ export function applyRefRenames(line: string, renames: Readonly<Record<string, s
  * The lines of one source file with every item ID that `used` has already replaced by the next free
  * ID of its letters (`#T3` when `#T1` and `#T2` are taken), and the references to it in the other
  * lines of the file rewritten the same way. `used` (lowercase IDs) gains each ID the file ends up with.
- * `renames` maps old (lowercase) to new; `pairs` lists them as written, for the toast.
+ * `renames` maps old (lowercase) to new; `pairs` lists them as written, for the toast. A new ID also
+ * skips every ID in `reserved` (lowercase): the IDs of the other files still to come.
  */
-export function renumberLines(lines: readonly string[], used: Set<string>): { lines: string[]; renames: Record<string, string>; pairs: { from: string; to: string }[] } {
+export function renumberLines(lines: readonly string[], used: Set<string>, reserved: ReadonlySet<string> = new Set()): { lines: string[]; renames: Record<string, string>; pairs: { from: string; to: string }[] } {
   const renames: Record<string, string> = {}
   const pairs: { from: string; to: string }[] = []
   // A new number also skips this source's own IDs, so one clash never pushes a later line out.
@@ -562,7 +563,7 @@ export function renumberLines(lines: readonly string[], used: Set<string>): { li
   })
   const nextFree = (letters: string) => {
     let top = 0
-    for (const id of [...used, ...own]) {
+    for (const id of [...used, ...own, ...reserved]) {
       const m = /^([a-z]+)(\d+)$/.exec(id)
       if (m !== null && m[1] === letters.toLowerCase()) {
         top = Math.max(top, Number(m[2]))
@@ -838,8 +839,14 @@ async function consolidate($: EngineInterface): Promise<void> {
     const blocks = new Map<string, { place: string; lines: string[] }[]>()
     const told: string[] = []
     const out = new Map<Job, string[]>()
+    // Every ID of every moved file: a new ID never takes one a later file keeps, so one clash renames one line.
+    const reserved = new Set(jobs.flatMap(job => job.lines.flatMap(line => {
+      const id = CHECKBOX.test(line) ? ITEM_ID.exec(line)?.[1] : undefined
+
+      return id === undefined ? [] : [id.toLowerCase()]
+    })))
     for (const job of jobs) {
-      const fresh = renumberLines(job.lines, used)
+      const fresh = renumberLines(job.lines, used, reserved)
       out.set(job, fresh.lines)
       blocks.set(job.dest, [...(blocks.get(job.dest) ?? []), { place: job.heading, lines: fresh.lines }])
       told.push(...fresh.pairs.map(pair => `- ${job.heading}: #${pair.from} is now #${pair.to}`))

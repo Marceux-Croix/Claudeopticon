@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- Consolidate gives a clashing ticket a new ID that no moved file uses, so one clash renames one ticket and no other.
+
 ## 0.5.1
 
 - A todo file that Consolidate emptied stays in the header, marked Empty, until Delete empty todos removes it. Before, it left the board at once and looked deleted.

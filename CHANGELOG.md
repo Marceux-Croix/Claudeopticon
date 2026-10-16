@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2
+
+- After Delete duplicate todos, the Consolidate todos button no longer comes back for folders that are gone.
+- The board header lists the repo root's files first, and a file's place sits apart from its name.
+
 ## 0.4.1
 
 - The ticket view draws one board for all todo files, under one header card with a row per file (name, bar, own count). Same-named files in different folders stay two files; their rows show the folder.

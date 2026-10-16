@@ -1056,7 +1056,10 @@ async function deleteDuplicates($: EngineInterface): Promise<void> {
         left.push(dup)
       }
     }
+    // A deleted folder also leaves the folder list, so Consolidate does not count it any more.
+    const gone = new Set(dupFolders.filter(one => !left.includes(one)).map(one => one.path))
     dupFolders = left
+    todoFolders = todoFolders?.filter(one => !gone.has(one.path))
     await saveRecord($)
     if (kept.length > 0) {
       $.ui.toast(`Kept: ${kept.join(', ')}`)
@@ -1682,7 +1685,11 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     const openA = a.done < a.total ? 0 : 1
     const openB = b.done < b.total ? 0 : 1
 
-    return linkA - linkB || openA - openB || b.mtimeMs - a.mtimeMs
+    // The repo root's own files first, then the rest.
+    const rootA = (a.place ?? '') === '' ? 0 : 1
+    const rootB = (b.place ?? '') === '' ? 0 : 1
+
+    return rootA - rootB || linkA - linkB || openA - openB || b.mtimeMs - a.mtimeMs
   })
 
   const current = files.filter(file => file.isArchived !== true)

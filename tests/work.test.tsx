@@ -1696,6 +1696,8 @@ test('Delete duplicate todos removes the files, the book and the folders when al
   // The book was merged into the central one before it went.
   expect(Object.keys(files).sort()).toEqual(['/repo/.claude_todo/TODO.md', '/repo/.claude_todo/archive/OLD.md', '/repo/.claude_todo/categories.json'])
   expect(await ui.find({ key: 'todo-delete-duplicates' })).toBeUndefined()
+  // The deleted folders leave the folder list too, so Consolidate does not come back.
+  expect(await ui.find({ key: 'todo-consolidate' })).toBeUndefined()
   expect(store.get('duplicates:/repo')).toEqual([])
 })
 

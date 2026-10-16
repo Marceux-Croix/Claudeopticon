@@ -677,9 +677,10 @@ export function boardHead(files: readonly FileView[]): Card {
     const room = INNER - 70
     const placeText = place === undefined ? undefined : fit(place, Math.floor(room / 2), 12)
     const nameText = fit(file.name, placeText === undefined ? room : room - placeText.length * 12 * 0.52 - 10, 14, 500)
-    const placeX = PAD + nameText.length * 14 * 0.55 + 10
-    const body = `<text x="${PAD}" y="${y}" fill="${LABEL}" font-size="14" font-weight="500">${esc(nameText)}</text>
-${placeText === undefined ? '' : `<text x="${Math.round(placeX)}" y="${y}" fill="${FAINT}" font-size="12">${esc(placeText)}</text>\n`}<text x="${W - PAD}" y="${y}" text-anchor="end" fill="${SUB}" font-size="12">${file.done} of ${file.total}</text>
+    // The place rides in the name's own text, so the gap is the font's, not a width guess.
+    const placeSpan = placeText === undefined ? '' : `<tspan dx="10" fill="${FAINT}" font-size="12" font-weight="400">${esc(placeText)}</tspan>`
+    const body = `<text x="${PAD}" y="${y}" fill="${LABEL}" font-size="14" font-weight="500">${esc(nameText)}${placeSpan}</text>
+<text x="${W - PAD}" y="${y}" text-anchor="end" fill="${SUB}" font-size="12">${file.done} of ${file.total}</text>
 ${strip(PAD, y + 9, INNER, file.done, file.active, file.total)}`
 
     return file.isArchived === true ? `<g opacity=".55">${body}</g>` : body

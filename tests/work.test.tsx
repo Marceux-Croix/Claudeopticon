@@ -1584,13 +1584,13 @@ test('the Todo heading says how many files it pulls from, and Consolidate shows 
   }
 })
 
-test('one folder: the heading counts its files and there is no Consolidate button', async ($, on) => {
+test('one folder: the heading counts its files and Consolidate shows for two files', async ($, on) => {
   mock.clock(on)
   repoWith(on, { '/repo/.claude_todo/A.md': '- [ ] one', '/repo/.claude_todo/B.md': '- [ ] two' }, { hasNearest: true, listed: ['.claude_todo/A.md', '.claude_todo/B.md'] })
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   expect(await ui.find({ type: 'Text', text: /Pulling todo from 2 files/ })).toBeDefined()
-  expect(await ui.find({ key: 'todo-consolidate' })).toBeUndefined()
+  expect(await ui.find({ key: 'todo-consolidate' })).toBeDefined()
 })
 
 test('Consolidate todos merges the folders into the central one, renumbers colliding IDs, leaves the sources alone and hides them', async ($, on) => {
@@ -1610,8 +1610,8 @@ test('Consolidate todos merges the folders into the central one, renumbers colli
   expect(await ui.find({ key: 'ticket-start-TODO.md-mods/x/.claude_todo::#t1' })).toBeDefined()
   const gitBefore = calls.length
   await ui.press({ key: 'todo-consolidate' })
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('# Plan\n- [ ] #T1 Fix the parser\n- [x] #T2 Ship it\n\n## From mods/x\n\n- [ ] #T3 Write the docs\n- [~] No id here\n')
-  expect(files['/repo/.claude_todo/archive/OLD.md']).toBe('## From mods/x\n\n- [x] #T9 Old thing\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('# Plan\n- [ ] #T1 Fix the parser\n- [x] #T2 Ship it\n\n## From mods/x/TODO.md\n\n- [ ] #T3 Write the docs\n- [~] No id here\n')
+  expect(files['/repo/.claude_todo/archive/OLD.md']).toBe('## From mods/x/archive/OLD.md\n\n- [x] #T9 Old thing\n')
   // Each target is written once, and no source is touched.
   expect(writes.sort()).toEqual(['/repo/.claude_todo/TODO.md', '/repo/.claude_todo/archive/OLD.md'])
   expect(files['/repo/mods/x/.claude_todo/TODO.md']).toBe(before['/repo/mods/x/.claude_todo/TODO.md'])
@@ -1630,10 +1630,9 @@ test('Consolidate todos merges the folders into the central one, renumbers colli
 test('Delete duplicate todos removes only verified files, one rm each, keeps a failing file, and the button stays while a file is kept', async ($, on) => {
   mock.clock(on)
   const files: Record<string, string> = {
-    '/repo/.claude_todo/TODO.md': '- [ ] #T1 Fix the parser\n\n## From mods/x\n\n- [ ] #T3 Write the docs\n',
+    '/repo/.claude_todo/TODO.md': '- [ ] #T1 Fix the parser\n\n## From mods/x\n\n- [ ] #T3 Write the docs\n- [ ] Only in the duplicate\n',
     '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T1 Write the docs',
     '/repo/mods/x/.claude_todo/EXTRA.md': '- [ ] Only in the duplicate',
-    '/repo/.claude_todo/EXTRA.md': '- [ ] Only in the duplicate',
     '/repo/mods/x/.claude_todo/categories.json': '{}',
   }
   // EXTRA.md is fully copied, but it is a symlink: it is kept, so the folder stays a duplicate.
@@ -1824,10 +1823,10 @@ test('safety 2: Consolidate copies every non-blank line, and Delete keeps a file
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   await ui.press({ key: 'todo-consolidate' })
-  expect(files['/repo/.claude_todo/TODO.md']).toContain('## From mods/x\n\n# Notes\n- [ ] #T2 Docs\n  indented note\nprose line\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toContain('## From mods/x/TODO.md\n\n# Notes\n- [ ] #T2 Docs\n  indented note\nprose line\n')
   expect(files['/repo/.claude_todo/EMPTY.md']).toBeUndefined()
-  // Delete: the central ONE.md holds the line once, so only one of the two copies may go.
-  files['/repo/.claude_todo/ONE.md'] = '## From a\n\n- [ ] Same twice\n'
+  // Delete: the target holds the line once now, so only one of the two copies may go.
+  files['/repo/.claude_todo/TODO.md'] = files['/repo/.claude_todo/TODO.md']!.replace('- [ ] Same twice\n\n## From mods/z/ONE.md\n\n- [ ] Same twice\n', '- [ ] Same twice\n')
   files['/repo/mods/y/.claude_todo/TODO.md'] = `${files['/repo/mods/y/.claude_todo/TODO.md']}\n- [ ] added later`
   files['/repo/.claude_todo/TODO.md'] = `${files['/repo/.claude_todo/TODO.md']}\n- [ ] #T5 Same line\n`
   await ui.press({ key: 'todo-delete-duplicates' })
@@ -1906,7 +1905,7 @@ test('safety 6: a source whose section is already in the central file is not cop
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   await ui.press({ key: 'todo-consolidate' })
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] one\n\n## From mods/x\n\n- [ ] two\n\n## From mods/y\n\n- [ ] three\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] one\n\n## From mods/x\n\n- [ ] two\n\n## From mods/y/TODO.md\n\n- [ ] three\n')
   expect(writes).toEqual(['/repo/.claude_todo/TODO.md'])
   // Pressing again finds nothing left to copy: the board has one folder and the button is gone.
   expect(await ui.find({ key: 'todo-consolidate' })).toBeUndefined()
@@ -1931,7 +1930,7 @@ test('safety 7: a renumbered ID is rewritten in the same file, listed in the toa
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   await ui.press({ key: 'todo-consolidate' })
   // One clash moves one line: #T1 takes #T3, past the source's own #T2, which keeps its number.
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix\n\n## From mods/x\n\n- [ ] #T3 Docs\n- [ ] #T2 Ship, after #T3\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix\n\n## From mods/x/TODO.md\n\n- [ ] #T3 Docs\n- [ ] #T2 Ship, after #T3\n')
   expect(toasts.join('\n')).toContain('mods/x/TODO.md: #T1 is now #T3')
   expect((store.get('duplicates-meta:/repo') as { renames: Record<string, unknown> }).renames['/repo/mods/x/.claude_todo/TODO.md']).toEqual({ t1: 'T3' })
   const told = JSON.stringify(await $.tool.call({ tool: 'Read', file_path: '/x' } as never))
@@ -1941,8 +1940,7 @@ test('safety 7: a renumbered ID is rewritten in the same file, listed in the toa
 
 test('safety 9: a file that changes after the check is not removed', async ($, on) => {
   mock.clock(on)
-  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] one\n- [ ] two', '/repo/mods/x/.claude_todo/OTHER.md': 'x' }
-  files['/repo/.claude_todo/OTHER.md'] = 'x'
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] one\n- [ ] two' }
   let reads = 0
   Object.defineProperty(files, '/repo/mods/x/.claude_todo/TODO.md', {
     enumerable: true,
@@ -1999,7 +1997,9 @@ const SRC_LIST = ['.claude_todo/TODO.md', 'mods/x/.claude_todo/TODO.md']
 test('final 1: a central file that cannot be read is never written, and the press stops', async ($, on) => {
   mock.clock(on)
   const files = SRC()
-  Object.defineProperty(files, '/repo/.claude_todo/TODO.md', { enumerable: true, configurable: true, get: () => { throw new Error('EIO') } })
+  // The file reads while the board loads, and fails when the press reads it.
+  let isBroken = false
+  Object.defineProperty(files, '/repo/.claude_todo/TODO.md', { enumerable: true, configurable: true, get: () => { if (isBroken) { throw new Error('EIO') } return '- [ ] one' }, set: () => undefined })
   const { writes } = repoWith(on, files, { hasNearest: true, listed: SRC_LIST })
   const store = storeWith(on)
   const toasts: string[] = []
@@ -2010,6 +2010,7 @@ test('final 1: a central file that cannot be read is never written, and the pres
   })
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  isBroken = true
   await ui.press({ key: 'todo-consolidate' })
   expect(writes).toEqual([])
   expect(toasts.join('\n')).toContain('Could not consolidate')
@@ -2061,7 +2062,7 @@ test('final 3: a heading alone does not mean copied: other lines under it are co
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   await ui.press({ key: 'todo-consolidate' })
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] one\n\n## From mods/x\n\n- [ ] an older version\n\n## From mods/x\n\n- [ ] two\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] one\n\n## From mods/x\n\n- [ ] an older version\n\n## From mods/x/TODO.md\n\n- [ ] two\n')
   expect(store.get('duplicates:/repo')).toEqual(['/repo/mods/x/.claude_todo'])
 })
 
@@ -2088,11 +2089,13 @@ test('final 4: Delete needs the exact line after the renames, for item lines too
 test('final 5: a source file that cannot be read is not marked copied, and its folder stays on the board', async ($, on) => {
   mock.clock(on)
   const files = SRC()
-  Object.defineProperty(files, '/repo/mods/x/.claude_todo/TODO.md', { enumerable: true, configurable: true, get: () => { throw new Error('EIO') } })
+  let isBroken = false
+  Object.defineProperty(files, '/repo/mods/x/.claude_todo/TODO.md', { enumerable: true, configurable: true, get: () => { if (isBroken) { throw new Error('EIO') } return '- [ ] two' }, set: () => undefined })
   const { writes } = repoWith(on, files, { hasNearest: true, listed: SRC_LIST })
   const store = storeWith(on)
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  isBroken = true
   await ui.press({ key: 'todo-consolidate' })
   expect(writes).toEqual([])
   expect((store.get('duplicates:/repo') as string[] | undefined) ?? []).toEqual([])
@@ -2137,7 +2140,7 @@ test('round 7a: a recorded duplicate that gains an uncovered line shows again, l
   expect(await ui.find({ key: 'todo-delete-duplicates' })).toBeUndefined()
   await ui.press({ key: 'todo-consolidate' })
   // Only the new line is copied; the old one is not doubled.
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] one\n\n## From mods/x\n\n- [ ] two\n\n## From mods/x\n\n- [ ] three\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] one\n\n## From mods/x/TODO.md\n\n- [ ] two\n\n## From mods/x/TODO.md\n\n- [ ] three\n')
   expect(store.get('duplicates:/repo')).toEqual(['/repo/mods/x/.claude_todo'])
   expect(rmCalls(calls)).toEqual([])
 })
@@ -2169,7 +2172,7 @@ test('round 7b: an identical ticket with another ID is folded: not copied, the I
     '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T4 Fix the parser\n- [ ] #T5 Ship, after #T4',
   }
   const { ui, calls, store, toasts } = await consolidated($, on, files, SRC_LIST)
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix the parser\n\n## From mods/x\n\n- [ ] #T5 Ship, after #T1\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix the parser\n\n## From mods/x/TODO.md\n\n- [ ] #T5 Ship, after #T1\n')
   const meta = store.get('duplicates-meta:/repo') as Meta
   expect(meta.renames['/repo/mods/x/.claude_todo/TODO.md']).toEqual({ t4: 'T1' })
   expect(meta.folds['/repo/mods/x/.claude_todo/TODO.md']).toEqual(['- [ ] #T4 Fix the parser'])
@@ -2185,7 +2188,7 @@ test('round 7c: the same text with another box is copied, not folded', async ($,
     '/repo/mods/x/.claude_todo/TODO.md': '- [x] #T4 Fix the parser',
   }
   const { store } = await consolidated($, on, files, SRC_LIST)
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix the parser\n\n## From mods/x\n\n- [x] #T4 Fix the parser\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix the parser\n\n## From mods/x/TODO.md\n\n- [x] #T4 Fix the parser\n')
   expect((store.get('duplicates-meta:/repo') as Meta).folds['/repo/mods/x/.claude_todo/TODO.md']).toEqual([])
 })
 
@@ -2196,7 +2199,7 @@ test('round 7d: two sources with the same ticket fold into one central line, and
     '/repo/mods/y/.claude_todo/TODO.md': '- [ ] #T2 Same ticket',
   }
   const { ui, calls } = await consolidated($, on, files, [...SRC_LIST, 'mods/y/.claude_todo/TODO.md'])
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T9 Other\n\n## From mods/x\n\n- [ ] #T1 Same ticket\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T9 Other\n\n## From mods/x/TODO.md\n\n- [ ] #T1 Same ticket\n')
   await ui.press({ key: 'todo-delete-duplicates' })
   expect(rmCalls(calls).filter(call => call.startsWith('rm --')).sort()).toEqual(['rm -- /repo/mods/x/.claude_todo/TODO.md', 'rm -- /repo/mods/y/.claude_todo/TODO.md'])
 })
@@ -2207,7 +2210,7 @@ test('round 7e: a ticket one character off is copied', async ($, on) => {
     '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T4 Fix the parsr\n- [ ] #T5 fix the parser',
   }
   await consolidated($, on, files, SRC_LIST)
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix the parser\n\n## From mods/x\n\n- [ ] #T4 Fix the parsr\n- [ ] #T5 fix the parser\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix the parser\n\n## From mods/x/TODO.md\n\n- [ ] #T4 Fix the parsr\n- [ ] #T5 fix the parser\n')
 })
 
 test('review 8a: a skipped write keeps its source off the record, even when the coverage check then fails', async ($, on) => {
@@ -2268,7 +2271,8 @@ test('round 8a: a ticket identical to one in another central file is folded, wit
   expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T6 Update the install guide')
   const meta = store.get('duplicates-meta:/repo') as Meta & { foldTo: Record<string, Record<string, string>> }
   expect(meta.renames['/repo/mods/y/.claude_todo/BACKLOG.md']).toEqual({ t16: 'T6' })
-  expect(meta.foldTo['/repo/mods/x/.claude_todo/BACKLOG.md']).toEqual({ '- [ ] #T6 Update the install guide': 'TODO.md' })
+  // The same line, ID and all, is already in the target: covered as it is, no fold needed.
+  expect(meta.foldTo['/repo/mods/x/.claude_todo/BACKLOG.md']).toEqual({})
   expect(meta.foldTo['/repo/mods/y/.claude_todo/BACKLOG.md']).toEqual({ '- [ ] #T16 Update the install guide': 'TODO.md' })
   expect(toasts.join('\n')).toContain('#T16 folded into #T6')
   await ui.press({ key: 'todo-delete-duplicates' })
@@ -2282,7 +2286,7 @@ test('round 8b: a line queued from one source TODO.md is the fold target for ano
     '/repo/mods/b/.claude_todo/BACKLOG.md': '- [ ] #T30 Shared thing',
   }
   const { ui, calls, store } = await consolidated($, on, files, ['.claude_todo/TODO.md', 'mods/a/.claude_todo/TODO.md', 'mods/b/.claude_todo/BACKLOG.md'])
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Something else\n\n## From mods/a\n\n- [ ] #T20 Shared thing\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Something else\n\n## From mods/a/TODO.md\n\n- [ ] #T20 Shared thing\n')
   expect(files['/repo/.claude_todo/BACKLOG.md']).toBeUndefined()
   const meta = store.get('duplicates-meta:/repo') as Meta
   expect(meta.renames['/repo/mods/b/.claude_todo/BACKLOG.md']).toEqual({ t30: 'T20' })
@@ -2290,17 +2294,150 @@ test('round 8b: a line queued from one source TODO.md is the fold target for ano
   expect(rmCalls(calls).filter(call => call.startsWith('rm --')).sort()).toEqual(['rm -- /repo/mods/a/.claude_todo/TODO.md', 'rm -- /repo/mods/b/.claude_todo/BACKLOG.md'])
 })
 
-test('round 8c: a fold is accepted only for a recorded line; an unrecorded identical line does not share', async ($, on) => {
+test('round 8c: only a recorded fold shares a central line; an unrecorded identical line is covered once', async ($, on) => {
   mock.clock(on)
   const files: Record<string, string> = {
     '/repo/.claude_todo/TODO.md': '- [ ] #T6 Update the install guide',
     '/repo/mods/x/.claude_todo/BACKLOG.md': '- [ ] #T6 Update the install guide',
+    '/repo/mods/y/.claude_todo/BACKLOG.md': '- [ ] #T6 Update the install guide',
   }
-  const { calls } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', 'mods/x/.claude_todo/BACKLOG.md'] })
-  // A duplicate record without a fold: BACKLOG.md has no central file of its own, so it is not covered.
-  storeWith(on, { 'duplicates:/repo': ['/repo/mods/x/.claude_todo'] })
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', 'mods/x/.claude_todo/BACKLOG.md', 'mods/y/.claude_todo/BACKLOG.md'] })
+  // Two duplicates with no fold record: the one central line covers the first only.
+  const store = storeWith(on, { 'duplicates:/repo': ['/repo/mods/x/.claude_todo', '/repo/mods/y/.claude_todo'] })
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  expect(store.get('duplicates:/repo')).toEqual(['/repo/mods/x/.claude_todo'])
+})
+
+// ---------------------------------------------------------------- one target file
+
+test('round 9a: Consolidate merges the central folder\'s other files too, and after Delete the board has one file', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/TODO.md': '- [ ] #T1 Fix',
+    '/repo/.claude_todo/BACKLOG.md': '- [ ] #T2 Backlog item',
+    '/repo/.claude_todo/categories.json': '{}',
+    '/repo/.claude_todo/archive/OLD.md': '- [x] #T9 Old',
+    '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T1 Docs',
+  }
+  const { calls } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', '.claude_todo/BACKLOG.md', '.claude_todo/archive/OLD.md', 'mods/x/.claude_todo/TODO.md'] })
+  const store = storeWith(on)
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const heads = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(await heads()).toContain('BACKLOG.md')
+  await ui.press({ key: 'todo-consolidate' })
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix\n\n## From BACKLOG.md\n\n- [ ] #T2 Backlog item\n\n## From mods/x/TODO.md\n\n- [ ] #T10 Docs\n')
+  // The central BACKLOG.md and the other folder are recorded; the target is not.
+  expect([...(store.get('duplicates:/repo') as string[])].sort()).toEqual(['/repo/.claude_todo/BACKLOG.md', '/repo/mods/x/.claude_todo'])
+  expect(await heads()).not.toContain('BACKLOG.md')
+  expect(await ui.find({ key: 'todo-consolidate' })).toBeUndefined()
+  await ui.press({ key: 'todo-delete-duplicates' })
+  const removing = rmCalls(calls)
+  expect(removing.filter(call => call.startsWith('rm --')).sort()).toEqual(['rm -- /repo/.claude_todo/BACKLOG.md', 'rm -- /repo/mods/x/.claude_todo/TODO.md'])
+  // The target, the central book and the central archive stay; the central folder is never removed.
+  expect(files['/repo/.claude_todo/TODO.md']).toBeDefined()
+  expect(files['/repo/.claude_todo/categories.json']).toBe('{}')
+  expect(files['/repo/.claude_todo/archive/OLD.md']).toBeDefined()
+  expect(files['/repo/.claude_todo/BACKLOG.md']).toBeUndefined()
+  expect(removing.some(call => call.includes('categories.json') || call.includes('/repo/.claude_todo/archive') || call === 'rmdir -- /repo/.claude_todo')).toBe(false)
+  expect(store.get('duplicates:/repo')).toEqual([])
+  const after = await heads()
+  expect(after).toContain('TODO.md')
+  expect(after).not.toContain('BACKLOG.md')
+  expect(await ui.find({ key: 'todo-delete-duplicates' })).toBeUndefined()
+})
+
+test('round 9b: a central extra file with an uncovered line stays on the board', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/TODO.md': '- [ ] #T1 Fix',
+    '/repo/.claude_todo/BACKLOG.md': '- [ ] #T2 Not copied yet',
+  }
+  const { calls } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', '.claude_todo/BACKLOG.md'] })
+  const store = storeWith(on, { 'duplicates:/repo': ['/repo/.claude_todo/BACKLOG.md'] })
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  expect(store.get('duplicates:/repo')).toEqual([])
+  expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('Not copied yet')
   expect(await ui.find({ key: 'todo-delete-duplicates' })).toBeUndefined()
   expect(rmCalls(calls)).toEqual([])
+})
+
+test('round 9c: one folder with TODO.md and BACKLOG.md shows Consolidate and merges into TODO.md', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 Fix', '/repo/.claude_todo/BACKLOG.md': '- [ ] #T2 Later' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', '.claude_todo/BACKLOG.md'] })
+  const store = storeWith(on)
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  await ui.press({ key: 'todo-consolidate' })
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix\n\n## From BACKLOG.md\n\n- [ ] #T2 Later\n')
+  expect(store.get('duplicates:/repo')).toEqual(['/repo/.claude_todo/BACKLOG.md'])
+  expect(await ui.find({ key: 'todo-consolidate' })).toBeUndefined()
+  expect(await ui.find({ key: 'todo-delete-duplicates' })).toBeDefined()
+})
+
+test('round 9d: the target is TODO.md; else the only todo file; else a new TODO.md', async ($, on) => {
+  mock.clock(on)
+  // The only top-level todo file in the central folder takes the others.
+  const only: Record<string, string> = { '/repo/.claude_todo/NOTES.md': '- [ ] #T1 n', '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T2 c' }
+  repoWith(on, only, { hasNearest: true, listed: ['.claude_todo/NOTES.md', 'mods/x/.claude_todo/TODO.md'] })
+  storeWith(on)
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  await ui.press({ key: 'todo-consolidate' })
+  expect(only['/repo/.claude_todo/NOTES.md']).toBe('- [ ] #T1 n\n\n## From mods/x/TODO.md\n\n- [ ] #T2 c\n')
+  expect(only['/repo/.claude_todo/TODO.md']).toBeUndefined()
+})
+
+test('round 9e: with two central todo files and no TODO.md, a new TODO.md takes all', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/A.md': '- [ ] #T1 a',
+    '/repo/.claude_todo/B.md': '- [ ] #T2 b',
+    '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T3 c',
+  }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/A.md', '.claude_todo/B.md', 'mods/x/.claude_todo/TODO.md'] })
+  const store = storeWith(on)
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  await ui.press({ key: 'todo-consolidate' })
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('## From A.md\n\n- [ ] #T1 a\n\n## From B.md\n\n- [ ] #T2 b\n\n## From mods/x/TODO.md\n\n- [ ] #T3 c\n')
+  expect([...(store.get('duplicates:/repo') as string[])].sort()).toEqual(['/repo/.claude_todo/A.md', '/repo/.claude_todo/B.md', '/repo/mods/x/.claude_todo'])
+})
+
+test('review 9: a lowercase todo.md is the target on a case-insensitive disk, never merged into itself or deleted', async ($, on) => {
+  mock.clock(on)
+  const real: Record<string, string> = {
+    '/repo/.claude_todo/todo.md': '- [ ] #T1 Precious',
+    '/repo/.claude_todo/NOTES.md': '- [ ] #T2 Notes',
+    '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T3 Other',
+  }
+  const key = (name: string | symbol) => (typeof name === 'string' ? Object.keys(real).find(one => one.toLowerCase() === name.toLowerCase()) ?? name : name)
+  // Paths match without case, as on the default macOS disk.
+  const files = new Proxy(real, {
+    get: (target, name) => (typeof name === 'string' ? target[key(name) as string] : undefined),
+    has: (target, name) => key(name) in target,
+    set: (target, name, value) => {
+      target[key(name) as string] = value
+
+      return true
+    },
+    getOwnPropertyDescriptor: (target, name) => Object.getOwnPropertyDescriptor(target, key(name)),
+  })
+  const { calls } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/todo.md', '.claude_todo/NOTES.md', 'mods/x/.claude_todo/TODO.md'] })
+  const store = storeWith(on)
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  await ui.press({ key: 'todo-consolidate' })
+  expect(real['/repo/.claude_todo/todo.md']).toContain('#T1 Precious')
+  expect(real['/repo/.claude_todo/todo.md']).toContain('Notes')
+  expect(real['/repo/.claude_todo/todo.md']).toContain('Other')
+  expect(((store.get('duplicates:/repo') as string[] | undefined) ?? []).some(one => one.toLowerCase().endsWith('/todo.md') && one.startsWith('/repo/.claude_todo'))).toBe(false)
+  if (await ui.find({ key: 'todo-delete-duplicates' })) {
+    await ui.press({ key: 'todo-delete-duplicates' })
+  }
+  expect(rmCalls(calls).some(one => one.toLowerCase().includes('/repo/.claude_todo/todo.md'))).toBe(false)
+  expect(real['/repo/.claude_todo/todo.md']).toContain('#T1 Precious')
 })

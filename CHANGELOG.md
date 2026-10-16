@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.6
+
+- Consolidate merges every todo file into one central file, `.claude_todo/TODO.md` (or the main folder's only todo file), so the board ends with one file. Delete duplicate todos then also removes the main folder's own merged files, never the central file, its categories or its archive.
+- Consolidate shows whenever the board pulls from more than one file, also within one folder.
+- File names compare without case, so a lowercase `todo.md` is the central file on a case-insensitive disk.
+
 ## 0.4.5
 
 - Consolidate folds an identical ticket into its twin in any file of the main todo, not only the file with the same name.

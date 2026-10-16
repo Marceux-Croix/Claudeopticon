@@ -526,9 +526,17 @@ function visibleFolders(): TodoFolder[] {
   return lostPrimary ? shown.map(one => (one.path === centralFolder() ? { ...one, isOther: false } : one)) : shown
 }
 
-/** True when the Consolidate todos button shows: a repo's main checkout (not a worktree, not the global folder), and more than one folder on the board. */
+/** True for a file recorded as a duplicate by its own path (a central file merged into the target): off the board. */
+function isDupFile(path: string): boolean {
+  return path.endsWith('.md') && dupFolders.some(one => one.path === path)
+}
+
+/**
+ * True when the Consolidate todos button shows: a repo's main checkout (not a worktree, not the
+ * global folder), and more than one top-level todo file on the board, in any folder.
+ */
 function canConsolidate(): boolean {
-  return !centralBlocked && centralRoot !== undefined && visibleFolders().length > 1
+  return !centralBlocked && centralRoot !== undefined && todoFiles.filter(file => file.isArchived !== true).length > 1
 }
 
 /** True when the Delete duplicate todos button shows: the same gate, and a recorded duplicate folder. */
@@ -786,6 +794,30 @@ async function writeFile($: EngineInterface, path: string, text: string): Promis
 let isWorking = false
 
 /**
+ * The one file the central todo is merged into: `TODO.md` when the central folder has it; else the
+ * only top-level `.md` todo file (one with checkbox items) when there is exactly one; else `TODO.md`,
+ * to be created.
+ */
+async function chooseTarget($: EngineInterface, central: string, topNames: readonly string[]): Promise<string> {
+  // Names compare without case, as the disk may: a `todo.md` is the target, by its own name.
+  const main = topNames.find(name => name.toLowerCase() === 'todo.md')
+  if (main !== undefined) {
+    return main
+  }
+  const todo: string[] = []
+  for (const name of topNames) {
+    if (itemLines(await readStrict($, `${central}/${name}`)).length > 0) {
+      todo.push(name)
+    }
+  }
+
+  return todo.length === 1 ? todo[0]! : 'TODO.md'
+}
+
+/** The file a source file is judged against in the central folder: the target for a top-level file, the same-named archive file for an archive file. */
+const destOf = (name: string, target: string): string => (name.startsWith('archive/') ? name : target)
+
+/**
  * The parts of a ticket line that a fold compares: everything but the item's own leading `#T<n>` ID,
  * kept letter for letter (bullet, box, spacing, text), and that ID. Undefined for any other line.
  */
@@ -830,10 +862,6 @@ async function consolidate($: EngineInterface): Promise<void> {
         sources.push({ path: one.path, real, rel: one.rel, wasPrimary: !one.isOther })
       }
     }
-    if (sources.length === 0) {
-      return
-    }
-    const used = new Set<string>()
     const texts = new Map<string, string>()
     const centralText = async (name: string) => {
       const held = texts.get(name)
@@ -847,7 +875,22 @@ async function consolidate($: EngineInterface): Promise<void> {
 
       return text
     }
-    for (const name of await mdFiles($, central, true)) {
+    // One target file takes everything; the central folder's other top-level todo files are merged into it.
+    const centralNames = await mdFiles($, central, true)
+    const topNames = centralNames.filter(name => !name.startsWith('archive/'))
+    const target = await chooseTarget($, central, topNames)
+    const mergeNames: string[] = []
+    for (const name of topNames) {
+      if (name.toLowerCase() !== target.toLowerCase() && itemLines(await centralText(name)).length > 0) {
+        mergeNames.push(name)
+      }
+    }
+    if (sources.length === 0 && mergeNames.length === 0) {
+      return
+    }
+    // The IDs of the central files that stay; a merged central file keeps its own IDs unless they clash with those.
+    const used = new Set<string>()
+    for (const name of centralNames.filter(one => !mergeNames.includes(one))) {
       for (const line of itemLines(await centralText(name))) {
         const id = ITEM_ID.exec(line)?.[1]
         if (id !== undefined) {
@@ -855,11 +898,11 @@ async function consolidate($: EngineInterface): Promise<void> {
         }
       }
     }
-    // Per target: the central lines still free to cover a source line, and the tickets a fold may join.
+    // Per destination file: the central lines still free to cover a source line, and the tickets a fold may join.
     const free = new Map<string, Map<string, number>>()
     const whole = new Map<string, Map<string, number>>()
     const tickets = new Map<string, Map<string, { id: string; file: string }>>()
-    // The tickets of every central file, and every ticket queued in this press: a fold may join any.
+    // The tickets of every central file that stays, and every ticket queued in this press: a fold may join any.
     const anyTicket = new Map<string, { id: string; file: string }>()
     const stateFor = async (name: string) => {
       if (!free.has(name)) {
@@ -871,7 +914,8 @@ async function consolidate($: EngineInterface): Promise<void> {
           if (parts !== undefined && !ids.has(parts.key)) {
             ids.set(parts.key, { id: parts.id, file: name })
           }
-          if (parts !== undefined && !anyTicket.has(parts.key)) {
+          // A file about to be merged away is no fold target: its tickets are copied, not joined.
+          if (parts !== undefined && !anyTicket.has(parts.key) && !mergeNames.includes(name)) {
             anyTicket.set(parts.key, { id: parts.id, file: name })
           }
         }
@@ -880,21 +924,25 @@ async function consolidate($: EngineInterface): Promise<void> {
         tickets.set(name, ids)
       }
 
-      return { held: free.get(name)!, all: whole.get(name)!, ids: tickets.get(name)! }
+      return { held: free.get(name)!, ids: tickets.get(name)! }
     }
-    for (const name of await mdFiles($, central, true)) {
+    for (const name of centralNames.filter(one => !mergeNames.includes(one))) {
       await stateFor(name)
     }
     const holdsAnywhere = (key: string, preferred?: string) =>
       (preferred !== undefined && (whole.get(preferred)?.get(key) ?? 0) > 0) || [...whole.values()].some(map => (map.get(key) ?? 0) > 0)
     type Block = { place: string; lines: string[] }
-    type Commit = { target?: string; file: string; renames: Record<string, string>; folds: string[]; foldTo: Record<string, string>; told: string[] }
+    type Commit = { target?: string; owner: string; file: string; renames: Record<string, string>; folds: string[]; foldTo: Record<string, string>; told: string[] }
     const sections = new Map<string, Block[]>()
     const commits: Commit[] = []
+    // What is merged: the central folder's other files first, then each other folder's files.
+    const jobs: { owner: string; path: string; name: string; heading: string; text: string }[] = []
+    for (const name of mergeNames) {
+      jobs.push({ owner: `${central}/${name}`, path: `${central}/${name}`, name, heading: name, text: await centralText(name) })
+    }
     // A source that will not list or read stays on the board: nothing of it was copied.
     const unreadable = new Set<string>()
     for (const source of sources) {
-      const place = placeOf(source.rel)
       const names = await mdFiles($, source.path, true).catch(() => undefined)
       if (names === undefined) {
         unreadable.add(source.path)
@@ -907,72 +955,77 @@ async function consolidate($: EngineInterface): Promise<void> {
           unreadable.add(source.path)
           continue
         }
-        const lines = nonBlankLines(text)
-        const { held, ids } = await stateFor(name)
-        const old = renameMap[path] ?? {}
-        const oldFolds = new Set(foldMap[path] ?? [])
-        const oldTo = foldTargets[path] ?? {}
-        const foldTo: Record<string, string> = {}
-        const fold: Record<string, string> = {}
-        // What the lines already in the central file still need of the old record; the rest is stale.
-        const keepOld: Record<string, string> = {}
-        const keepFolds: string[] = []
-        const folded: string[] = []
-        const told: string[] = []
-        const toCopy: string[] = []
-        for (const line of lines) {
-          // Already in the central file: exactly, after this file's renames. A recorded fold may share its line.
-          const key = coverKey(applyRenames(line, old))
-          // A recorded fold may share its central line, used or not; any other line uses it up.
-          if (oldFolds.has(line) ? holdsAnywhere(key, oldTo[line]) : (held.get(key) ?? 0) > 0) {
-            if (oldFolds.has(line)) {
-              keepFolds.push(line)
-              if (oldTo[line] !== undefined) {
-                foldTo[line] = oldTo[line]!
-              }
-            } else {
-              held.set(key, (held.get(key) ?? 0) - 1)
-            }
-            for (const [, id] of line.matchAll(/#([A-Za-z]+\d+)\b/g)) {
-              if (id !== undefined && old[id.toLowerCase()] !== undefined) {
-                keepOld[id.toLowerCase()] = old[id.toLowerCase()]!
-              }
-            }
-            continue
-          }
-          const parts = foldParts(line)
-          // The same file's ticket first, else an identical ticket in any central file or queued for any target.
-          const target = parts === undefined ? undefined : (ids.get(parts.key) ?? anyTicket.get(parts.key))
-          if (parts !== undefined && target !== undefined) {
-            if (target.id.toLowerCase() !== parts.id.toLowerCase()) {
-              fold[parts.id.toLowerCase()] = target.id
-            }
-            folded.push(line)
-            foldTo[line] = target.file
-            told.push(`- ${place}/${name}: #${parts.id} folded into #${target.id}`)
-            continue
-          }
-          toCopy.push(line)
-        }
-        const fresh = renumberLines(toCopy, used)
-        // New copies take no old renaming: a recreated file must not inherit a stale one.
-        const now = { ...fold, ...fresh.renames }
-        const out = toCopy.map(line => applyRenames(line, now))
-        told.push(...fresh.pairs.map(pair => `- ${place}/${name}: #${pair.from} is now #${pair.to}`))
-        for (const line of out) {
-          const parts = foldParts(line)
-          if (parts !== undefined && !ids.has(parts.key)) {
-            ids.set(parts.key, { id: parts.id, file: name })
-          }
-          if (parts !== undefined && !anyTicket.has(parts.key)) {
-            anyTicket.set(parts.key, { id: parts.id, file: name })
-          }
-        }
-        if (out.length > 0) {
-          sections.set(name, [...(sections.get(name) ?? []), { place, lines: out }])
-        }
-        commits.push({ ...(out.length > 0 ? { target: name } : {}), file: path, renames: { ...keepOld, ...now }, folds: [...keepFolds, ...folded], foldTo, told })
+        jobs.push({ owner: source.path, path, name, heading: `${placeOf(source.rel)}/${name}`, text })
       }
+    }
+    for (const job of jobs) {
+      const { path, name, heading } = job
+      const dest = destOf(name, target)
+      const lines = nonBlankLines(job.text)
+      const { held, ids } = await stateFor(dest)
+      const old = renameMap[path] ?? {}
+      const oldFolds = new Set(foldMap[path] ?? [])
+      const oldTo = foldTargets[path] ?? {}
+      const foldTo: Record<string, string> = {}
+      const fold: Record<string, string> = {}
+      // What the lines already in the central file still need of the old record; the rest is stale.
+      const keepOld: Record<string, string> = {}
+      const keepFolds: string[] = []
+      const folded: string[] = []
+      const told: string[] = []
+      const toCopy: string[] = []
+      for (const line of lines) {
+        // Already in the central file: exactly, after this file's renames. A recorded fold may share its line.
+        const key = coverKey(applyRenames(line, old))
+        // A recorded fold may share its central line, used or not; any other line uses it up.
+        if (oldFolds.has(line) ? holdsAnywhere(key, oldTo[line]) : (held.get(key) ?? 0) > 0) {
+          if (oldFolds.has(line)) {
+            keepFolds.push(line)
+            if (oldTo[line] !== undefined) {
+              foldTo[line] = oldTo[line]!
+            }
+          } else {
+            held.set(key, (held.get(key) ?? 0) - 1)
+          }
+          for (const [, id] of line.matchAll(/#([A-Za-z]+\d+)\b/g)) {
+            if (id !== undefined && old[id.toLowerCase()] !== undefined) {
+              keepOld[id.toLowerCase()] = old[id.toLowerCase()]!
+            }
+          }
+          continue
+        }
+        const parts = foldParts(line)
+        // The destination file's ticket first, else an identical ticket in any central file or queued for any target.
+        const joined = parts === undefined ? undefined : (ids.get(parts.key) ?? anyTicket.get(parts.key))
+        if (parts !== undefined && joined !== undefined) {
+          if (joined.id.toLowerCase() !== parts.id.toLowerCase()) {
+            fold[parts.id.toLowerCase()] = joined.id
+          }
+          folded.push(line)
+          foldTo[line] = joined.file
+          told.push(`- ${heading}: #${parts.id} folded into #${joined.id}`)
+          continue
+        }
+        toCopy.push(line)
+      }
+      const fresh = renumberLines(toCopy, used)
+      // New copies take no old renaming: a recreated file must not inherit a stale one.
+      const now = { ...fold, ...fresh.renames }
+      const out = toCopy.map(line => applyRenames(line, now))
+      told.push(...fresh.pairs.map(pair => `- ${heading}: #${pair.from} is now #${pair.to}`))
+      for (const line of out) {
+        const parts = foldParts(line)
+        if (parts !== undefined && !ids.has(parts.key)) {
+          ids.set(parts.key, { id: parts.id, file: dest })
+        }
+        if (parts !== undefined && !anyTicket.has(parts.key)) {
+          anyTicket.set(parts.key, { id: parts.id, file: dest })
+        }
+      }
+      if (out.length > 0) {
+        sections.set(dest, [...(sections.get(dest) ?? []), { place: heading, lines: out }])
+      }
+      commits.push({ ...(out.length > 0 ? { target: dest } : {}), owner: job.owner, file: path, renames: { ...keepOld, ...now }, folds: [...keepFolds, ...folded], foldTo, told })
     }
     let files = 0
     const told: string[] = []
@@ -996,7 +1049,7 @@ async function consolidate($: EngineInterface): Promise<void> {
         skipped.add(`${DIR}/${name}`)
         // Its sources were not copied: they stay off the duplicates record, so a failed check later cannot hide them.
         for (const one of commits.filter(c => c.target === name)) {
-          notCopied.add(one.file.slice(0, one.file.length - name.length - 1))
+          notCopied.add(one.owner)
         }
         continue
       }
@@ -1008,10 +1061,13 @@ async function consolidate($: EngineInterface): Promise<void> {
       // The renumbering is kept as each file lands, so a press that fails later still knows it.
       await saveMeta($)
     }
-    // The union of the old record and the new sources, in memory at once; the coverage check then
-    // lets go of any folder that is not fully in the central one.
-    const fresh = sources.filter(one => !unreadable.has(one.path) && !notCopied.has(one.path)).map(one => ({ path: one.path, real: one.real, ...(one.wasPrimary ? { wasPrimary: true as const } : {}) }))
-    dupFolders = [...dupFolders.filter(one => !fresh.some(now => now.path === one.path)), ...fresh]
+    // The union of the old record and the new sources (other folders by folder, central files by file),
+    // in memory at once; the coverage check then lets go of any entry that is not fully in the target.
+    const merged = [
+      ...mergeNames.map(name => ({ path: `${central}/${name}` })),
+      ...sources.map(one => ({ path: one.path, real: one.real, ...(one.wasPrimary ? { wasPrimary: true as const } : {}) })),
+    ].filter(one => !unreadable.has(one.path) && !notCopied.has(one.path))
+    dupFolders = [...dupFolders.filter(one => !merged.some(now => now.path === one.path)), ...merged]
     await saveRecord($)
     await dropUncovered($, true)
     pendingRenames = [...pendingRenames, ...told]
@@ -1022,9 +1078,9 @@ async function consolidate($: EngineInterface): Promise<void> {
     await ensureFolders($)
     await scan($, true)
     if (skipped.size > 0) {
-      $.ui.toast(`Not written, changed meanwhile: ${[...skipped].join(', ')}. Their folders stay on the board. Press Consolidate todos again.`)
+      $.ui.toast(`Not written, changed meanwhile: ${[...skipped].join(', ')}. Their files stay on the board. Press Consolidate todos again.`)
     }
-    $.ui.toast(`Consolidated ${files} ${files === 1 ? 'file' : 'files'} into ${DIR}/ at the repo root.${skipped.size === 0 && unreadable.size === 0 ? ' The old folders are off the board.' : ''}${told.length > 0 ? ` Renumbered: ${told.map(line => line.slice(2)).join('; ')}` : ''}`)
+    $.ui.toast(`Consolidated ${files} ${files === 1 ? 'file' : 'files'} into ${DIR}/${target} at the repo root.${skipped.size === 0 && unreadable.size === 0 ? ' The old files are off the board.' : ''}${told.length > 0 ? ` Renumbered: ${told.map(line => line.slice(2)).join('; ')}` : ''}`)
   } catch (error) {
     $.ui.toast(`Could not consolidate: ${error instanceof Error ? error.message : String(error)}`)
   } finally {
@@ -1044,6 +1100,9 @@ type FileCover = { name: string; path: string; text: string; state: 'covered' | 
  * A file that cannot be read counts as uncovered. A central file that cannot be read throws.
  */
 async function coverageOf($: EngineInterface, central: string, folders: readonly { path: string }[]): Promise<Map<string, FileCover[] | undefined>> {
+  // Every top-level source file is judged against the one target file; an archive file against its own.
+  const centralNames = await mdFiles($, central, true)
+  const target = await chooseTarget($, central, centralNames.filter(name => !name.startsWith('archive/')))
   const have = new Map<string, Map<string, number>>()
   // What each central file holds before anything is used: a recorded fold is judged against this.
   const whole = new Map<string, Map<string, number>>()
@@ -1063,7 +1122,7 @@ async function coverageOf($: EngineInterface, central: string, folders: readonly
     return held
   }
   // Every central file is loaded, since a recorded fold may join an identical ticket in any of them.
-  for (const name of await mdFiles($, central, true)) {
+  for (const name of centralNames) {
     await covers(name)
   }
   const holdsAnywhere = (key: string, preferred?: string) =>
@@ -1071,14 +1130,15 @@ async function coverageOf($: EngineInterface, central: string, folders: readonly
   const out = new Map<string, FileCover[] | undefined>()
   for (const dup of folders) {
     const files: FileCover[] = []
-    // A folder that will not list is not judged: nothing is known of it.
-    const names = await mdFiles($, dup.path, true).catch(() => undefined)
+    // A folder that will not list is not judged: nothing is known of it. An entry that is a file is one central file.
+    const isFileEntry = dup.path.endsWith('.md')
+    const names = isFileEntry ? [dup.path.slice(dup.path.lastIndexOf('/') + 1)] : await mdFiles($, dup.path, true).catch(() => undefined)
     if (names === undefined) {
       out.set(dup.path, undefined)
       continue
     }
     for (const name of names) {
-      const path = `${dup.path}/${name}`
+      const path = isFileEntry ? dup.path : `${dup.path}/${name}`
       const text = await readStrict($, path).catch(() => undefined)
       if (text === undefined) {
         files.push({ name, path, text: '', state: 'uncovered' })
@@ -1091,7 +1151,7 @@ async function coverageOf($: EngineInterface, central: string, folders: readonly
       }
       const renames = renameMap[path] ?? {}
       const folded = new Set(foldMap[path] ?? [])
-      const held = await covers(name)
+      const held = await covers(destOf(name, target))
       const left = new Map(held)
       const isCovered = lines.every(line => {
         const key = coverKey(applyRenames(line, renames))
@@ -1184,6 +1244,21 @@ async function isTrustedFolder($: EngineInterface, path: string, central: string
   return realCentral === undefined || real !== realCentral
 }
 
+/**
+ * Whether a central file recorded as a duplicate may be removed: a top-level `.md` file directly in
+ * the central folder, not the target file, and the folder itself a plain, non-global folder. Never
+ * anything in the central `archive/`, and never `categories.json`.
+ */
+async function isTrustedCentralFile($: EngineInterface, path: string, central: string, target: string): Promise<boolean> {
+  const name = path.slice(central.length + 1)
+  if (!path.startsWith(`${central}/`) || name.includes('/') || !name.endsWith('.md') || name.toLowerCase() === target.toLowerCase()) {
+    return false
+  }
+  const real = await realOf($, central)
+
+  return real === central && !isGlobalTodo(real)
+}
+
 /** True for a regular file that is its own real path: no symlink in the file or the folders above it. */
 async function isPlainFile($: EngineInterface, path: string): Promise<boolean> {
   const stat = await $.fs.stat(path).catch(() => undefined)
@@ -1258,11 +1333,12 @@ async function deleteDuplicates($: EngineInterface): Promise<void> {
     // Only trusted folders are judged, with the same coverage rule the board uses.
     const trusted: typeof dupFolders = []
     const kept: string[] = []
+    const target = await chooseTarget($, central, (await mdFiles($, central, true)).filter(name => !name.startsWith('archive/')))
     for (const dup of dupFolders) {
-      if (await isTrustedFolder($, dup.path, central, realCentral)) {
+      if (dup.path.endsWith('.md') ? await isTrustedCentralFile($, dup.path, central, target) : await isTrustedFolder($, dup.path, central, realCentral)) {
         trusted.push(dup)
       } else {
-        kept.push(`${dup.path} (not a folder this mod may delete from)`)
+        kept.push(`${dup.path} (not a file or folder this mod may delete)`)
       }
     }
     const cover = await coverageOf($, central, trusted)
@@ -1290,6 +1366,10 @@ async function deleteDuplicates($: EngineInterface): Promise<void> {
           isAllGone = false
           kept.push(file.path)
         }
+      }
+      // A central file is one file: no book to merge and no folder to remove.
+      if (dup.path.endsWith('.md')) {
+        continue
       }
       const book = `${dup.path}/categories.json`
       if (isAllGone && dup.wasPrimary !== true && (await $.fs.exists(book).catch(() => false)) && (await isPlainFile($, book)) && (await mergeBook($, dup, central)) && (await run(['rm', '--', book]))) {
@@ -1386,6 +1466,9 @@ async function scan($: EngineInterface, isFull = false): Promise<void> {
       }
       for (const entry of await $.fs.list(dir).catch(() => [])) {
         if (entry.kind !== 'file' || !entry.name.endsWith('.md')) {
+          continue
+        }
+        if (isDupFile(`${dir}/${entry.name}`)) {
           continue
         }
         const name = `${prefix}${entry.name}`

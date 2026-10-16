@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="88" viewBox="0 0 720 88" role="img" aria-label="Orchestrator: 14:35:40 Watch the deploy log; 14:29:00 Run the web build in watch mode; 14:31:00 Review the release diff">
+<defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
+<style>
+text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
+.blink{animation:blink 1.2s steps(1,end) infinite}
+@keyframes blink{50%{opacity:.25}}
+.pulse{animation:pulse 1.2s cubic-bezier(0,0,.2,1) infinite;transform-box:fill-box;transform-origin:center}
+@keyframes pulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
+@media (prefers-reduced-motion:reduce){.blink,.pulse{animation:none}.pulse{opacity:0}}
+@media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
+
+</style>
+<rect width="720" height="88" rx="12" fill="#07080F"/>
+<circle cx="21" cy="26" r="4" fill="#8B5CF6"/><circle cx="21" cy="26" r="4" fill="#8B5CF6" class="pulse"/><text x="34" y="30" fill="rgba(255,255,255,.88)" font-size="13">Watch the deploy log</text>
+<text x="704" y="30" text-anchor="end" fill="rgba(255,255,255,.38)" font-size="10.5" class="mono">14:35:40</text>
+<circle cx="21" cy="48" r="4" fill="#8B5CF6"/><circle cx="21" cy="48" r="4" fill="#8B5CF6" class="pulse"/><text x="34" y="52" fill="rgba(255,255,255,.88)" font-size="13">Run the web build in watch mode</text>
+<text x="704" y="52" text-anchor="end" fill="rgba(255,255,255,.38)" font-size="10.5" class="mono">14:29:00</text>
+<circle cx="21" cy="70" r="3" fill="rgba(255,255,255,.38)"/><text x="34" y="74" fill="rgba(255,255,255,.62)" font-size="13">Review the release diff</text>
+<text x="704" y="74" text-anchor="end" fill="rgba(255,255,255,.38)" font-size="10.5" class="mono">14:31:00</text></svg>

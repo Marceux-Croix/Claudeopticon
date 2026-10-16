@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="166" viewBox="0 0 720 166" role="img" aria-label="Todo 24 of 40 done. 2 of 3 agents live. 17.38M tokens used, 5.28M since compact.">
+<defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
+<style>
+text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
+.blink{animation:blink 1.2s steps(1,end) infinite}
+@keyframes blink{50%{opacity:.25}}
+.pulse{animation:pulse 1.2s cubic-bezier(0,0,.2,1) infinite;transform-box:fill-box;transform-origin:center}
+@keyframes pulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
+@media (prefers-reduced-motion:reduce){.blink,.pulse{animation:none}.pulse{opacity:0}}
+@media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
+
+</style>
+<rect width="720" height="166" rx="12" fill="#07080F"/>
+<circle cx="124" cy="62" r="34" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="6"/><path d="M 124 28 A 34 34 0 1 1 104.02 89.51" fill="none" stroke="url(#progress)" stroke-width="6" stroke-linecap="round"/>
+<text x="124" y="69.04" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="22" font-weight="700">60<tspan fill="rgba(255,255,255,.62)" font-size="13" font-weight="500">%</tspan></text>
+<text x="124" y="120" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Todo</text>
+<text x="124" y="138" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">24 of 40 done</text><circle cx="360" cy="62" r="34" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="6"/><path d="M 360 28 A 34 34 0 1 1 357.46 95.90" fill="none" stroke="url(#progress)" stroke-width="6" stroke-linecap="round"/>
+<text x="360" y="69.04" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="22" font-weight="700">2<tspan fill="rgba(255,255,255,.62)" font-size="13" font-weight="500"> live</tspan></text>
+<text x="360" y="120" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Agents</text>
+<text x="360" y="138" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">1 of 3 agents finished</text><text x="596" y="73" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="32" font-weight="700" letter-spacing="-0.5">17.38M</text>
+<text x="596" y="120" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Tokens</text>
+<text x="596" y="138" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">5.28M since compact</text><circle cx="700" cy="20" r="4" fill="#8B5CF6" class="pulse"/>
+<circle cx="700" cy="20" r="4" fill="#8B5CF6"/>
+<text x="690" y="24" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">Live</text></svg>

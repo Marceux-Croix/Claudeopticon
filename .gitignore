@@ -1,0 +1,4 @@
+# The engine writes these type files on each load.
+.claude-plugin/types/
+.DS_Store
+.claude_todo/

@@ -1,0 +1,15 @@
+{
+  "name": "claudeopticon",
+  "description": "Claudeopticon, a side panel for Claude Code that shows what Claude is doing",
+  "owner": {
+    "name": "Marceux-Croix",
+    "url": "https://github.com/Marceux-Croix"
+  },
+  "plugins": [
+    {
+      "name": "claudeopticon",
+      "source": "./",
+      "description": "A side panel for Claude Code that shows what Claude is doing: your todo list as a ticket board, each step Claude takes, the helper agents and background tasks it starts, and which ticket each one works on"
+    }
+  ]
+}

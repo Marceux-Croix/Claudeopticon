@@ -1,0 +1,28 @@
+{
+  "name": "claudeopticon",
+  "version": "0.3.0",
+  "description": "A side panel for Claude Code that shows what Claude is doing: your todo list as a ticket board, each step Claude takes, the helper agents and background tasks it starts, and which ticket each one works on.",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Marceux-Croix",
+    "url": "https://github.com/Marceux-Croix"
+  },
+  "homepage": "https://github.com/Marceux-Croix/Claudeopticon",
+  "repository": "https://github.com/Marceux-Croix/Claudeopticon",
+  "license": "MIT",
+  "keywords": [
+    "todo",
+    "tickets",
+    "agents",
+    "progress",
+    "pane"
+  ],
+  "userConfig": {
+    "rules": {
+      "type": "boolean",
+      "title": "Todo rules",
+      "description": "Give Claude the mod's todo and ticket rules as context. Turn off if your CLAUDE.md has its own.",
+      "default": true
+    }
+  }
+}

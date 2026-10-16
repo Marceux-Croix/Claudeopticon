@@ -1,10 +1,12 @@
 # Claudeopticon
 
-**See everything Claude is doing, in one live pane.**
+**A ticket system for Claude Code. Plan the work, hand it to Claude, and watch it get done.**
 
 Claudeopticon is a mod for Claude Code. It adds a work pane next to your conversation which shows your todo list as a ticket board, what Claude is doing, what its helpers (Claude Code calls them agents) are doing, and what runs in the background. You can send a ticket to Claude, ask how it is going, or move it yourself.
 
 ![The whole Claudeopticon pane: the top card, then Orchestrator, Background tasks, Agents and the Todo board, top to bottom](docs/images/pane.svg)
+
+At its core is a ticket system that lives in your repo. Each line in `.claude_todo/` is a ticket with an ID such as `#T12`. From the board you can send a ticket to Claude, ask for a status update, or move it between Open, In progress and Done. Claude keeps each ticket's state up to date as it works, and every helper agent is linked to the tickets it works on.
 
 ## Contents
 

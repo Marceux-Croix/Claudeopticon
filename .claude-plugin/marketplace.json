@@ -1,6 +1,6 @@
 {
   "name": "claudeopticon",
-  "description": "Claudeopticon, a side panel for Claude Code that shows what Claude is doing",
+  "description": "Claudeopticon, a ticket system for Claude Code",
   "owner": {
     "name": "Marceux-Croix",
     "url": "https://github.com/Marceux-Croix"
@@ -9,7 +9,7 @@
     {
       "name": "claudeopticon",
       "source": "./",
-      "description": "A side panel for Claude Code that shows what Claude is doing: your todo list as a ticket board, each step Claude takes, the helper agents and background tasks it starts, and which ticket each one works on"
+      "description": "A ticket system for Claude Code: your todo as a live ticket board you can hand to Claude, with each step Claude takes and each helper agent linked to the tickets it works on"
     }
   ]
 }

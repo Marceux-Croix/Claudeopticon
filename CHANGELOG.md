@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4
+
+- The README and the plugin description lead with the ticket system.
+
 ## 0.3.3
 
 - A pane opened before 0.3.2 takes the Claudeopticon title after `/reload-plugins`, without a restart.

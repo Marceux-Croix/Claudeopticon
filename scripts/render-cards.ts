@@ -140,7 +140,7 @@ function ticketButtons(card: Card, x: number, y: number, width: number, glyphs: 
 }
 
 /**
- * The whole Work pane, top to bottom, in the order the pane draws it: the top card; Orchestrator;
+ * The whole Claudeopticon pane, top to bottom, in the order the pane draws it: the top card; Orchestrator;
  * Background tasks; Agents with the timeline and the agent cards; Todo with its controls, the file
  * card and the ticket board. The headings and buttons are the host's own, drawn here to match.
  */

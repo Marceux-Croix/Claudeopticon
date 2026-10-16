@@ -2,9 +2,9 @@
 
 **See everything Claude is doing, in one live pane.**
 
-Claudeopticon is a mod for Claude Code. It adds the Work pane next to your conversation. The pane shows your todo list as a ticket board, what Claude is doing, what its helpers (Claude Code calls them agents) are doing, and what runs in the background. You can send a ticket to Claude, ask how it is going, or move it yourself.
+Claudeopticon is a mod for Claude Code. It adds a work pane next to your conversation which shows your todo list as a ticket board, what Claude is doing, what its helpers (Claude Code calls them agents) are doing, and what runs in the background. You can send a ticket to Claude, ask how it is going, or move it yourself.
 
-![The whole Work pane: the top card, then Orchestrator, Background tasks, Agents and the Todo board, top to bottom](docs/images/pane.svg)
+![The whole Claudeopticon pane: the top card, then Orchestrator, Background tasks, Agents and the Todo board, top to bottom](docs/images/pane.svg)
 
 ## Contents
 

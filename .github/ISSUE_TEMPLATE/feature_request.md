@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: An idea for the Work pane
+about: An idea for the Claudeopticon pane
 labels: enhancement
 ---
 

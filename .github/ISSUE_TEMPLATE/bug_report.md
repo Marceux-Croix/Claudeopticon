@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something in the Work pane is wrong or broken
+about: Something in the Claudeopticon pane is wrong or broken
 labels: bug
 ---
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- The pane's title is now Claudeopticon instead of Work.
+
 ## 0.3.1
 
 - A background task that a helper agent started now ends when that agent ends. Before, its line could stay on running for good.

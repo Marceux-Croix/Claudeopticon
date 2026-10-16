@@ -5,7 +5,7 @@ import { ACCENT, DANGER, GREEN, clock, tokens, orchestratorSvg, plural, agentCol
 import type { AgentView, FileView, ItemStatus, ItemView, TaskView, Usage, View } from './cards'
 
 const PANE = 'claudeopticon'
-const TITLE = 'Work'
+const TITLE = 'Claudeopticon'
 const DIR = '.claude_todo'
 const TICK_MS = 1000
 const SCAN_EVERY = 3
@@ -743,7 +743,7 @@ export function labelNote(text: string, rows: readonly AgentRow[]): string | und
 
   return lines.length === 0
     ? undefined
-    : `The user's agent labels come from the Work pane (the claudeopticon mod), which numbers this session's agents in start order:\n${lines.join('\n')}`
+    : `The user's agent labels come from the Claudeopticon pane (the claudeopticon mod), which numbers this session's agents in start order:\n${lines.join('\n')}`
 }
 
 // ---------------------------------------------------------------- links
@@ -1075,7 +1075,7 @@ export function movesNote(moves: readonly string[]): string | undefined {
   return moves.length === 0
     ? undefined
     : [
-        'The user moved these todo items by hand in the Work pane (the claudeopticon mod), which wrote the new box into the todo file:',
+        'The user moved these todo items by hand in the Claudeopticon pane (the claudeopticon mod), which wrote the new box into the todo file:',
         ...moves,
         'This is for your information only. Do not act on it unless the user asks. Follow the new places: stop work on an item moved to open or done. Never change the box of an item the user moved by hand yourself: if you think a move is wrong, call move_ticket, which asks the user first.',
       ].join('\n')
@@ -1365,14 +1365,14 @@ function start($: EngineInterface): void {
  * edit to anyone's CLAUDE.md. The `rules` option turns it off for those who write their own.
  */
 export const RULES = [
-  'This session runs the Claudeopticon mod. Its Work pane reads the project todo and shows the agents working on it. Follow these rules for the todo:',
+  'This session runs the Claudeopticon mod. Its Claudeopticon pane reads the project todo and shows the agents working on it. Follow these rules for the todo:',
   '',
   "- Todo items go in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's). Create the folder when the repo has none. Each repo keeps its own items, and only its own.",
   '- Write each item as one Markdown checkbox line in a `.md` file at the top level of `.claude_todo/`: `- [ ]` open, `- [~]` in progress, `- [x]` done. Prose, tables and headings may surround the items; only checkbox lines count. Update the box the moment the status changes.',
   '- Give each item a short ID, unique in the project, in its line: `#T<n>` (`- [ ] #T12 Fix the parser`). When you dispatch an agent for an item, put its ID in the Agent call\'s description and mark the item `[~]`: the pane links the agent to the item by that ID.',
   '- Never delete a done item, and never fold done items into a summary line: check it off (`- [x]`) and leave it in place, as the ledger of completed work. When every item in a file is done, move the whole file to `.claude_todo/archive/`.',
   '- All work is ticketed. Before you start any work, find its item or add one, and mark it `[~]`. Never do work that has no item.',
-  '- The user can move items by hand on the Work pane board. You are told of each move with your next tool result or prompt. Follow it: stop work on an item moved to open or done. Never change the box of an item the user moved by hand yourself. If you think a move is wrong, call `mcp__claudeopticon__move_ticket`, which asks the user and writes the box only on a yes.',
+  '- The user can move items by hand on the Claudeopticon pane board. You are told of each move with your next tool result or prompt. Follow it: stop work on an item moved to open or done. Never change the box of an item the user moved by hand yourself. If you think a move is wrong, call `mcp__claudeopticon__move_ticket`, which asks the user and writes the box only on a yes.',
 ].join('\n')
 
 export const register: Register = (on, options) => {
@@ -1416,7 +1416,7 @@ export const register: Register = (on, options) => {
       .register({
         name: 'move_ticket',
         description:
-          "Ask the user to approve moving a .claude_todo item to another column of the Work pane board: open, in_progress or done. The user sees a dialog; the box is written only if they approve. Use it for any item the user moved by hand, instead of editing its box.",
+          "Ask the user to approve moving a .claude_todo item to another column of the Claudeopticon pane board: open, in_progress or done. The user sees a dialog; the box is written only if they approve. Use it for any item the user moved by hand, instead of editing its box.",
         inputSchema: {
           type: 'object',
           properties: {
@@ -1443,7 +1443,7 @@ export const register: Register = (on, options) => {
     start($)
     await $.ui.open({ id: PANE, title: TITLE })
 
-    return { text: 'Work pane opened.' }
+    return { text: 'Claudeopticon pane opened.' }
   })
 
   on('agent.spawn', async ($, e, next) => {

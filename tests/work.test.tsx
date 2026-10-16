@@ -5,7 +5,7 @@ import { endAgentTasks, taskLines, launchedTask, endedTask, readTaskName, taskNa
 import type { AgentRow, TodoFile } from '../types'
 import type { BackgroundTask } from '../hooks/register'
 
-const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Work', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
+const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
 const PLAN = ['# Plan', '- [x] Write code', '- [~] #T2 Run the test suite', '- [ ] Ship the release build', 'prose', '  - [X] nested'].join('\n')
 

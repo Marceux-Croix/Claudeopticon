@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- A background task that a helper agent started now ends when that agent ends. Before, its line could stay on running for good.
+
 ## 0.3.0
 
 First public release.

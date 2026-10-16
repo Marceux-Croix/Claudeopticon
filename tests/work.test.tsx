@@ -1,8 +1,9 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
-import { taskLines, launchedTask, endedTask, readTaskName, taskNamePrompt, RULES, callSummary, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, plainText, progressReply, readClaims, buildView, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
+import { endAgentTasks, taskLines, launchedTask, endedTask, readTaskName, taskNamePrompt, RULES, callSummary, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, plainText, progressReply, readClaims, buildView, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
 import type { AgentRow, TodoFile } from '../types'
+import type { BackgroundTask } from '../hooks/register'
 
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Work', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
@@ -1170,4 +1171,13 @@ test('agent data is kept by session, so a reload shows each agent as it was', as
   expect(models).toBe(0)
   const kept = store.get('agents:sess-1') as { id: string }[]
   expect(kept.map(row => row.id)).toEqual(['a1'])
+})
+
+test("a background task a helper agent started ends when that agent ends; the main conversation's own stays", () => {
+  const task = (id: string, agentId?: string): BackgroundTask => ({ id, stock: id, name: id, kind: 'shell', status: 'running', startedAt: 0, ...(agentId === undefined ? {} : { agentId }) })
+  const tasks = [task('t1', 'a1'), task('t2', 'a2'), task('t3'), task('t4', 'gone')]
+  const ended = endAgentTasks(tasks, [row({ id: 'a1', status: 'killed' }), row({ id: 'a2', status: 'running' })], 20_000)
+  expect(ended.map(one => one.status)).toEqual(['ended', 'running', 'running', 'ended'])
+  expect(endAgentTasks(tasks, [], 5_000).map(one => one.status)).toEqual(['running', 'running', 'running', 'running'])
+  expect(taskLines(ended)[0]?.line).toBe('t1')
 })

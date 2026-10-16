@@ -30,7 +30,7 @@ Strongest first: the ID in the agent's description or prompt (a whole ID: `#T1` 
 
 ## Background tasks
 
-A card starts when the launching call returns a task ID (`backgroundTaskId` from a background Bash call, `taskId` from `Monitor` and `Workflow`). It ends when the task's notification reports `completed`, `failed` or `killed`, or when `TaskStop` names it. Haiku shortens the description to a name once; until it answers, the cut description stands in.
+A card starts when the launching call returns a task ID (`backgroundTaskId` from a background Bash call, `taskId` from `Monitor` and `Workflow`). It ends when the task's notification reports `completed`, `failed` or `killed`, or when `TaskStop` names it. A task a helper agent starts reports its end to that agent, not to the main conversation, so its card ends when that agent ends (or after 15 s with no such agent). Haiku shortens the description to a name once; until it answers, the cut description stands in.
 
 ## Categories
 

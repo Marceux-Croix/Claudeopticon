@@ -270,7 +270,8 @@ export function orchestratorSvg(entries: readonly { line: string; at: number; is
 export type TaskView = {
   name: string
   kind: 'shell' | 'monitor' | 'workflow'
-  status: 'running' | 'completed' | 'failed' | 'killed'
+  /** `ended`: the helper agent that started it ended, and no word came of how the task ended. */
+  status: 'running' | 'completed' | 'failed' | 'killed' | 'ended'
   startedAt: number
   endedAt?: number
 }

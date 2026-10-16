@@ -704,6 +704,7 @@ async function refreshAgents($: EngineInterface, isForced = false): Promise<void
     }
   }
   agentRows = [...known.values()]
+  backgroundTasks = endAgentTasks(backgroundTasks, agentRows, time)
   lastClock = time
   clockMs = time
   redraw($)
@@ -1168,7 +1169,8 @@ export function orchestratorView(history: readonly OrchestratorEntry[], page: nu
  * in the background, monitors and workflows. Each starts with the tool call that launched it and
  * ends with its notification or a TaskStop. Its name is made once, at the start, and never changes.
  */
-export type BackgroundTask = TaskView & { id: string; stock: string }
+/** `agentId`: the helper agent that started the task, absent for the main conversation's own. */
+export type BackgroundTask = TaskView & { id: string; stock: string; agentId?: string }
 let backgroundTasks: BackgroundTask[] = []
 let isFinishedTasksShown = false
 
@@ -1246,14 +1248,30 @@ export function taskLines(tasks: readonly BackgroundTask[]): { line: string; at:
   }))
 }
 
-async function trackLaunch($: EngineInterface, tool: string, input: Record<string, unknown>, result: unknown): Promise<void> {
+async function trackLaunch($: EngineInterface, tool: string, input: Record<string, unknown>, result: unknown, agentId: string | undefined): Promise<void> {
   const launched = launchedTask(tool, input, result)
   if (launched === undefined || backgroundTasks.some(task => task.id === launched.id)) {
     return
   }
-  backgroundTasks = [...backgroundTasks, { ...launched, name: fallbackName(launched.stock), status: 'running', startedAt: await $.clock.now() }]
+  backgroundTasks = [...backgroundTasks, { ...launched, name: fallbackName(launched.stock), status: 'running', startedAt: await $.clock.now(), ...(agentId === undefined ? {} : { agentId }) }]
   redraw($)
   void nameTask($, launched.id, launched.stock)
+}
+
+/**
+ * Ends the running tasks whose helper agent has ended or is gone: a task an agent starts tells that
+ * agent when it ends, never the main conversation, so without this its line stays live for good.
+ */
+export function endAgentTasks(tasks: readonly BackgroundTask[], rows: readonly AgentRow[], time: number): BackgroundTask[] {
+  return tasks.map(task => {
+    if (task.status !== 'running' || task.agentId === undefined) {
+      return task
+    }
+    const row = rows.find(one => one.id === task.agentId)
+    const isGone = row === undefined ? time - task.startedAt > UNLISTED_MS : isEnded(row.status)
+
+    return isGone ? { ...task, status: 'ended' as const, endedAt: time } : task
+  })
 }
 
 async function endTask($: EngineInterface, id: string, status: BackgroundTask['status']): Promise<void> {
@@ -1329,8 +1347,9 @@ function start($: EngineInterface): void {
 
         return
       }
-      if (pendingTools.size > 0 || agentRows.some(row => !isEnded(row.status))) {
-        await refreshAgents($)
+      // A live agent, or a running task a helper agent started, keeps the agent list checked.
+      if (pendingTools.size > 0 || agentRows.some(row => !isEnded(row.status)) || backgroundTasks.some(task => task.status === 'running' && task.agentId !== undefined)) {
+        await refreshAgents($, backgroundTasks.some(task => task.status === 'running' && task.agentId !== undefined && agentRows.every(row => row.id !== task.agentId || isEnded(row.status))))
       }
       if (ticks % SCAN_EVERY === 0) {
         await scan($)
@@ -1514,7 +1533,7 @@ export const register: Register = (on, options) => {
     }
     if (ran.deny === undefined) {
       const input = e as unknown as Record<string, unknown>
-      await trackLaunch($, e.tool, input, ran.result).catch(() => undefined)
+      await trackLaunch($, e.tool, input, ran.result, e.agentId).catch(() => undefined)
       if (e.tool === 'TaskStop' && typeof input.task_id === 'string') {
         await endTask($, input.task_id, 'killed').catch(() => undefined)
       }

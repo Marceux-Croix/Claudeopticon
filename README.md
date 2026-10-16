@@ -69,7 +69,7 @@ This card lists what Claude does itself, not its agents. Each line is the short 
 
 ![The Background tasks card](docs/images/tasks.svg)
 
-Claude can start work that keeps running: a build, a server, a monitor (a watch on a log file), or a workflow of several agents. Each task gets a line with a short name, its start time, and a dot: pulsing while it runs, gray when it ended ("(failed)" or "(stopped)" if not clean). Haiku, Claude's small model, makes the name once, at the start.
+Claude can start work that keeps running: a build, a server, a monitor (a watch on a log file), or a workflow of several agents. Each task gets a line with a short name, its start time, and a dot: pulsing while it runs, gray when it ended ("(failed)" or "(stopped)" if not clean). Haiku, Claude's small model, makes the name once, at the start. A task that a helper agent started ends with that agent.
 
 Finished tasks are hidden. **Show finished tasks** brings them back. Agents that run in the background have their own cards.
 

@@ -283,9 +283,29 @@ export async function findTodoDirWith(fs: TodoFs): Promise<string | undefined> {
   return real !== undefined && isGlobalTodo(real) ? undefined : found
 }
 
-/** True for the global todo folder, `<home>/.claude/.claude_todo`, which the mod never reads. A project's own `<repo>/.claude/.claude_todo` is not it. */
+/**
+ * True for the global todo folder, `<home>/.claude/.claude_todo`, which the mod never reads. A project's
+ * own `<repo>/.claude/.claude_todo` is not it. On Windows the profile can live anywhere, so every
+ * `.claude/.claude_todo` counts as global there.
+ */
 export function isGlobalTodo(realPath: string): boolean {
-  return /^\/(Users|home)\/[^/]+\/\.claude\/\.claude_todo\/?$|^\/root\/\.claude\/\.claude_todo\/?$/.test(realPath)
+  return /^\/(Users|home)\/[^/]+\/\.claude\/\.claude_todo\/?$|^\/root\/\.claude\/\.claude_todo\/?$/.test(realPath) || /^[A-Za-z]:[\\/](.*[\\/])?\.claude[\\/]\.claude_todo[\\/]?$/i.test(realPath)
+}
+
+/**
+ * A PowerShell expression for a path, built from its character codes: digits and commas only, so no
+ * character in a file name (straight or curly quote, `$`, backtick) can end the string or run code.
+ */
+export function psPath(path: string): string {
+  return `[string]::new([char[]](${[...path.replace(/\//g, '\\')].map(char => char.codePointAt(0)).join(',')}))`
+}
+
+/** True for a Windows absolute path, `C:/x` or `C:\x`. */
+const isWinPath = (path: string): boolean => /^[A-Za-z]:[\\/]/.test(path)
+
+/** A Windows path with forward slashes and an upper-case drive letter, so two spellings compare equal. Any other path is returned as it is (a backslash is a legal POSIX name character). */
+function normPath(path: string): string {
+  return isWinPath(path) ? path.replace(/\\/g, '/').replace(/^[a-z]:/, drive => drive.toUpperCase()) : path
 }
 
 /**
@@ -355,7 +375,7 @@ export function todoFoldersIn(listing: string, root: string): { path: string; re
  */
 export function repoRoots(stdout: string): { root: string; main?: string } | undefined {
   const [top, common] = stdout.split('\n').map(line => line.trim())
-  if (top === undefined || top === '' || !top.startsWith('/')) {
+  if (top === undefined || top === '' || !(top.startsWith('/') || /^[A-Za-z]:\//.test(top))) {
     return undefined
   }
   const main = common !== undefined && common !== `${top}/.git` && common.endsWith('/.git') ? common.slice(0, -'/.git'.length) : undefined
@@ -724,7 +744,9 @@ export function foldParts(line: string): { key: string; id: string } | undefined
 async function isPlainFile($: EngineInterface, path: string): Promise<boolean> {
   const stat = await $.fs.stat(path).catch(() => undefined)
 
-  return stat !== undefined && stat.kind === 'file' && (await realOf($, path)) === path
+  const real = await realOf($, path)
+
+  return stat !== undefined && stat.kind === 'file' && real !== undefined && normPath(real) === normPath(path)
 }
 
 /**
@@ -734,13 +756,18 @@ async function isPlainFile($: EngineInterface, path: string): Promise<boolean> {
  */
 async function isTrustedDir($: EngineInterface, path: string): Promise<boolean> {
   const parts = path.split('/')
-  if (!path.startsWith('/') || parts.includes('..') || parts.filter(part => part !== '').pop() !== DIR) {
+  if (!(path.startsWith('/') || /^[A-Za-z]:\//.test(path)) || parts.includes('..') || parts.filter(part => part !== '').pop() !== DIR) {
     return false
   }
   const real = await realOf($, path)
   const root = centralRoot === undefined ? undefined : await realOf($, centralRoot)
 
-  return real !== undefined && real === path && root !== undefined && real.startsWith(`${root}/`) && !isGlobalTodo(real)
+  if (real === undefined || root === undefined) {
+    return false
+  }
+  const [nReal, nRoot] = [normPath(real), normPath(root)]
+
+  return nReal === normPath(path) && nReal.startsWith(`${nRoot}/`) && !isGlobalTodo(nReal)
 }
 
 /**
@@ -917,12 +944,61 @@ async function consolidate($: EngineInterface): Promise<void> {
   }
 }
 
+/** The answer of `uname -s`, asked once. Empty when it cannot be asked. */
+let unameCache: string | undefined
+
+/** The command lines that send a file to the OS trash, in the order they are tried. */
+async function trashCommands($: EngineInterface, path: string): Promise<string[][]> {
+  if (isWinPath(path)) {
+    // DeleteFile deletes outright, with no word, where there is no Recycle Bin: so only a local fixed
+    // drive, and never when a Recycle Bin is set to delete at once (NukeOnDelete).
+    const bin = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\BitBucket'
+    const script = [
+      `$p = ${psPath(path)}`,
+      "if ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($p)).DriveType -ne 'Fixed') { exit 3 }",
+      `$keys = @(Get-Item -LiteralPath '${bin}' -ErrorAction SilentlyContinue) + @(Get-ChildItem -LiteralPath '${bin}\\Volume' -ErrorAction SilentlyContinue)`,
+      'if ($keys | Where-Object { $_.GetValue(\'NukeOnDelete\') -eq 1 }) { exit 4 }',
+      'Add-Type -AssemblyName Microsoft.VisualBasic',
+      "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, 'OnlyErrorDialogs', 'SendToRecycleBin')",
+    ].join('; ')
+
+    return [['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script]]
+  }
+  if (unameCache === undefined) {
+    unameCache = ((await $.process.run(['uname', '-s']).catch(() => undefined))?.stdout ?? '').trim()
+  }
+  if (unameCache === 'Darwin') {
+    // The macOS `trash` CLI takes no `--`; the path is absolute, so it cannot look like a flag.
+    const quoted = path.replace(/[\\"]/g, char => `\\${char}`)
+
+    return [['/usr/bin/trash', path], ['osascript', '-e', `tell application "Finder" to delete POSIX file "${quoted}"`]]
+  }
+
+  return [['gio', 'trash', '--', path], ['trash-put', '--', path], ['kioclient5', 'move', path, 'trash:/']]
+}
+
 /**
- * Removes the empty `.md` files the last scan found (top level and archive): each is read again
- * right before its `rm -- <path>` (no shell, no glob, one call per file) and skipped if it holds
+ * Sends one file to the OS trash. True only if a command exited 0 and the file is gone. There is no
+ * fallback to `rm` or any other outright delete: when no trash method works, the file stays.
+ */
+async function trashFile($: EngineInterface, path: string): Promise<boolean> {
+  for (const argv of await trashCommands($, path)) {
+    const result = await $.process.run(argv).catch(() => undefined)
+    if (result?.exitCode === 0 && !(await $.fs.exists(path).catch(() => true))) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Sends the empty `.md` files the last scan found (top level and archive) to the OS trash: each is
+ * read again right before `trashFile` (no shell, no glob, one call per file) and skipped if it holds
  * anything now. Never the central target, never a file in an untrusted folder or behind a symlink,
- * never `categories.json`. Then `rmdir --` on an emptied `archive/` and folder, which fails on a
- * non-empty directory: the intended guard.
+ * never `categories.json`. A file whose trash call fails is kept and named with the reason; nothing
+ * is ever deleted outright. Then a non-recursive `rmdir --` (a .NET `Directory.Delete` on Windows)
+ * on an emptied `archive/` and folder, which fails on a non-empty directory: the intended guard.
  */
 async function deleteEmpty($: EngineInterface): Promise<void> {
   const central = centralFolder()
@@ -931,9 +1007,13 @@ async function deleteEmpty($: EngineInterface): Promise<void> {
   }
   isWorking = true
   try {
+    // `uname` is asked once per press, so a changed platform is never read from a stale answer.
+    unameCache = undefined
     const run = async (argv: string[]) => (await $.process.run(argv).catch(() => undefined))?.exitCode === 0
     const target = await chooseTarget($, central, (await mdFiles($, central)).filter(name => !name.startsWith('archive/')))
     const folders = new Set<string>()
+    const isWin = isWinPath(central)
+    const unmoved: string[] = []
     let removed = 0
     const kept: string[] = []
     for (const file of emptyFiles) {
@@ -949,17 +1029,18 @@ async function deleteEmpty($: EngineInterface): Promise<void> {
         kept.push(file.path)
         continue
       }
-      if (await run(['rm', '--', file.path])) {
+      if (await trashFile($, file.path)) {
         removed += 1
         folders.add(file.folder)
       } else {
         kept.push(file.path)
+        unmoved.push(file.path)
       }
     }
     for (const folder of folders) {
       for (const dir of [`${folder}/archive`, folder]) {
         // Fails on a directory that still holds files, which keeps it.
-        await run(['rmdir', '--', dir])
+        await run(isWin ? ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', `[System.IO.Directory]::Delete(${psPath(dir)})`] : ['rmdir', '--', dir])
       }
     }
     // A folder that is gone leaves the folder list.
@@ -973,7 +1054,11 @@ async function deleteEmpty($: EngineInterface): Promise<void> {
     if (kept.length > 0) {
       $.ui.toast(`Kept: ${kept.join(', ')}`)
     }
-    $.ui.toast(`Removed ${removed} empty ${removed === 1 ? 'file' : 'files'}.`)
+    if (unmoved.length > 0) {
+      const reason = isWin ? 'PowerShell could not move it to the Recycle Bin' : unameCache === 'Darwin' ? 'no trash method worked; /usr/bin/trash and osascript failed' : 'no trash command found; install gio or trash-cli'
+      $.ui.toast(`Not moved to the ${isWin ? 'Recycle Bin' : 'Trash'}, file kept (${reason}): ${unmoved.join(', ')}`)
+    }
+    $.ui.toast(`Moved ${removed} empty todo ${removed === 1 ? 'file' : 'files'} to the ${isWin ? 'Recycle Bin' : 'Trash'}.`)
     await scan($, true).catch(() => undefined)
   } finally {
     isWorking = false

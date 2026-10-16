@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3
+
+- Delete empty todos moves empty todo files to the Trash (the Recycle Bin on Windows) instead of deleting them, so you can get them back. It never falls back to an outright delete: if no trash command works, it keeps the file and says why.
+- Windows paths (`C:/...`) pass the same trust rules as macOS and Linux paths, so the todo buttons work on Windows. On Windows the Trash step runs only on a local fixed drive with its Recycle Bin on, and keeps the file elsewhere. A file name reaches PowerShell only as character codes, and every `.claude/.claude_todo` counts as the global folder.
+
 ## 0.5.2
 
 - Consolidate gives a clashing ticket a new ID that no moved file uses, so one clash renames one ticket and no other.

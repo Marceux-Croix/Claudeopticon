@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { boardHead, clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
-import { applyRefRenames, removeDuplicateTickets, removedNote, foldParts, endAgentTasks, itemLines, renumberLines, appendSections, applyRenames, nonBlankLines, renameNote, taskLines, launchedTask, endedTask, readTaskName, taskNamePrompt, RULES, callSummary, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
+import { psPath, applyRefRenames, removeDuplicateTickets, removedNote, foldParts, endAgentTasks, itemLines, renumberLines, appendSections, applyRenames, nonBlankLines, renameNote, taskLines, launchedTask, endedTask, readTaskName, taskNamePrompt, RULES, callSummary, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
 import type { AgentRow, TodoFile } from '../types'
 import type { FileView } from '../hooks/cards'
 import type { BackgroundTask } from '../hooks/register'
@@ -1335,12 +1335,17 @@ test('a folder input picks a move_ticket target exactly, never by a word in the 
   expect(findTicket(list, '#T1', 'b/.claude_todo/TODO.md')?.item.text).toBe('#T1 Second')
 })
 
+/** The path a PowerShell script names through `psPath`, with forward slashes. */
+const fromPs = (script: string) => String.fromCodePoint(...(/\[char\[\]\]\(([\d,]+)\)/.exec(script)![1]!.split(',').map(Number))).replace(/\\/g, '/')
+
 /**
  * A fake repo (at `/repo` unless `root` says) with the given files by absolute path; `hasNearest` says
  * whether the session folder has its own `.claude_todo`; `rev` is what `git rev-parse` answers;
- * `links` maps a path to the real path the fake stat gives it (a symlink).
+ * `links` maps a path to the real path the fake stat gives it (a symlink). `uname` is what `uname -s`
+ * answers; a trash command named in `failing` exits 1, and one named in `stays` exits 0 but leaves the
+ * file. Any other trash command removes the file from `files`, as the real one would.
  */
-function repoWith(on: Parameters<Parameters<typeof test>[1]>[1], files: Record<string, string>, opts: { hasNearest: boolean; listed: string[]; root?: string; rev?: string; links?: Record<string, string> }) {
+function repoWith(on: Parameters<Parameters<typeof test>[1]>[1], files: Record<string, string>, opts: { hasNearest: boolean; listed: string[]; root?: string; rev?: string; links?: Record<string, string>; uname?: string; failing?: string[]; stays?: string[] }) {
   const R = opts.root ?? '/repo'
   const state = { hasNearest: opts.hasNearest, listed: opts.listed }
   const writes: string[] = []
@@ -1352,26 +1357,51 @@ function repoWith(on: Parameters<Parameters<typeof test>[1]>[1], files: Record<s
     calls.push(argv.join(' '))
     const out = (stdout: string) => ({ value: { exitCode: 0, stdout, stderr: '' } }) as never
 
+    const fail = { value: { exitCode: 1, stdout: '', stderr: 'failed' } } as never
+    const dirEmpty = (dir: string) => !Object.keys(files).some(path => path.startsWith(`${dir}/`))
+
+    if (argv[0] === 'uname') {
+      return out(`${opts.uname ?? 'Darwin'}\n`)
+    }
+    if (['/usr/bin/trash', 'osascript', 'gio', 'trash-put', 'kioclient5', 'powershell.exe'].includes(argv[0]!)) {
+      const script = argv[argv.length - 1]!
+      if (argv[0] === 'powershell.exe' && script.startsWith('[System.IO.Directory]::Delete(')) {
+        return dirEmpty(fromPs(script)) ? out('') : fail
+      }
+      if (opts.failing?.includes(argv[0]!)) {
+        return fail
+      }
+      const path =
+        argv[0] === 'osascript' ? /POSIX file "(.*)"$/.exec(script)![1]!.replace(/\\(.)/g, '$1')
+        : argv[0] === 'powershell.exe' ? fromPs(script)
+        : argv[0] === 'kioclient5' ? argv[2]!
+        : argv[argv.length - 1]!
+      if (!opts.stays?.includes(argv[0]!)) {
+        delete files[path]
+      }
+
+      return out('')
+    }
     if (argv[0] === 'rm') {
       delete files[argv[2]!]
 
       return out('')
     }
     if (argv[0] === 'rmdir') {
-      const isEmpty = !Object.keys(files).some(path => path.startsWith(`${argv[2]}/`))
-
-      return (isEmpty ? out('') : { value: { exitCode: 1, stdout: '', stderr: 'not empty' } }) as never
+      return dirEmpty(argv[2]!) ? out('') : fail
     }
 
     return argv[1] === 'rev-parse' ? out(opts.rev ?? `${R}\n${R}/.git\n`) : out(argv.includes('--directory') ? '' : state.listed.join('\0'))
   })
   // The engine may hand the session folder's own paths over made absolute: match by their ends.
-  on('fs.exists', (_$, e) => ({ value: e.path.endsWith('.git') || (e.path.endsWith('.claude_todo') && !inside(e.path) && state.hasNearest) || (inside(e.path) && (e.path in files || Object.keys(files).some(path => path.startsWith(`${e.path}/`)))) }))
-  on('fs.stat', (_$, e) => ({ value: { kind: e.path in files ? 'file' : 'dir', size: 0, mtimeMs: 1, isLink: false, realPath: opts.links?.[e.path] ?? (inside(e.path) ? e.path : `${R}/.claude_todo`) } }) as never)
-  on('fs.list', (_$, e) => ({ value: (inside(e.path) ? names(e.path) : state.hasNearest ? names(`${R}/.claude_todo`) : []).map(name => ({ name, kind: 'file', size: 1, mtimeMs: 2, isLink: false })) }))
-  on('fs.read', (_$, e) => ({ value: files[inside(e.path) ? e.path : `${R}/.claude_todo/${e.path.split('/').pop()}`] ?? '' }))
+  // It does the same to a Windows path (`C:/repo`), which `abs` hands back whole.
+  const abs = (path: string) => /[A-Za-z]:\/.*$/.exec(path)?.[0] ?? path
+  on('fs.exists', (_$, e) => ({ value: abs(e.path).endsWith('.git') || (abs(e.path).endsWith('.claude_todo') && !inside(abs(e.path)) && state.hasNearest) || (inside(abs(e.path)) && (abs(e.path) in files || Object.keys(files).some(path => path.startsWith(`${abs(e.path)}/`)))) }))
+  on('fs.stat', (_$, e) => ({ value: { kind: abs(e.path) in files ? 'file' : 'dir', size: 0, mtimeMs: 1, isLink: false, realPath: opts.links?.[abs(e.path)] ?? (inside(abs(e.path)) ? abs(e.path) : `${R}/.claude_todo`) } }) as never)
+  on('fs.list', (_$, e) => ({ value: (inside(abs(e.path)) ? names(abs(e.path)) : state.hasNearest ? names(`${R}/.claude_todo`) : []).map(name => ({ name, kind: 'file', size: 1, mtimeMs: 2, isLink: false })) }))
+  on('fs.read', (_$, e) => ({ value: files[inside(abs(e.path)) ? abs(e.path) : `${R}/.claude_todo/${abs(e.path).split('/').pop()}`] ?? '' }))
   on('fs.write', (_$, e) => {
-    const path = inside(e.path) ? e.path : `${R}/.claude_todo/${e.path.split('/').pop()}`
+    const path = inside(abs(e.path)) ? abs(e.path) : `${R}/.claude_todo/${abs(e.path).split('/').pop()}`
     files[path] = e.text as string
     writes.push(path)
 
@@ -1546,6 +1576,7 @@ test('a todo folder made after the mod loaded shows at the next scan, as the pri
 // ---------------------------------------------------------------- tidying the todo files
 
 const rmCalls = (calls: string[]) => calls.filter(call => call.startsWith('rm'))
+const trashed = (calls: string[]) => calls.filter(call => call.startsWith('/usr/bin/trash ')).sort()
 
 const open = async ($: Parameters<Parameters<typeof test>[1]>[0]) => {
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
@@ -1767,12 +1798,13 @@ test('Delete empty todos removes only the empty files and their emptied folders,
   const ui = await open($)
   expect(await ui.find({ key: 'todo-consolidate' })).toBeUndefined()
   await ui.press({ key: 'todo-delete-empty' })
-  expect(rmCalls(calls).filter(call => call.startsWith('rm --')).sort()).toEqual([
-    'rm -- /repo/.claude_todo/BACKLOG.md',
-    'rm -- /repo/.claude_todo/archive/EMPTY.md',
-    'rm -- /repo/mods/x/.claude_todo/archive/GONE.md',
-    'rm -- /repo/mods/y/.claude_todo/NOTES.md',
+  expect(trashed(calls)).toEqual([
+    '/usr/bin/trash /repo/.claude_todo/BACKLOG.md',
+    '/usr/bin/trash /repo/.claude_todo/archive/EMPTY.md',
+    '/usr/bin/trash /repo/mods/x/.claude_todo/archive/GONE.md',
+    '/usr/bin/trash /repo/mods/y/.claude_todo/NOTES.md',
   ])
+  expect(calls.filter(call => call.startsWith('rm --'))).toEqual([])
   expect(files['/repo/.claude_todo/TODO.md']).toBe('')
   expect(files['/repo/.claude_todo/categories.json']).toBe('{}')
   expect(files['/repo/mods/x/.claude_todo/TODO.md']).toBe('- [ ] stays')
@@ -1808,7 +1840,113 @@ test('Delete empty todos keeps a file that gained content since the scan', async
   expect(await ui.find({ key: 'todo-delete-empty' })).toBeDefined()
   reads = 0
   await ui.press({ key: 'todo-delete-empty' })
+  expect(trashed(calls)).toEqual([])
   expect(rmCalls(calls).some(call => call.startsWith('rm --'))).toBe(false)
+})
+
+/** A repo with two empty todo files and one with content, for the trash tests. */
+const EMPTIES = (root = '/repo'): Record<string, string> => ({
+  [`${root}/.claude_todo/TODO.md`]: '- [ ] one',
+  [`${root}/mods/x/.claude_todo/OLD's.md`]: '',
+})
+
+/** Runs Delete empty todos on a fake repo and returns the calls, the files left and the toasts. */
+async function trashRun($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1], files: Record<string, string>, opts: { root?: string; uname?: string; failing?: string[]; stays?: string[] }) {
+  mock.clock(on)
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => {
+    toasts.push(JSON.stringify(e))
+
+    return { value: undefined } as never
+  })
+  const root = opts.root ?? '/repo'
+  const { calls } = repoWith(on, files, { ...opts, hasNearest: true, listed: ['.claude_todo/TODO.md', "mods/x/.claude_todo/OLD's.md"], rev: `${root}\n${root}/.git\n` })
+  const ui = await open($)
+  await ui.press({ key: 'todo-delete-empty' })
+
+  return { calls, toasts: toasts.join('\n') }
+}
+
+test('Delete empty todos on macOS uses /usr/bin/trash without --, and never rm', async ($, on) => {
+  const files = EMPTIES()
+  const { calls, toasts } = await trashRun($, on, files, {})
+  expect(calls).toContain("/usr/bin/trash /repo/mods/x/.claude_todo/OLD's.md")
+  expect(calls.some(call => call.startsWith('osascript'))).toBe(false)
+  expect(calls.filter(call => call.startsWith('uname'))).toEqual(['uname -s'])
+  expect(rmCalls(calls).filter(call => call.startsWith('rm --'))).toEqual([])
+  expect(Object.keys(files)).toEqual(['/repo/.claude_todo/TODO.md'])
+  expect(toasts).toContain('Moved 1 empty todo file to the Trash')
+})
+
+test('Delete empty todos on macOS falls back to osascript when trash fails', async ($, on) => {
+  const files = EMPTIES()
+  const { calls } = await trashRun($, on, files, { failing: ['/usr/bin/trash'] })
+  expect(calls).toContain(`osascript -e tell application "Finder" to delete POSIX file "/repo/mods/x/.claude_todo/OLD's.md"`)
+  expect(files["/repo/mods/x/.claude_todo/OLD's.md"]).toBeUndefined()
+  expect(calls.filter(call => call.startsWith('rm --'))).toEqual([])
+})
+
+test('Delete empty todos on Linux tries gio, then trash-put, then kioclient5', async ($, on) => {
+  const first = EMPTIES()
+  const one = await trashRun($, on, first, { uname: 'Linux' })
+  expect(one.calls).toContain("gio trash -- /repo/mods/x/.claude_todo/OLD's.md")
+  expect(one.calls.some(call => call.startsWith('trash-put'))).toBe(false)
+  expect(Object.keys(first)).toEqual(['/repo/.claude_todo/TODO.md'])
+})
+
+test('Delete empty todos on Linux falls back to trash-put when gio fails', async ($, on) => {
+  const files = EMPTIES()
+  const { calls } = await trashRun($, on, files, { uname: 'Linux', failing: ['gio'] })
+  expect(calls).toContain("gio trash -- /repo/mods/x/.claude_todo/OLD's.md")
+  expect(calls).toContain("trash-put -- /repo/mods/x/.claude_todo/OLD's.md")
+  expect(calls.some(call => call.startsWith('kioclient5'))).toBe(false)
+  expect(files["/repo/mods/x/.claude_todo/OLD's.md"]).toBeUndefined()
+})
+
+test('Delete empty todos keeps the file and says why when no trash command works, and never calls rm', async ($, on) => {
+  const files = EMPTIES()
+  const { calls, toasts } = await trashRun($, on, files, { uname: 'Linux', failing: ['gio', 'trash-put', 'kioclient5'] })
+  expect(calls.some(call => call.startsWith('kioclient5 move'))).toBe(true)
+  expect(rmCalls(calls).filter(call => call.startsWith('rm --'))).toEqual([])
+  expect(files["/repo/mods/x/.claude_todo/OLD's.md"]).toBe('')
+  expect(toasts).toContain("OLD's.md")
+  expect(toasts).toContain('no trash command found; install gio or trash-cli')
+  expect(toasts).toContain('Moved 0 empty todo files')
+})
+
+test('Delete empty todos counts a command that exits 0 but leaves the file as a failure', async ($, on) => {
+  const files = EMPTIES()
+  const { calls, toasts } = await trashRun($, on, files, { stays: ['/usr/bin/trash', 'osascript'] })
+  expect(calls.some(call => call.startsWith('osascript'))).toBe(true)
+  expect(files["/repo/mods/x/.claude_todo/OLD's.md"]).toBe('')
+  expect(calls.filter(call => call.startsWith('rm --'))).toEqual([])
+  expect(toasts).toContain('file kept')
+})
+
+test('Delete empty todos on a Windows path uses PowerShell, with the path as character codes and a fixed-drive check', async ($, on) => {
+  const files = EMPTIES('C:/repo')
+  const { calls, toasts } = await trashRun($, on, files, { root: 'C:/repo' })
+  const script = calls.find(call => call.startsWith('powershell.exe') && call.includes('DeleteFile'))
+  expect(script).toContain(`$p = ${psPath("C:/repo/mods/x/.claude_todo/OLD's.md")}`)
+  expect(script).not.toContain("OLD's")
+  expect(script).toContain("DriveType -ne 'Fixed') { exit 3 }")
+  expect(script).toContain("GetValue('NukeOnDelete') -eq 1 }) { exit 4 }")
+  expect(script).toContain("DeleteFile($p, 'OnlyErrorDialogs', 'SendToRecycleBin')")
+  // No character of a file name reaches the script as text: curly quotes, `$` and backticks become codes.
+  expect(psPath('C:/a’);$x`b')).toBe('[string]::new([char[]](67,58,92,97,8217,41,59,36,120,96,98))')
+  expect(calls.some(call => call.startsWith('uname') || call.startsWith('/usr/bin/trash'))).toBe(false)
+  expect(calls.some(call => call.includes('[System.IO.Directory]::Delete('))).toBe(true)
+  expect(calls.some(call => call.startsWith('rm'))).toBe(false)
+  expect(Object.keys(files)).toEqual(['C:/repo/.claude_todo/TODO.md'])
+  expect(toasts).toContain('Moved 1 empty todo file to the Recycle Bin')
+})
+
+test('isGlobalTodo matches a Windows home too, in any case', () => {
+  expect(isGlobalTodo('C:/Accounts/Me/.claude/.claude_todo')).toBe(true)
+  expect(isGlobalTodo('c:\\accounts\\Me\\.claude\\.claude_todo\\')).toBe(true)
+  expect(isGlobalTodo('C:/repo/.claude_todo')).toBe(false)
+  // A profile outside C:/Users still counts: on Windows every .claude/.claude_todo is global.
+  expect(isGlobalTodo('D:/Profiles/me/.claude/.claude_todo')).toBe(true)
 })
 
 test('Delete duplicate tickets keeps the first of each exact group, fixes references, and tells Claude', async ($, on) => {

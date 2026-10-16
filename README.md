@@ -112,7 +112,7 @@ The move buttons are for work you do yourself, such as a human review. They chan
 The Todo heading says how many todo files the board pulls from ("Pulling todo from 3 files"; archives are not counted). Up to three buttons sit next to it. Each shows only when it has work to do, and disappears once it is done. You can use one, two or all three, in any order.
 
 - **Consolidate todos** (more than one todo file): moves every ticket into one central file, `TODO.md` in the repo's root `.claude_todo/`. If that folder has no `TODO.md` but exactly one other todo file, that file is the central file. Notes move too, under a `## From <folder>/<file>` heading per file. Nothing is folded and nothing is deleted. A ticket whose `#T` ID the central file already uses gets the next ID that no file uses, references to it follow, and Claude is told the new IDs once. Archive files move into the same-named file in the central `archive/`. Each old file is emptied only after its content is confirmed in the central file. If a file changed in the meantime, it is left alone, and the pane names it. The emptied files stay on disk and in the header, marked Empty, until you delete them.
-- **Delete empty todos** (an empty todo file exists): removes empty todo files, and then their `archive/` and `.claude_todo/` folders if those are empty too. It never removes the central file, a file with content, or `categories.json`.
+- **Delete empty todos** (an empty todo file exists): moves empty todo files to the Trash (the Recycle Bin on Windows), so you can get them back. Then it removes their `archive/` and `.claude_todo/` folders if those are empty too. It never deletes a file outright: if it cannot use the Trash, it keeps the file and says why. It never removes the central file, a file with content, or `categories.json`.
 - **Delete duplicate tickets** (the central file holds identical tickets): removes tickets that are letter-for-letter identical, apart from their own ID, and keeps the first. A subtask, or a ticket with subtasks under it, is never removed. A removed ticket's ID is rewritten to the kept one wherever it is mentioned, and Claude is told once.
 
 Each button reads a file again right before it writes it, and skips a file that changed. The buttons are off in a git worktree and when the repo root is `~/.claude`.
@@ -182,7 +182,7 @@ The mod uses Haiku for three small jobs:
 
 Everything else is free or nearly free: the Orchestrator card makes no requests, the instructions to Claude are about 400 tokens per conversation, a progress report is about 40 tokens, and card token counts come from usage Claude Code already reports.
 
-All requests go through your own Claude Code session. The mod sends nothing anywhere else. On disk, it reads `.claude_todo/` and writes the checkbox of a ticket you move, the checkbox of a ticket you allow Claude to move, and `.claude_todo/categories.json`, which remembers each ticket's group. The three todo buttons write and remove todo files only when you click them.
+All requests go through your own Claude Code session. The mod sends nothing anywhere else. On disk, it reads `.claude_todo/` and writes the checkbox of a ticket you move, the checkbox of a ticket you allow Claude to move, and `.claude_todo/categories.json`, which remembers each ticket's group. The three todo buttons change todo files only when you click them: Consolidate writes and empties them, Delete duplicate tickets edits the central file, and Delete empty todos moves empty files to the Trash.
 
 ## Limits
 
@@ -193,6 +193,7 @@ All requests go through your own Claude Code session. The mod sends nothing anyw
 - Ticket buttons sit over the card, so their position is approximate.
 - The pane finds the `.claude_todo/` folders once, when it starts. A new `.claude_todo/` in the session's folder or a folder above it shows at once. One made elsewhere needs `/reload-plugins` (or a new session).
 - **Consolidate todos**, **Delete empty todos** and **Delete duplicate tickets** are off in a repo whose root folder is the home `.claude` folder (`~/.claude`), because there the repo's root `.claude_todo/` is Claude Code's global todo folder, which the mod never writes to. They are also off in a git worktree. In every other repo the central todo is the repo's own root `.claude_todo/`.
+- Delete empty todos uses the system's own trash command: `trash` or Finder on macOS, `gio trash`, `trash-put` or `kioclient5` on Linux, and PowerShell on Windows. A Linux system with none of these keeps the files. On Windows it works only on a local fixed drive whose Recycle Bin is on, because elsewhere Windows deletes the file outright; on any other drive it keeps the file. Only the macOS command has been run on a real system. The Linux and Windows commands are covered by the mod's own tests only.
 - The files in the known folders stay live: new items, edits, checkbox changes, new files and archived files show within a few seconds, with no restart.
 
 [How it works](docs/how-it-works.md) explains the hooks, the linking and the drawing.

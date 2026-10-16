@@ -128,7 +128,7 @@ The mod reads checkbox lines in the Markdown files at the top level of `.claude_
 - Prose, tables and headings may surround the items. Only checkbox lines count.
 - When an item is done, check it off and leave it in the file. Checked items are your record of finished work.
 - When every item in a file is done, move the file to `.claude_todo/archive/`.
-- The folder lives at the root of the repo's main checkout. A git worktree uses the main checkout's folder.
+- The folder usually lives at the root of the repo. The pane reads the nearest one, from the folder the session started in up to the repo root, so a subfolder can keep its own. A git worktree uses the main checkout's folder.
 
 ## Rules for Claude
 

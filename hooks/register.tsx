@@ -288,9 +288,24 @@ export function isGlobalTodo(realPath: string): boolean {
   return /\/\.claude\/\.claude_todo\/?$/.test(realPath)
 }
 
+/**
+ * The nearest `.claude_todo/`, from the session folder up to the repo root: a subfolder with a todo
+ * of its own keeps it. With none up to the root, a worktree uses its main checkout's. Outside a
+ * repo, only the session folder's own counts.
+ */
 async function repoTodoDir(fs: TodoFs): Promise<string | undefined> {
   for (let depth = 0; depth <= MAX_UP; depth += 1) {
     const prefix = '../'.repeat(depth)
+    if (await fs.exists(`${prefix}${DIR}`)) {
+      // Taken only inside a repo: the walk must reach a .git at or above this folder.
+      for (let up = depth; up <= MAX_UP; up += 1) {
+        if (await fs.exists(`${'../'.repeat(up)}.git`)) {
+          return `${prefix}${DIR}`
+        }
+      }
+
+      return depth === 0 ? DIR : undefined
+    }
     const git = `${prefix}.git`
     if (!(await fs.exists(git))) {
       continue
@@ -302,10 +317,10 @@ async function repoTodoDir(fs: TodoFs): Promise<string | undefined> {
       return main !== undefined && main !== gitdir && (await fs.exists(`${main}/${DIR}`)) ? `${main}/${DIR}` : undefined
     }
 
-    return (await fs.exists(`${prefix}${DIR}`)) ? `${prefix}${DIR}` : undefined
+    return undefined
   }
 
-  return (await fs.exists(DIR)) ? DIR : undefined
+  return undefined
 }
 
 /** Rereads `.claude_todo/*.md`; a file whose mtime is unchanged keeps its parse. */

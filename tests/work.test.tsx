@@ -579,7 +579,12 @@ test('the todo folder is the repo root one, the main checkout one from a worktre
     realPath: async (path: string) => real[path],
     read: async () => 'gitdir: /repo/.git/worktrees/x\n',
   })
-  expect(await findTodoDirWith(fake({ '../../.git': 'dir', '../../.claude_todo': 'dir', '.claude_todo': 'dir' }))).toBe('../../.claude_todo')
+  // The nearest todo wins, up to the repo root: a subfolder's own, else the root's.
+  expect(await findTodoDirWith(fake({ '../../.git': 'dir', '../../.claude_todo': 'dir', '.claude_todo': 'dir' }))).toBe('.claude_todo')
+  expect(await findTodoDirWith(fake({ '../../.git': 'dir', '../.claude_todo': 'dir' }))).toBe('../.claude_todo')
+  expect(await findTodoDirWith(fake({ '../../.git': 'dir', '../../.claude_todo': 'dir' }))).toBe('../../.claude_todo')
+  // Above the repo root, nothing counts.
+  expect(await findTodoDirWith(fake({ '.git': 'dir', '../.claude_todo': 'dir' }))).toBeUndefined()
   expect(await findTodoDirWith(fake({ '.git': 'file', '/repo/.claude_todo': 'dir' }))).toBe('/repo/.claude_todo')
   expect(await findTodoDirWith(fake({ '.git': 'dir' }))).toBeUndefined()
   expect(await findTodoDirWith(fake({ '.claude_todo': 'dir' }, { '.claude_todo': '/home/someone/.claude/.claude_todo' }))).toBeUndefined()

@@ -24,7 +24,7 @@ The todo folder is scanned every 3 seconds, and fully reread once a minute.
 
 ## Reading the todo
 
-The mod looks for `.claude_todo/` at the root of the repo. From a git worktree it uses the main checkout's folder. It never reads one in the home `.claude` folder. A line's `#T<n>` ID is the item's key. Without an ID, the key is the item's text.
+The mod reads the nearest `.claude_todo/`, from the session folder up to the repo root; outside a repo, only the session folder's own. With none up to the root, a git worktree uses the main checkout's folder. It never reads one in the home `.claude` folder. A line's `#T<n>` ID is the item's key. Without an ID, the key is the item's text.
 
 ## Linking agents to tickets
 

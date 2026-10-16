@@ -1069,7 +1069,9 @@ test("an agent's model requests add up to a token count beside its tool calls", 
     }
   }
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't', agentId: 'a1' } as never).catch(() => undefined)
-  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  // The turn ended, so the card is idle and its meta line longer: a wide pane shows it whole.
+  const wide = { ...PANE, props: { ...(PANE.props as object), bodyColumns: 120 } } as never as typeof PANE
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...wide })
   expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('0 tool calls · 1.20M tokens')
   const text = await $.ui.mount({ plugin: 'claudeopticon', surface: 'terminal', ...PANE })
   expect(await text.find({ type: 'Text', text: /1\.20M tokens/ })).toBeDefined()
@@ -1197,4 +1199,26 @@ test('a pane drawn under an older title is opened again once, with the current o
   await ui.drawn()
   await new Promise(resolve => setTimeout(resolve, 20))
   expect(opened).toEqual(['Claudeopticon'])
+})
+
+test('an agent whose turn ended with nothing after it is idle: not live, still shown, with its Stop button', async ($, on) => {
+  mock.clock(on)
+  on('fs.exists', () => ({ value: false }))
+  on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'a1' }))
+  on('agent.list', () => ({ value: [{ id: 'a1', description: 'Gate fixes', type: 'engineer', status: 'waiting' }] }) as never)
+  on('turn.complete', () => ({ text: '' }) as never)
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: '', stderr: '', interrupted: false } }) as never)
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  await $.agent.spawn({ prompt: 'Fix the gate', description: 'Gate fixes', subagentType: 'engineer' } as never)
+  await $.tool.call({ tool: 'Bash', command: 'sleep 20', description: 'Wait', agentId: 'a1' } as never).catch(() => undefined)
+  await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't', agentId: 'a1' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const svgs = JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(svgs).toContain('>Idle<')
+  expect(svgs).toContain('not stopped')
+  expect(svgs).toContain('Last: ')
+  expect(svgs).toContain('0 of 1 agent live')
+  expect(await ui.find({ type: 'Text', text: /0 live, 1 idle, 0 finished/ })).toBeDefined()
+  const labels = (await ui.findAll({ type: 'Button' })).map(button => (button as { props?: { label?: string } }).props?.label)
+  expect(labels).toContain('\u2296')
 })

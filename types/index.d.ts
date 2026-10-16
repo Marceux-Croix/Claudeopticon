@@ -35,6 +35,11 @@ export type AgentRow = {
   brief: string
   /** What SendMessage addresses the agent by, when it has a name. */
   name?: string
+  /**
+   * When the agent's last turn ended with nothing after it: the work is done, but the agent was
+   * never stopped. Cleared by its next tool call or model request.
+   */
+  idleSince?: number
   /** The agent's own report through `report_progress`: steps done of its plan, and the current one. */
   progress?: Progress
   /** The todo items the agent says it handles, as it quoted them through `report_progress`. */

@@ -83,6 +83,8 @@ Each agent gets a card, labeled A1, A2, and so on, in start order. Each agent ha
 
 A running agent has a **Stop** button (⊖) left of its status. Stop ends the agent at once. It gets no chance to finish its step or write a summary. Use it when an agent has gone wrong.
 
+An agent that finished its work but was never stopped shows **Idle**, with the time it finished and its last command marked "Last:". It does not count as live, and it keeps its Stop button so you can close it.
+
 If an agent vanishes from Claude Code's agent list without a report of how it ended, its card shows **Ended** after 15 seconds.
 
 Finished agents are hidden. **Show finished agents** brings them back, grayed out. You can name an agent by its label in chat ("how is A2 doing?"). The mod tells Claude which agent that is.

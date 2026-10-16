@@ -666,6 +666,7 @@ async function refreshAgents($: EngineInterface, isForced = false): Promise<void
       endedAt: isEnded(state) ? (row?.endedAt ?? time) : undefined,
       toolCalls: row?.toolCalls ?? 0,
       ...(row?.tokens === undefined ? {} : { tokens: row.tokens }),
+      ...(row?.idleSince === undefined ? {} : { idleSince: row.idleSince }),
       doing: row?.doing,
       brief: row?.brief ?? normalize(description),
       ...(row?.progress === undefined ? {} : { progress: row.progress }),
@@ -866,6 +867,8 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
       model: row.model,
       status: row.status,
       isEnded: isEnded(row.status),
+      isIdle: !isEnded(row.status) && row.idleSince !== undefined,
+      idleSince: row.idleSince,
       startedAt: row.startedAt,
       endedAt: row.endedAt,
       toolCalls: row.toolCalls,
@@ -875,7 +878,7 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
       progress: row.progress,
     })),
     ...all,
-    live: rows.filter(row => !isEnded(row.status)).length,
+    live: rows.filter(row => !isEnded(row.status) && row.idleSince === undefined).length,
     now,
   }
 }
@@ -899,11 +902,30 @@ export function todoLedger(view: View, showCompleted = isCompletedShown): FileVi
  * The agents as the pane lists them: every active agent, in start order; then, when shown, the
  * finished ones, most recently ended first, so the bottom of the list is the ledger of who ran.
  */
-export function ledger(view: View, showFinished = isFinishedShown): { active: AgentView[]; finished: AgentView[]; shown: AgentView[] } {
-  const active = view.agents.filter(agent => !agent.isEnded)
+/**
+ * The agents in three groups: live, idle (finished but never stopped, always shown, since an open
+ * task is worth a look), and finished (shown on request).
+ */
+export function ledger(view: View, showFinished = isFinishedShown): { active: AgentView[]; idle: AgentView[]; finished: AgentView[]; shown: AgentView[] } {
+  const active = view.agents.filter(agent => !agent.isEnded && !agent.isIdle)
+  const idle = view.agents.filter(agent => !agent.isEnded && agent.isIdle)
   const finished = view.agents.filter(agent => agent.isEnded).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))
 
-  return { active, finished, shown: showFinished ? [...active, ...finished] : active }
+  return { active, idle, finished, shown: showFinished ? [...active, ...idle, ...finished] : [...active, ...idle] }
+}
+
+/** Marks an agent at work again: its tool call or model request ends its idle time. */
+function wake(id: string): void {
+  if (agentRows.some(row => row.id === id && row.idleSince !== undefined)) {
+    agentRows = agentRows.map(row => {
+      if (row.id !== id) {
+        return row
+      }
+      const { idleSince: _, ...awake } = row
+
+      return awake
+    })
+  }
 }
 
 /** The prompt a ticket sends to Claude: the item, where it lives, and how to keep the pane in step. */
@@ -1514,6 +1536,7 @@ export const register: Register = (on, options) => {
     if (id !== undefined && e.tool !== PROGRESS_TOOL) {
       const doing = describeCall(e.tool, e as unknown as Record<string, unknown>)
       pendingTools.set(id, { calls: (pendingTools.get(id)?.calls ?? 0) + 1, doing })
+      wake(id)
     }
     const entry: OrchestratorEntry | undefined =
       id === undefined && e.tool !== 'Agent'
@@ -1594,6 +1617,7 @@ export const register: Register = (on, options) => {
       return yield* next(e)
     }
     stepModels.set(e.agentId, e.model)
+    wake(e.agentId)
     const stream = next(e)
     let stopUsage: Parameters<typeof turnTokens>[0] | undefined
     for (;;) {
@@ -1618,6 +1642,14 @@ export const register: Register = (on, options) => {
       await addBurn($, turnTokens(e.usage)).catch(() => undefined)
     }
     if (e.agentId !== undefined) {
+      // A turn that ends with nothing after it leaves the agent finished but open, until a stop. One
+      // that waits on a background task of its own is still at work.
+      const id = e.agentId
+      const isWaitingOnTask = backgroundTasks.some(task => task.agentId === id && task.status === 'running')
+      if (!isWaitingOnTask) {
+        const time = await $.clock.now()
+        agentRows = agentRows.map(row => (row.id === id && !isEnded(row.status) ? { ...row, idleSince: time } : row))
+      }
       // The end of an agent's turn folds in its last tokens at once, not on the next clock step.
       await refreshAgents($, true).catch(() => undefined)
     } else {
@@ -1647,7 +1679,7 @@ export const register: Register = (on, options) => {
     const Svg = e.surface !== 'terminal' && 'Svg' in table ? table.Svg : undefined
     if (Svg !== undefined) {
       setWidth((e.props.bodyColumns ?? 48) * CELL_PX)
-      const { active, finished, shown } = ledger(view)
+      const { active, idle, finished, shown } = ledger(view)
       const runningTasks = backgroundTasks.filter(task => task.status === 'running').sort((a, b) => b.startedAt - a.startedAt)
       const finishedTasks = backgroundTasks.filter(task => task.status !== 'running').sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))
       const card = (key: string, drawn: { source: string; width: number; alt: string }) => (
@@ -1725,7 +1757,7 @@ export const register: Register = (on, options) => {
           {section(
             'agents',
             'Agents',
-            view.agents.length === 0 ? 'None in this session yet' : `${active.length} live, ${finished.length} finished`,
+            view.agents.length === 0 ? 'None in this session yet' : `${active.length} live, ${idle.length > 0 ? `${idle.length} idle, ` : ''}${finished.length} finished`,
             finished.length === 0 ? undefined : isFinishedShown ? 'Hide finished agents' : `Show finished agents (${finished.length})`,
             () => {
               isFinishedShown = !isFinishedShown
@@ -2026,8 +2058,8 @@ export const register: Register = (on, options) => {
               ))}
               <Text dimColor>
                 {`  ${agent.type}${agent.model ? ` · ${agent.model}` : ''} · `}
-                <Text color={failed ? DANGER : agent.isEnded ? GREEN : ACCENT}>{failed ? '✕ ' : agent.isEnded ? '✓ ' : ''}{agent.status}</Text>
-                {` · ${elapsed((agent.endedAt ?? view.now) - agent.startedAt)} · ${agent.toolCalls} tool call${agent.toolCalls === 1 ? '' : 's'}${agent.tokens ? ` · ${tokens(agent.tokens)} tokens` : ''}`}
+                <Text color={failed ? DANGER : agent.isEnded ? GREEN : ACCENT}>{failed ? '✕ ' : agent.isEnded ? '✓ ' : ''}{agent.isIdle ? 'idle, not stopped' : agent.status}</Text>
+                {` · ${elapsed((agent.endedAt ?? agent.idleSince ?? view.now) - agent.startedAt)} · ${agent.toolCalls} tool call${agent.toolCalls === 1 ? '' : 's'}${agent.tokens ? ` · ${tokens(agent.tokens)} tokens` : ''}`}
               </Text>
               {!agent.isEnded && agent.progress !== undefined && (
                 <Text color={ACCENT}>

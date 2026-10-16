@@ -45,6 +45,9 @@ export type AgentView = {
   toolCalls: number
   /** The tokens of every model request the agent made, every kind summed. */
   tokens?: number
+  /** Its last turn ended and nothing followed: finished, but never stopped. Not live. */
+  isIdle?: boolean
+  idleSince?: number
   doing?: string
   /** The open todo items the agent works on, by text. */
   links: string[]
@@ -354,7 +357,7 @@ export function agentShare(agents: readonly AgentView[]): number {
     return 0
   }
   const sum = agents.reduce((total, agent) => {
-    if (agent.isEnded) {
+    if (agent.isEnded || agent.isIdle) {
       return total + 1
     }
     const progress = agent.progress
@@ -646,6 +649,9 @@ export function fileCards(file: FileView, view: View, limit: number, isTextOpen 
 // ---------------------------------------------------------------- agents
 
 function agentBadge(agent: AgentView): { label: string; kind: 'live' | 'ok' | 'danger' | 'neutral' } {
+  if (agent.isIdle) {
+    return { label: 'Idle', kind: 'neutral' }
+  }
   if (agent.status === 'completed') {
     return { label: 'Done', kind: 'ok' }
   }
@@ -693,7 +699,7 @@ export function timelineSvg(view: View, all: readonly AgentView[]): Card {
   }
   agents.forEach((agent, i) => {
     const y = top + i * rowH
-    const end = agent.endedAt ?? view.now
+    const end = agent.endedAt ?? agent.idleSince ?? view.now
     const x0 = x(agent.startedAt)
     const w = Math.max(6, x(end) - x0)
     const failed = agent.status === 'failed' || agent.status === 'killed'
@@ -703,7 +709,7 @@ export function timelineSvg(view: View, all: readonly AgentView[]): Card {
     parts.push(`<rect x="${x0}" y="${y - 4}" width="${w}" height="4" rx="2" fill="${fill}"/>`)
     if (agent.status === 'completed' && end <= t1) {
       parts.push(`<path d="M ${x0 + w + 5} ${y - 2} l 2.4 2.4 l 4.6 -5" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`)
-    } else if (!agent.isEnded) {
+    } else if (!agent.isEnded && !agent.isIdle) {
       parts.push(`<circle cx="${x0 + w}" cy="${y - 2}" r="4" fill="${ACCENT}" class="pulse"/>
 <circle cx="${x0 + w}" cy="${y - 2}" r="3.5" fill="${ACCENT}"/>`)
     }
@@ -770,15 +776,19 @@ export function agentSvg(agent: AgentView, view: View): Card {
     parts.push(strip(tx, ty + 7, W - PAD - tx, progress.done, 0, progress.total))
     ty += 28
   }
-  const ran = elapsed((agent.endedAt ?? view.now) - agent.startedAt)
-  const when = agent.endedAt === undefined ? [ran] : [`ran ${ran}`, `ended ${elapsed(view.now - agent.endedAt)} ago`]
-  const meta = [agent.type, agent.model, ...when, plural(agent.toolCalls, 'tool call'), agent.tokens ? `${tokens(agent.tokens)} tokens` : undefined]
+  const ran = elapsed((agent.endedAt ?? agent.idleSince ?? view.now) - agent.startedAt)
+  const isIdle = agent.isIdle === true && agent.idleSince !== undefined
+  const when = agent.endedAt !== undefined ? [`ran ${ran}`, `ended ${elapsed(view.now - agent.endedAt)} ago`] : isIdle ? [`ran ${ran}`] : [ran]
+  // An idle agent's note leads, so a narrow card never cuts it off.
+  const meta = [isIdle ? `Finished ${clock(agent.idleSince!)}, not stopped` : undefined, agent.type, agent.model, ...when, plural(agent.toolCalls, 'tool call'), agent.tokens ? `${tokens(agent.tokens)} tokens` : undefined]
     .filter((part): part is string => part !== undefined && part !== '')
     .join('\u2002·\u2002')
   parts.push(`<text x="${tx}" y="${ty}" fill="${SUB}" font-size="12">${esc(fit(meta, INNER - 40, 12))}</text>`)
   ty += 20
   if (!agent.isEnded && agent.doing !== undefined) {
-    parts.push(`<text x="${tx}" y="${ty}" fill="${SUB}" font-size="12" class="mono">${esc(fit(agent.doing, INNER - 44, 12, 400, true))}</text>`)
+    // An idle agent's call has long returned: it is the last one, not the current one.
+    const doing = agent.isIdle ? `Last: ${agent.doing}` : agent.doing
+    parts.push(`<text x="${tx}" y="${ty}" fill="${SUB}" font-size="12" class="mono">${esc(fit(doing, INNER - 44, 12, 400, true))}</text>`)
   }
 
   // A finished agent stays in the ledger, grayed out (STG-DRAW-6: a quiet item draws at reduced opacity).

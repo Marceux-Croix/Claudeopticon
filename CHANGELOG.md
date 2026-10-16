@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.3
+
+- Delete duplicate todos no longer keeps a file that was copied again after an earlier consolidation: a new copy replaces the old renumbering record.
+- Consolidate renumbers only the tickets whose IDs clash, not the ones after them.
+
 ## 0.4.2
 
 - After Delete duplicate todos, the Consolidate todos button no longer comes back for folders that are gone.

@@ -1546,9 +1546,10 @@ test('a todo folder made after the mod loaded shows at the next scan, as the pri
 test('consolidation helpers: renumber colliding IDs, append under a heading, compare lines without IDs', async () => {
   const used = new Set(['t1', 't2'])
   const out = renumberLines(['- [ ] #T1 Docs', '- [x] #T7 Kept', '- [~] No id', '- note, see #T1 and #T7'], used)
-  expect(out.lines).toEqual(['- [ ] #T3 Docs', '- [x] #T7 Kept', '- [~] No id', '- note, see #T3 and #T7'])
-  expect(out.renames).toEqual({ t1: 'T3' })
-  expect(out.pairs).toEqual([{ from: 'T1', to: 'T3' }])
+  // The new number skips the source's own #T7 as well as the used IDs.
+  expect(out.lines).toEqual(['- [ ] #T8 Docs', '- [x] #T7 Kept', '- [~] No id', '- note, see #T8 and #T7'])
+  expect(out.renames).toEqual({ t1: 'T8' })
+  expect(out.pairs).toEqual([{ from: 'T1', to: 'T8' }])
   expect(applyRenames('#T1 and #T10 and #T3', { t1: 'T3', t3: 'T4' })).toBe('#T3 and #T10 and #T4')
   expect(appendSections('', [{ place: 'mods/x', lines: ['- [ ] a'] }])).toBe('## From mods/x\n\n- [ ] a\n')
   expect(appendSections('- [ ] top\n', [{ place: 'a', lines: ['- [ ] b'] }, { place: 'c', lines: ['- [x] d'] }])).toBe('- [ ] top\n\n## From a\n\n- [ ] b\n\n## From c\n\n- [x] d\n')
@@ -1923,11 +1924,12 @@ test('safety 7: a renumbered ID is rewritten in the same file, listed in the toa
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   await ui.press({ key: 'todo-consolidate' })
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix\n\n## From mods/x\n\n- [ ] #T2 Docs\n- [ ] #T3 Ship, after #T2\n')
-  expect(toasts.join('\n')).toContain('mods/x/TODO.md: #T1 is now #T2')
-  expect((store.get('duplicates-meta:/repo') as { renames: Record<string, unknown> }).renames['/repo/mods/x/.claude_todo/TODO.md']).toEqual({ t1: 'T2', t2: 'T3' })
+  // One clash moves one line: #T1 takes #T3, past the source's own #T2, which keeps its number.
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix\n\n## From mods/x\n\n- [ ] #T3 Docs\n- [ ] #T2 Ship, after #T3\n')
+  expect(toasts.join('\n')).toContain('mods/x/TODO.md: #T1 is now #T3')
+  expect((store.get('duplicates-meta:/repo') as { renames: Record<string, unknown> }).renames['/repo/mods/x/.claude_todo/TODO.md']).toEqual({ t1: 'T3' })
   const told = JSON.stringify(await $.tool.call({ tool: 'Read', file_path: '/x' } as never))
-  expect(told).toContain('#T1 is now #T2')
+  expect(told).toContain('#T1 is now #T3')
   expect(JSON.stringify(await $.tool.call({ tool: 'Read', file_path: '/x' } as never))).not.toContain('is now #T2')
 })
 
@@ -2088,4 +2090,22 @@ test('final 5: a source file that cannot be read is not marked copied, and its f
   expect(writes).toEqual([])
   expect((store.get('duplicates:/repo') as string[] | undefined) ?? []).toEqual([])
   expect(await ui.find({ key: 'todo-delete-duplicates' })).toBeUndefined()
+})
+
+test('renumbering skips the source file own IDs, so one clash moves one line only', () => {
+  const used = new Set(['t1', 't2', 't12'])
+  const out = renumberLines(['- [ ] #T1 Module task', '- [ ] #T12 Other', '- [x] #T13 Own', '- [ ] see #T1'], used)
+  expect(out.pairs.map(pair => `${pair.from}>${pair.to}`)).toEqual(['T1>T14', 'T12>T15'])
+  expect(out.lines[2]).toContain('#T13 Own')
+})
+
+test('a file copied again replaces its old renumbering, even with none, so Delete still matches it', async ($, on) => {
+  mock.clock(on)
+  repoWith(on, SRC(), { hasNearest: true, listed: SRC_LIST })
+  const store = storeWith(on, { 'duplicates-meta:/repo': { primary: [], renames: { '/repo/mods/x/.claude_todo/TODO.md': { t2: 'T9' } } } })
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  await ui.press({ key: 'todo-consolidate' })
+  const meta = store.get('duplicates-meta:/repo') as { renames: Record<string, unknown> }
+  expect(meta.renames['/repo/mods/x/.claude_todo/TODO.md']).toEqual({})
 })

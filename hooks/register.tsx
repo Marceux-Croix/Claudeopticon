@@ -613,9 +613,15 @@ export function applyRenames(line: string, renames: Readonly<Record<string, stri
 export function renumberLines(lines: readonly string[], used: Set<string>): { lines: string[]; renames: Record<string, string>; pairs: { from: string; to: string }[] } {
   const renames: Record<string, string> = {}
   const pairs: { from: string; to: string }[] = []
+  // A new number also skips this source's own IDs, so one clash never pushes a later line out.
+  const own = lines.flatMap(line => {
+    const id = CHECKBOX.test(line) ? ITEM_ID.exec(line)?.[1] : undefined
+
+    return id === undefined ? [] : [id.toLowerCase()]
+  })
   const nextFree = (letters: string) => {
     let top = 0
-    for (const id of used) {
+    for (const id of [...used, ...own]) {
       const m = /^([a-z]+)(\d+)$/.exec(id)
       if (m !== null && m[1] === letters.toLowerCase()) {
         top = Math.max(top, Number(m[2]))
@@ -854,9 +860,8 @@ async function consolidate($: EngineInterface): Promise<void> {
       files += 1
       for (const block of blocks) {
         told.push(...block.told)
-        if (Object.keys(block.renames).length > 0) {
-          renameMap = { ...renameMap, [block.file]: block.renames }
-        }
+        // Always replaced, an empty one too: a file copied again must not keep an older renumbering.
+        renameMap = { ...renameMap, [block.file]: block.renames }
       }
       // The renumbering is kept as each file lands, so a press that fails later still knows it.
       const meta = metaKey()

@@ -4,7 +4,7 @@ process.env.TZ = 'UTC'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { agentSvg, fileCards, orchestratorSvg, heroSvg, setWidth, ticketSvg, timelineSvg, type Card } from '../hooks/cards.ts'
+import { agentSvg, boardHead, orchestratorSvg, heroSvg, setWidth, ticketSvg, timelineSvg, type Card } from '../hooks/cards.ts'
 import { agents, entries, openTickets, progressTickets, tasks, view } from './sample.ts'
 
 const WIDTH = 720
@@ -39,7 +39,8 @@ function stack(cards: Card[]): string {
 /** Two columns of tickets with a header each; the width follows the card width. */
 function board(): string {
   const colW = (WIDTH - GAP) / 2
-  const head = 28
+  const header = boardHead(view.files)
+  const head = header.height + GAP + 28
   const columns = [
     { title: 'In progress', tickets: progressTickets },
     { title: 'Open', tickets: openTickets },
@@ -55,9 +56,9 @@ function board(): string {
       return s
     })
     height = Math.max(height, y - GAP)
-    return `<text x="${x + 4}" y="18" font-family='${FONT}' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">${col.title}</text>\n${cards.join('\n')}`
+    return `<text x="${x + 4}" y="${header.height + GAP + 18}" font-family='${FONT}' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">${col.title}</text>\n${cards.join('\n')}`
   })
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}">\n<rect width="${WIDTH}" height="${height}" rx="12" fill="#07080F"/>\n${parts.join('\n')}\n</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}">\n<rect width="${WIDTH}" height="${height}" rx="12" fill="#07080F"/>\n${place(header, 0, 0)}\n${parts.join('\n')}\n</svg>`
 }
 
 /**
@@ -169,7 +170,7 @@ function pane(): string {
   add(timelineSvg(view, agents.slice(0, 2)))
   add(withStop(agentSvg(agents[0]!, view), 'Running'))
   add(withStop(agentSvg(agents[1]!, view), 'Running'))
-  head('Todo', `${view.done} of ${view.total} done, ${view.active} in progress`, 'Show completed (24)')
+  head('Todo', `${view.done} of ${view.total} done, ${view.active} in progress`, `Show completed (${view.completed})`)
   parts.push(`<rect x="${PANE_PAD}" y="${y}" width="220" height="30" rx="8" fill="none" stroke="rgba(255,255,255,.22)"/>
 <text x="${PANE_PAD + 12}" y="${y + 20}" font-family='${FONT}' font-size="13.5" fill="${DIM}">Search open and done items</text>`)
   parts.push(buttonRow(PANE_PAD + 228, y, ['Search', 'Show as list']).svg)
@@ -177,9 +178,7 @@ function pane(): string {
   parts.push(`<text x="${PANE_PAD}" y="${y + 20}" font-family='${FONT}' font-size="13.5" fill="${DIM}">Categories</text>`)
   parts.push(buttonRow(PANE_PAD + 84, y, ['Config', 'Docs', 'Parser', 'Release'], true).svg)
   y += 30 + GAP
-  for (const card of fileCards(view.files[0]!, view, 0)) {
-    add(card)
-  }
+  add(boardHead(view.files))
   const colW = (WIDTH - GAP) / 2
   const columns = [
     { title: 'In progress', tickets: progressTickets, glyphs: ['✓', '↩', '?'] },

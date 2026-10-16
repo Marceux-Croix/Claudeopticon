@@ -95,7 +95,7 @@ Finished agents are hidden. **Show finished agents** brings them back, grayed ou
 
 ![The ticket board](docs/images/board.svg)
 
-Each todo file becomes a board with the columns **In progress**, **Open** and **Done**. A ticket shows its number, its group, its status, and the tags of the agents working on it. The tags blink in the agent's color. When an agent starts on a ticket, the ticket moves to In progress by itself.
+The pane draws one board for all your todo files, with the columns **In progress**, **Open** and **Done**. Above it, one header card has a row for each file: its name, its progress bar, and its own "done of total" count. If two files have the same name, the row also shows the folder in dim text. A ticket shows its number, its group, its status, and the tags of the agents working on it. The tags blink in the agent's color. When an agent starts on a ticket, the ticket moves to In progress by itself.
 
 Tickets that are not done have buttons on the bottom edge:
 
@@ -133,7 +133,7 @@ The mod reads checkbox lines in the Markdown files at the top level of `.claude_
 - When an item is done, check it off and leave it in the file. Checked items are your record of finished work.
 - When every item in a file is done, move the file to `.claude_todo/archive/`.
 - The pane shows the tickets of every `.claude_todo/` folder in the repo together, as if they were one todo. It finds the folders with git (tracked, untracked and ignored ones; at most 20) and adds the main checkout's folders from a git worktree. It never reads the global `~/.claude/.claude_todo`.
-- Files of the same name in different folders are one board. Each change goes back to the file the ticket came from. Two folders may use the same `#T` ID: they stay two tickets.
+- Files of the same name in different folders are two files, each with its own header row. Each change goes back to the file the ticket came from. Two folders may use the same `#T` ID: they stay two tickets.
 - `categories.json` lives in the folder nearest to the session folder. With no such folder, items are not sorted into categories.
 
 ## Rules for Claude

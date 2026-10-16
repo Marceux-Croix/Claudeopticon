@@ -47,10 +47,19 @@ export const agents: AgentView[] = [
   },
 ]
 
+/** A second todo file, so the board header shows one row per file. */
+const docs = [
+  item('Write the install guide for Linux', 'completed'), item('Write the plugin guide', 'completed'), item('Add the FAQ page', 'completed'),
+  item('Move the docs to the new site', 'in_progress'), item('Add search to the docs', 'pending'), item('Fix the broken links', 'pending'),
+]
+
 export const view: View = {
-  files: [{ name: 'release.md', id: 'release.md', done: 24, active: 4, total: 40, owners: [0, 1], items, mtimeMs: NOW - MIN }],
+  files: [
+    { name: 'release.md', id: 'release.md', done: 24, active: 4, total: 40, owners: [0, 1], items, mtimeMs: NOW - MIN },
+    { name: 'docs.md', id: 'docs.md', done: 3, active: 1, total: 6, owners: [], items: docs, mtimeMs: NOW - 5 * MIN },
+  ],
   agents,
-  done: 24, active: 4, total: 40, completed: 24, live: 2, now: NOW,
+  done: 27, active: 5, total: 46, completed: 27, live: 2, now: NOW,
   usage: { tokens: 17_384_000, atCompact: 12_100_000, since: 0 },
 }
 

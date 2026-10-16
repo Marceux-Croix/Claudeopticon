@@ -1,6 +1,6 @@
 {
   "name": "claudeopticon",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A ticket system for Claude Code: your todo as a live ticket board you can hand to Claude, with each step Claude takes and each helper agent linked to the tickets it works on.",
   "types": "./types/index.d.ts",
   "author": {

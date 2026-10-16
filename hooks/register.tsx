@@ -1,7 +1,7 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { AgentRow, AgentRowStatus, Progress, TodoFile, TodoItem, TodoStatus } from '../types'
-import { ACCENT, DANGER, GREEN, clock, tokens, orchestratorSvg, plural, agentColor, agentLabel, agentSvg, stopInsetPx, cardWidth, elapsed, fileCards, heroSvg, longItems, ticketSvg, setWidth, timelineSvg } from './cards'
+import { ACCENT, DANGER, GREEN, clock, tokens, orchestratorSvg, plural, agentColor, agentLabel, agentSvg, stopInsetPx, cardWidth, elapsed, boardHead, fileCards, heroSvg, longItems, ticketSvg, setWidth, timelineSvg } from './cards'
 import type { AgentView, FileView, ItemStatus, ItemView, TaskView, Usage, View } from './cards'
 
 const PANE = 'claudeopticon'
@@ -694,6 +694,11 @@ function placeOf(rel: string): string {
   const place = rel.slice(0, Math.max(0, rel.length - DIR.length)).replace(/\/$/, '')
 
   return place === '' ? 'the root of another checkout' : place
+}
+
+/** A folder's place in its checkout, for telling same-named files apart: its path without `.claude_todo`; empty at the repo root. */
+export function folderPlace(rel: string): string {
+  return rel.slice(0, Math.max(0, rel.length - DIR.length)).replace(/\/$/, '')
 }
 
 /** The `.md` files of a folder, top level and archive, as names inside it. */
@@ -1629,17 +1634,18 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     }
   })
 
-  // Files of one name, in whatever folders, are one board: the pane never shows the folders. Each
-  // item keeps its source (folder, file, path) for the writes and the prompts. Sources run primary
-  // folder first, then by folder path, so the order inside a board is stable.
+  // One FileView per file: the ticket board shares its columns across files, and the header card
+  // has one row per file. Each item keeps its source (folder, file, path) for the writes and the
+  // prompts. Sources run primary folder first, then by folder path, so the order is stable.
   const sources = [...list].sort((a, b) => Number(a.isOther === true) - Number(b.isOther === true) || ((a.rel ?? a.folder) < (b.rel ?? b.folder) ? -1 : (a.rel ?? a.folder) > (b.rel ?? b.folder) ? 1 : 0))
-  const boards = new Map<string, TodoFile[]>()
+  // The pane ID is the name, kept short for the common case; a repeated name takes its folder too.
+  const nameCount = new Map<string, number>()
   for (const file of sources) {
-    boards.set(file.name, [...(boards.get(file.name) ?? []), file])
+    nameCount.set(file.name, (nameCount.get(file.name) ?? 0) + 1)
   }
-  const files: FileView[] = [...boards.entries()].map(([name, group]) => {
-    const { done, active, total } = count(group.flatMap(file => file.items))
-    const indexed = group.flatMap(file => file.items.map((item, index) => ({ file, item, owners: itemOwners.get(`${fileId(file)}:${index}`) ?? [] })))
+  const files: FileView[] = sources.map(file => {
+    const { done, active, total } = count(file.items)
+    const indexed = file.items.map((item, index) => ({ file, item, owners: itemOwners.get(`${fileId(file)}:${index}`) ?? [] }))
     const linked = indexed.filter(one => one.owners.length > 0)
     const rest = [
       ...indexed.filter(one => one.item.status === 'in_progress'),
@@ -1649,12 +1655,13 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     const shown = [...linked, ...rest]
 
     return {
-      name,
-      id: name,
+      name: file.name,
+      id: (nameCount.get(file.name) ?? 0) > 1 ? fileId(file) : file.name,
+      place: folderPlace(file.rel ?? file.folder),
       done,
       active,
       total,
-      owners: [...new Set(group.flatMap(file => fileOwners.get(fileId(file)) ?? []))],
+      owners: fileOwners.get(fileId(file)) ?? [],
       items: shown.map(one => ({
         text: one.item.text,
         status: one.item.status,
@@ -1665,8 +1672,8 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
         file: one.file.name,
         path: filePath(one.file),
       })),
-      mtimeMs: Math.max(...group.map(file => file.mtimeMs)),
-      ...(group[0]?.isArchived === true ? { isArchived: true } : {}),
+      mtimeMs: file.mtimeMs,
+      ...(file.isArchived === true ? { isArchived: true } : {}),
     }
   })
   files.sort((a, b) => {
@@ -1722,6 +1729,34 @@ export function todoLedger(view: View, showCompleted = isCompletedShown): FileVi
   return view.files
     .filter(file => file.isArchived !== true && file.done < file.total)
     .map(file => ({ ...file, items: file.items.filter(item => item.status !== 'completed') }))
+}
+
+/**
+ * What the todo area draws. The list view draws one card set per file. The ticket view draws one
+ * board: a single FileView holding every file's items, files in their order (the tiebreak within
+ * a column), with `rows` the files for the board's header. No files, no board.
+ */
+export function boardTargets(entries: readonly { file: FileView; prefix: string }[], isTickets: boolean): { file: FileView; prefix: string; rows: FileView[] }[] {
+  if (!isTickets) {
+    return entries.map(one => ({ ...one, rows: [one.file] }))
+  }
+  const first = entries[0]
+  if (first === undefined) {
+    return []
+  }
+  const files = entries.map(one => one.file)
+  const file: FileView = {
+    name: 'board',
+    id: 'board',
+    done: files.reduce((sum, one) => sum + one.done, 0),
+    active: files.reduce((sum, one) => sum + one.active, 0),
+    total: files.reduce((sum, one) => sum + one.total, 0),
+    owners: [...new Set(files.flatMap(one => one.owners))],
+    items: files.flatMap(one => one.items.map(item => (item.file === undefined ? { ...item, file: one.name } : item))),
+    mtimeMs: Math.max(...files.map(one => one.mtimeMs)),
+  }
+
+  return [{ file, prefix: first.prefix, rows: files }]
 }
 
 /**
@@ -2750,12 +2785,14 @@ export const register: Register = (on, options) => {
               />
             </Box>
           )}
-          {(query.trim() !== ''
-            ? searchTodo(view.files, query).map(file => ({ file, prefix: 'search' }))
-            : sortBy === 'category' && !isTicketView
-              ? categoryGroups(withoutHidden(todoLedger(view), book, hiddenCategories), book).map(file => ({ file, prefix: 'category' }))
-              : withoutHidden(todoLedger(view), book, hiddenCategories).map(file => ({ file, prefix: 'file' }))
-          ).flatMap(({ file, prefix }) => {
+          {boardTargets(
+            query.trim() !== ''
+              ? searchTodo(view.files, query).map(file => ({ file, prefix: 'search' }))
+              : sortBy === 'category' && !isTicketView
+                ? categoryGroups(withoutHidden(todoLedger(view), book, hiddenCategories), book).map(file => ({ file, prefix: 'category' }))
+                : withoutHidden(todoLedger(view), book, hiddenCategories).map(file => ({ file, prefix: 'file' })),
+            isTicketView,
+          ).flatMap(({ file, prefix, rows }) => {
             const id = `${prefix}:${file.id}`
             const isExpanded = expandedFiles.has(id)
             const limit = isExpanded ? file.items.length : ITEMS_SHOWN
@@ -2771,7 +2808,7 @@ export const register: Register = (on, options) => {
             const columnCount = isStacked ? 1 : sideBy
             const ticketW = Math.floor((cardWidth() - (columnCount - 1) * CELL_PX) / columnCount)
             const ticket = (item: ItemView, k: number) => {
-              const sentKey = `${file.id}:${item.key}`
+              const sentKey = `${item.file ?? file.name}:${item.key}`
               const isSent = sentTickets.has(sentKey)
               const category = book.items[item.key]
               const id = /#[A-Za-z]+\d+\b/.exec(item.text)?.[0]
@@ -2793,7 +2830,7 @@ export const register: Register = (on, options) => {
                 if (action === SEND_ACTION) {
                   sentTickets.add(sentKey)
                 }
-                void $.prompt.submit({ text: action.prompt(item.path ?? `${DIR}/${file.name}`, item.text), asUser: true }).catch(() => undefined)
+                void $.prompt.submit({ text: action.prompt(item.path ?? `${DIR}/${item.file ?? file.name}`, item.text), asUser: true }).catch(() => undefined)
                 $.ui.toast(`${action.toast}: ${ticketSummary(item.text, 60)}`)
                 redraw($)
               }
@@ -2801,11 +2838,11 @@ export const register: Register = (on, options) => {
               // The buttons sit over the card's bottom row, which the card keeps free for them;
               // pointing at one reveals its tip in the same row, left of them all, cut to fit.
               return (
-                <Box key={`${prefix}-${file.id}-t${k}-${item.key}`} flexDirection="column" position="relative">
-                  {card(`${prefix}-${file.id}-c${k}-${item.key}`, drawn)}
+                <Box key={`${prefix}-${file.id}-t${k}-${item.file ?? ''}-${item.key}`} flexDirection="column" position="relative">
+                  {card(`${prefix}-${file.id}-c${k}-${item.file ?? ''}-${item.key}`, drawn)}
                   {actions.map(action => (
                     <Box
-                      key={`${prefix}-${file.id}-tip-${action.name}-${item.key}`}
+                      key={`${prefix}-${file.id}-tip-${action.name}-${item.file ?? file.name}-${item.key}`}
                       position="absolute"
                       left={2}
                       right={ACTION_RIGHT + actions.length * ACTION_CELLS}
@@ -2820,7 +2857,7 @@ export const register: Register = (on, options) => {
                     <Box position="absolute" right={ACTION_RIGHT} bottom={ACTION_BOTTOM} flexDirection="row" gap={1}>
                       {actions.map(action => (
                         <Button
-                          key={action === SEND_ACTION || action === STATUS_ACTION ? `ticket-${file.id}-${item.key}` : `ticket-${action.name}-${file.id}-${item.key}`}
+                          key={action === SEND_ACTION || action === STATUS_ACTION ? `ticket-${item.file ?? file.name}-${item.key}` : `ticket-${action.name}-${item.file ?? file.name}-${item.key}`}
                           label={action.glyph}
                           hover={{ scope: sendScope(`${action.name}:${sentKey}`), bold: true }}
                           onPress={() => press(action)}
@@ -2833,7 +2870,7 @@ export const register: Register = (on, options) => {
             }
             const cards = isTicketView
               ? [
-                  ...fileCards(file, view, 0).map(drawn => card(`${prefix}-${file.id}-head`, drawn)),
+                  card(`${prefix}-${file.id}-head`, boardHead(rows)),
                   ...sections.map(section => (
                     <Box key={`${prefix}-${file.id}-board-${section.name}`} flexDirection="column" gap={1}>
                       {section.name !== '' && (
@@ -2977,10 +3014,10 @@ export const register: Register = (on, options) => {
             }}
           />
         )}
-        {todoLedger(view).map(file => (
+        {todoLedger(view).map((file, _, all) => (
           <Box key={file.id} flexDirection="column" marginTop={1}>
             <Text dimColor={file.done === file.total} bold={file.done < file.total}>
-              {`${clip(file.name, columns - 24)}  ${bar(file.done, file.total, 10)} ${file.done}/${file.total}`}
+              {`${clip(`${file.name}${all.filter(one => one.name === file.name).length > 1 && file.place ? ` ${file.place}` : ''}`, columns - 24)}  ${bar(file.done, file.total, 10)} ${file.done}/${file.total}`}
             </Text>
             {file.items.slice(0, expandedFiles.has(`file:${file.id}`) ? file.items.length : ITEMS_SHOWN).map((item, k) => (
               <Box key={`${file.id}:${k}`}>

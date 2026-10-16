@@ -1,8 +1,9 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
+import { boardHead, clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
 import { endAgentTasks, itemLines, lineSignature, renumberLines, appendSections, applyRenames, nonBlankLines, hasSection, renameNote, taskLines, launchedTask, endedTask, readTaskName, taskNamePrompt, RULES, callSummary, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
 import type { AgentRow, TodoFile } from '../types'
+import type { FileView } from '../hooks/cards'
 import type { BackgroundTask } from '../hooks/register'
 
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
@@ -1268,7 +1269,7 @@ test('the folders are the primary first then by path, the global one dropped, on
 })
 
 
-test('files of one name in different folders are one board, and each item keeps its source', async () => {
+test('files of one name in different folders stay two files, and each item keeps its source', async () => {
   const items = parseTodo('- [ ] #T1 Same ID\n- [x] Done thing')
   const list: TodoFile[] = [
     { name: 'TODO.md', folder: '/r/mods/x/.claude_todo', rel: 'mods/x/.claude_todo', isOther: true, mtimeMs: 5, items: parseTodo('- [~] #T1 Same ID') },
@@ -1276,24 +1277,47 @@ test('files of one name in different folders are one board, and each item keeps 
     { name: 'OTHER.md', folder: '/r/mods/x/.claude_todo', rel: 'mods/x/.claude_todo', isOther: true, mtimeMs: 1, items: parseTodo('- [ ] Alone') },
   ]
   const view = buildView(list, [], 0)
-  expect(view.files.map(file => file.name).sort()).toEqual(['OTHER.md', 'TODO.md'])
-  const board = view.files.find(file => file.name === 'TODO.md')!
-  expect(board.total).toBe(3)
-  expect(board.done).toBe(1)
-  expect(board.active).toBe(1)
-  expect(board.mtimeMs).toBe(5)
-  // In progress, then open, then done; the primary folder's items before the others' within a status.
-  expect(board.items.map(item => item.status)).toEqual(['in_progress', 'pending', 'completed'])
-  expect(board.items.map(item => item.key)).toEqual(['mods/x/.claude_todo::#t1', '#t1', 'done thing'])
-  expect(board.items.map(item => item.path)).toEqual(['mods/x/.claude_todo/TODO.md', '.claude_todo/TODO.md', '.claude_todo/TODO.md'])
-  expect(board.items.map(item => item.folder)).toEqual(['/r/mods/x/.claude_todo', '/r/.claude_todo', '/r/.claude_todo'])
-  expect(board.items.every(item => item.file === 'TODO.md')).toBe(true)
+  expect(view.files.map(file => file.name).sort()).toEqual(['OTHER.md', 'TODO.md', 'TODO.md'])
+  const mine = view.files.find(file => file.name === 'TODO.md' && file.place === '')!
+  const other = view.files.find(file => file.name === 'TODO.md' && file.place === 'mods/x')!
+  expect(mine.id).not.toBe(other.id)
+  expect([mine.total, mine.done, mine.active]).toEqual([2, 1, 0])
+  expect([other.total, other.done, other.active]).toEqual([1, 0, 1])
+  expect(other.mtimeMs).toBe(5)
+  expect(mine.items.map(item => item.key)).toEqual(['#t1', 'done thing'])
+  expect(other.items.map(item => item.key)).toEqual(['mods/x/.claude_todo::#t1'])
+  expect(mine.items.map(item => item.path)).toEqual(['.claude_todo/TODO.md', '.claude_todo/TODO.md'])
+  expect(other.items.map(item => item.path)).toEqual(['mods/x/.claude_todo/TODO.md'])
+  expect(other.items[0]?.folder).toBe('/r/mods/x/.claude_todo')
   expect(view.total).toBe(4)
-  // Nothing in the drawn card names a folder.
-  const svg = fileCards(board, view, 12).map(card => card.source).join('')
+  // A name that is unique keeps the plain name as its ID.
+  expect(view.files.find(file => file.name === 'OTHER.md')?.id).toBe('OTHER.md')
+  // The list view's card for one file names no folder.
+  const svg = fileCards(mine, view, 12).map(card => card.source).join('')
   expect(svg).not.toContain('mods/x')
   expect(svg).toContain('>TODO.md<')
 })
+
+test('the board header has one row per file with its own count, and shows a place only for a repeated name', async () => {
+  const file = (name: string, place: string, done: number, total: number): FileView => ({ name, id: name, place, done, active: 0, total, owners: [], items: [], mtimeMs: 1 })
+  const two = boardHead([file('A.md', '', 1, 4), file('B.md', 'mods/x', 3, 5)])
+  const one = boardHead([file('A.md', '', 1, 4)])
+  expect(two.source).toContain('>A.md<')
+  expect(two.source).toContain('>B.md<')
+  expect(two.source).toContain('1 of 4')
+  expect(two.source).toContain('3 of 5')
+  expect(two.source).not.toContain('mods/x')
+  expect(two.height).toBeGreaterThan(one.height)
+  // With one file the header is the list view's first card.
+  expect(one.height).toBe(fileCards(file('A.md', '', 1, 4), { ...view0(), files: [] }, 0)[0]!.height)
+  const same = boardHead([file('A.md', '', 1, 4), file('A.md', 'mods/x', 3, 5), file('B.md', 'lib', 0, 1)])
+  expect(same.source).toContain('>mods/x<')
+  expect(same.source).not.toContain('>lib<')
+  // The root's own folder needs no place.
+  expect(same.source).not.toContain('>.claude_todo<')
+})
+
+const view0 = () => buildView([], [], 0)
 
 test('a folder input picks a move_ticket target exactly, never by a word in the reference', async () => {
   const mk = (folder: string, rel: string, name: string, text: string): TodoFile => ({ name, folder, rel, mtimeMs: 1, items: parseTodo(text) })
@@ -1381,9 +1405,11 @@ test('two todo folders show as one board, a button writes only its own file, and
   expect(drawn).toContain('Write the docs')
   expect(drawn).not.toContain('mods/x:')
   expect(drawn).not.toContain('repo root')
-  // One board: one card header for TODO.md, counting both items.
-  expect(drawn.match(/>TODO\.md</g)?.length).toBe(1)
-  expect(drawn).toContain('0 of 2')
+  // One board, one header with a row per file: the names repeat, so the second one's place shows.
+  expect(drawn.match(/>TODO\.md</g)?.length).toBe(2)
+  expect(drawn.match(/>0 of 1</g)?.length).toBe(2)
+  expect(drawn).toContain('>mods/x<')
+  expect(drawn).not.toContain('>.claude_todo<')
   expect(await ui.find({ key: 'ticket-start-TODO.md-#t1' })).toBeDefined()
   await ui.press({ key: 'ticket-start-TODO.md-mods/x/.claude_todo::#t1' })
   expect(writes).toEqual(['/repo/mods/x/.claude_todo/TODO.md'])
@@ -1398,6 +1424,60 @@ test('two todo folders show as one board, a button writes only its own file, and
   const gitCalls = calls.length
   await $.tool.call({ tool: 'Write', file_path: '/repo/new/.claude_todo/T.md' } as never).catch(() => undefined)
   expect(calls.length).toBe(gitCalls)
+})
+
+test('one board holds the tickets of every file together, under a header with a row per file; the list view stays per file', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/ALPHA.md': '- [ ] #T1 Alpha open\n- [~] #T2 Alpha active\n- [x] #T3 Alpha done',
+    '/repo/mods/x/.claude_todo/BETA.md': '- [ ] #T4 Beta open\n- [~] #T5 Beta active',
+  }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/ALPHA.md', 'mods/x/.claude_todo/BETA.md'] })
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const drawn = JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  // Ticket view: one header card (two rows, own counts), tickets from both files, no place shown.
+  expect(drawn.match(/>ALPHA\.md</g)?.length).toBe(1)
+  expect(drawn.match(/>BETA\.md</g)?.length).toBe(1)
+  expect(drawn).toContain('1 of 3')
+  expect(drawn).toContain('0 of 2')
+  expect(drawn).not.toContain('mods/x')
+  // Four tickets in the columns (Open 2, In progress 2); the Done ticket is not shown.
+  for (const one of ['Alpha open', 'Alpha active', 'Beta open', 'Beta active']) {
+    expect(drawn).toContain(one)
+  }
+  expect(drawn).not.toContain('Alpha done')
+  // In a column, file order: Alpha before Beta.
+  const order = (text: string) => drawn.indexOf(text)
+  expect(order('Alpha open')).toBeLessThan(order('Beta open'))
+  expect(order('Alpha active')).toBeLessThan(order('Beta active'))
+  // Button keys keep the file and the item.
+  expect(await ui.find({ key: 'ticket-start-ALPHA.md-#t1' })).toBeDefined()
+  expect(await ui.find({ key: 'ticket-start-BETA.md-mods/x/.claude_todo::#t4' })).toBeDefined()
+  // List view: a card set per file, each with its own header.
+  await ui.press({ key: 'todo-tickets' })
+  const text = JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(text.match(/>ALPHA\.md</g)?.length).toBe(1)
+  expect(text.match(/>BETA\.md</g)?.length).toBe(1)
+  expect(text).toContain('>1 of 3<')
+  expect(text).toContain('>0 of 2<')
+})
+
+test('the board shows 12 tickets per column across all files, and one button shows them all', async ($, on) => {
+  mock.clock(on)
+  const many = (word: string) => Array.from({ length: 8 }, (_, i) => `- [ ] ${word} ${i}`).join('\n')
+  const files = { '/repo/.claude_todo/AAA.md': many('aaa'), '/repo/mods/x/.claude_todo/BBB.md': many('bbb') }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/AAA.md', 'mods/x/.claude_todo/BBB.md'] })
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const count = async () => {
+    const text = JSON.stringify(await ui.findAll({ type: 'Svg' }))
+
+    return (text.match(/>(aaa|bbb) \d</g) ?? []).length
+  }
+  expect(await count()).toBe(12)
+  await ui.press({ key: 'file-toggle-board' })
+  expect(await count()).toBe(16)
 })
 
 test('move_ticket refuses an ID found in more than one file, and the folder input picks one', async ($, on) => {

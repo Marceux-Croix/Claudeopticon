@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- The ticket view draws one board for all todo files, under one header card with a row per file (name, bar, own count). Same-named files in different folders stay two files; their rows show the folder.
+
 ## 0.4.0
 
 - The board shows the tickets of every `.claude_todo/` folder in the repo together, as one todo. Each change still goes back to the file the ticket came from. The folders are found once, when the pane starts.

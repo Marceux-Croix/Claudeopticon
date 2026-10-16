@@ -27,10 +27,12 @@ export type ItemView = {
 }
 
 export type FileView = {
-  /** The file's path inside its folder. Files of that name in every folder are one board. */
+  /** The file's path inside its folder. */
   name: string
-  /** The board's ID in the pane: the name. */
+  /** The file's ID in the pane: its name, or its folder and name when another file has that name. */
   id: string
+  /** Where its folder sits in the repo (no `.claude_todo`); empty at the root. Shown only to tell same-named files apart. */
+  place?: string
   done: number
   active: number
   total: number
@@ -653,6 +655,38 @@ export function fileCards(file: FileView, view: View, limit: number, isTextOpen 
   }
 
   return cards
+}
+
+/** The height of one file row in the board header. */
+const HEAD_ROW_PX = 44
+
+/**
+ * The ticket board's header: one row per file, each with its name, its own progress strip and its
+ * own "done of total". With one file it is the same card as the list view's first card. A file's
+ * place (its folder) shows in dim text after the name only when another row has the same name,
+ * since the two rows would look the same. Archived files are grayed.
+ */
+export function boardHead(files: readonly FileView[]): Card {
+  const counts = new Map<string, number>()
+  for (const file of files) {
+    counts.set(file.name, (counts.get(file.name) ?? 0) + 1)
+  }
+  const rows = files.map((file, i) => {
+    const y = 26 + i * HEAD_ROW_PX
+    const place = (counts.get(file.name) ?? 0) > 1 && file.place !== undefined && file.place !== '' ? file.place : undefined
+    const room = INNER - 70
+    const placeText = place === undefined ? undefined : fit(place, Math.floor(room / 2), 12)
+    const nameText = fit(file.name, placeText === undefined ? room : room - placeText.length * 12 * 0.52 - 10, 14, 500)
+    const placeX = PAD + nameText.length * 14 * 0.55 + 10
+    const body = `<text x="${PAD}" y="${y}" fill="${LABEL}" font-size="14" font-weight="500">${esc(nameText)}</text>
+${placeText === undefined ? '' : `<text x="${Math.round(placeX)}" y="${y}" fill="${FAINT}" font-size="12">${esc(placeText)}</text>\n`}<text x="${W - PAD}" y="${y}" text-anchor="end" fill="${SUB}" font-size="12">${file.done} of ${file.total}</text>
+${strip(PAD, y + 9, INNER, file.done, file.active, file.total)}`
+
+    return file.isArchived === true ? `<g opacity=".55">${body}</g>` : body
+  })
+  const height = 26 + Math.max(0, files.length - 1) * HEAD_ROW_PX + 34
+
+  return stage(height, rows.join('\n'), files.map(file => `${file.name}: ${file.done} of ${file.total} done`).join('; '))
 }
 
 // ---------------------------------------------------------------- agents

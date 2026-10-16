@@ -2253,3 +2253,54 @@ test('review 8b: a malformed folds entry in the record does not stop the coverag
   expect(store.get('duplicates:/repo')).toEqual([])
   expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('three ONLY HERE')
 })
+
+// ---------------------------------------------------------------- folding across central files
+
+test('round 8a: a ticket identical to one in another central file is folded, with the same or another ID, and Delete removes the source', async ($, on) => {
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/TODO.md': '- [ ] #T6 Update the install guide',
+    '/repo/mods/x/.claude_todo/BACKLOG.md': '- [ ] #T6 Update the install guide',
+    '/repo/mods/y/.claude_todo/BACKLOG.md': '- [ ] #T16 Update the install guide',
+  }
+  const { ui, calls, store, toasts } = await consolidated($, on, files, ['.claude_todo/TODO.md', 'mods/x/.claude_todo/BACKLOG.md', 'mods/y/.claude_todo/BACKLOG.md'])
+  // Nothing was copied: no BACKLOG.md in the central folder, and TODO.md as it was.
+  expect(files['/repo/.claude_todo/BACKLOG.md']).toBeUndefined()
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T6 Update the install guide')
+  const meta = store.get('duplicates-meta:/repo') as Meta & { foldTo: Record<string, Record<string, string>> }
+  expect(meta.renames['/repo/mods/y/.claude_todo/BACKLOG.md']).toEqual({ t16: 'T6' })
+  expect(meta.foldTo['/repo/mods/x/.claude_todo/BACKLOG.md']).toEqual({ '- [ ] #T6 Update the install guide': 'TODO.md' })
+  expect(meta.foldTo['/repo/mods/y/.claude_todo/BACKLOG.md']).toEqual({ '- [ ] #T16 Update the install guide': 'TODO.md' })
+  expect(toasts.join('\n')).toContain('#T16 folded into #T6')
+  await ui.press({ key: 'todo-delete-duplicates' })
+  expect(rmCalls(calls).filter(call => call.startsWith('rm --')).sort()).toEqual(['rm -- /repo/mods/x/.claude_todo/BACKLOG.md', 'rm -- /repo/mods/y/.claude_todo/BACKLOG.md'])
+})
+
+test('round 8b: a line queued from one source TODO.md is the fold target for another source BACKLOG.md in the same press', async ($, on) => {
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/TODO.md': '- [ ] #T1 Something else',
+    '/repo/mods/a/.claude_todo/TODO.md': '- [ ] #T20 Shared thing',
+    '/repo/mods/b/.claude_todo/BACKLOG.md': '- [ ] #T30 Shared thing',
+  }
+  const { ui, calls, store } = await consolidated($, on, files, ['.claude_todo/TODO.md', 'mods/a/.claude_todo/TODO.md', 'mods/b/.claude_todo/BACKLOG.md'])
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Something else\n\n## From mods/a\n\n- [ ] #T20 Shared thing\n')
+  expect(files['/repo/.claude_todo/BACKLOG.md']).toBeUndefined()
+  const meta = store.get('duplicates-meta:/repo') as Meta
+  expect(meta.renames['/repo/mods/b/.claude_todo/BACKLOG.md']).toEqual({ t30: 'T20' })
+  await ui.press({ key: 'todo-delete-duplicates' })
+  expect(rmCalls(calls).filter(call => call.startsWith('rm --')).sort()).toEqual(['rm -- /repo/mods/a/.claude_todo/TODO.md', 'rm -- /repo/mods/b/.claude_todo/BACKLOG.md'])
+})
+
+test('round 8c: a fold is accepted only for a recorded line; an unrecorded identical line does not share', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/TODO.md': '- [ ] #T6 Update the install guide',
+    '/repo/mods/x/.claude_todo/BACKLOG.md': '- [ ] #T6 Update the install guide',
+  }
+  const { calls } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', 'mods/x/.claude_todo/BACKLOG.md'] })
+  // A duplicate record without a fold: BACKLOG.md has no central file of its own, so it is not covered.
+  storeWith(on, { 'duplicates:/repo': ['/repo/mods/x/.claude_todo'] })
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  expect(await ui.find({ key: 'todo-delete-duplicates' })).toBeUndefined()
+  expect(rmCalls(calls)).toEqual([])
+})

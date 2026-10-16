@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.5
+
+- Consolidate folds an identical ticket into its twin in any file of the main todo, not only the file with the same name.
+- Leftover scratch files are out of the repo.
+
 ## 0.4.4
 
 - Consolidate folds tickets whose text is letter-for-letter identical into one ticket, and copies everything else. A folded ticket's ID points to the ticket it was folded into.

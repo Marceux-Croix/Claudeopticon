@@ -496,6 +496,8 @@ let dupFolders: { path: string; real?: string; wasPrimary?: boolean }[] = []
 let renameMap: Record<string, Record<string, string>> = {}
 /** By source file (absolute path): the source lines (trailing spaces cut) folded into an identical central ticket, not copied. */
 let foldMap: Record<string, string[]> = {}
+/** By source file: for each folded line, the central file (by name) whose identical ticket it joined; coverage looks there first. */
+let foldTargets: Record<string, Record<string, string>> = {}
 /** What the last coverage check looked at, so the board's scan checks again only after a file changed. */
 let lastCoverageSig: string | undefined
 /** True when Consolidate and Delete are off: a linked worktree, or a main folder that would be the global one. */
@@ -538,7 +540,7 @@ function canDelete(): boolean {
 async function saveMeta($: EngineInterface): Promise<void> {
   const meta = metaKey()
   if (meta !== undefined) {
-    await $.store.set(meta, { primary: dupFolders.filter(one => one.wasPrimary === true).map(one => one.path), renames: renameMap, folds: foldMap }).catch(() => undefined)
+    await $.store.set(meta, { primary: dupFolders.filter(one => one.wasPrimary === true).map(one => one.path), renames: renameMap, folds: foldMap, foldTo: foldTargets }).catch(() => undefined)
   }
 }
 
@@ -560,7 +562,7 @@ async function loadDuplicates($: EngineInterface, found: readonly TodoFolder[] =
     return
   }
   const stored = await $.store.get(key).catch(() => undefined)
-  const kept = (await $.store.get(meta).catch(() => undefined)) as { primary?: unknown; renames?: unknown; folds?: unknown } | undefined
+  const kept = (await $.store.get(meta).catch(() => undefined)) as { primary?: unknown; renames?: unknown; folds?: unknown; foldTo?: unknown } | undefined
   const primary = new Set(Array.isArray(kept?.primary) ? kept.primary.filter((one): one is string => typeof one === 'string') : [])
   if (typeof kept?.renames === 'object' && kept.renames !== null) {
     renameMap = { ...(kept.renames as typeof renameMap), ...renameMap }
@@ -569,6 +571,15 @@ async function loadDuplicates($: EngineInterface, found: readonly TodoFolder[] =
   if (typeof kept?.folds === 'object' && kept.folds !== null) {
     const clean = Object.fromEntries(Object.entries(kept.folds as Record<string, unknown>).map(([file, list]) => [file, Array.isArray(list) ? list.filter((one): one is string => typeof one === 'string') : []]))
     foldMap = { ...clean, ...foldMap }
+  }
+  if (typeof kept?.foldTo === 'object' && kept.foldTo !== null) {
+    const clean = Object.fromEntries(
+      Object.entries(kept.foldTo as Record<string, unknown>).map(([file, to]) => [
+        file,
+        typeof to === 'object' && to !== null ? Object.fromEntries(Object.entries(to).filter((pair): pair is [string, string] => typeof pair[1] === 'string')) : {},
+      ]),
+    )
+    foldTargets = { ...clean, ...foldTargets }
   }
   // The record and what this load already knows: a store that fails must not unhide a folder.
   const paths = [...new Set([...(Array.isArray(stored) ? stored.filter((one): one is string => typeof one === 'string') : []), ...dupFolders.map(one => one.path)])]
@@ -847,16 +858,21 @@ async function consolidate($: EngineInterface): Promise<void> {
     // Per target: the central lines still free to cover a source line, and the tickets a fold may join.
     const free = new Map<string, Map<string, number>>()
     const whole = new Map<string, Map<string, number>>()
-    const tickets = new Map<string, Map<string, string>>()
+    const tickets = new Map<string, Map<string, { id: string; file: string }>>()
+    // The tickets of every central file, and every ticket queued in this press: a fold may join any.
+    const anyTicket = new Map<string, { id: string; file: string }>()
     const stateFor = async (name: string) => {
       if (!free.has(name)) {
         const held = new Map<string, number>()
-        const ids = new Map<string, string>()
+        const ids = new Map<string, { id: string; file: string }>()
         for (const line of nonBlankLines(await centralText(name))) {
           held.set(coverKey(line), (held.get(coverKey(line)) ?? 0) + 1)
           const parts = foldParts(line)
           if (parts !== undefined && !ids.has(parts.key)) {
-            ids.set(parts.key, parts.id)
+            ids.set(parts.key, { id: parts.id, file: name })
+          }
+          if (parts !== undefined && !anyTicket.has(parts.key)) {
+            anyTicket.set(parts.key, { id: parts.id, file: name })
           }
         }
         free.set(name, held)
@@ -866,8 +882,13 @@ async function consolidate($: EngineInterface): Promise<void> {
 
       return { held: free.get(name)!, all: whole.get(name)!, ids: tickets.get(name)! }
     }
+    for (const name of await mdFiles($, central, true)) {
+      await stateFor(name)
+    }
+    const holdsAnywhere = (key: string, preferred?: string) =>
+      (preferred !== undefined && (whole.get(preferred)?.get(key) ?? 0) > 0) || [...whole.values()].some(map => (map.get(key) ?? 0) > 0)
     type Block = { place: string; lines: string[] }
-    type Commit = { target?: string; file: string; renames: Record<string, string>; folds: string[]; told: string[] }
+    type Commit = { target?: string; file: string; renames: Record<string, string>; folds: string[]; foldTo: Record<string, string>; told: string[] }
     const sections = new Map<string, Block[]>()
     const commits: Commit[] = []
     // A source that will not list or read stays on the board: nothing of it was copied.
@@ -887,9 +908,11 @@ async function consolidate($: EngineInterface): Promise<void> {
           continue
         }
         const lines = nonBlankLines(text)
-        const { held, all: whole, ids } = await stateFor(name)
+        const { held, ids } = await stateFor(name)
         const old = renameMap[path] ?? {}
         const oldFolds = new Set(foldMap[path] ?? [])
+        const oldTo = foldTargets[path] ?? {}
+        const foldTo: Record<string, string> = {}
         const fold: Record<string, string> = {}
         // What the lines already in the central file still need of the old record; the rest is stale.
         const keepOld: Record<string, string> = {}
@@ -901,9 +924,12 @@ async function consolidate($: EngineInterface): Promise<void> {
           // Already in the central file: exactly, after this file's renames. A recorded fold may share its line.
           const key = coverKey(applyRenames(line, old))
           // A recorded fold may share its central line, used or not; any other line uses it up.
-          if (oldFolds.has(line) ? (whole.get(key) ?? 0) > 0 : (held.get(key) ?? 0) > 0) {
+          if (oldFolds.has(line) ? holdsAnywhere(key, oldTo[line]) : (held.get(key) ?? 0) > 0) {
             if (oldFolds.has(line)) {
               keepFolds.push(line)
+              if (oldTo[line] !== undefined) {
+                foldTo[line] = oldTo[line]!
+              }
             } else {
               held.set(key, (held.get(key) ?? 0) - 1)
             }
@@ -915,13 +941,15 @@ async function consolidate($: EngineInterface): Promise<void> {
             continue
           }
           const parts = foldParts(line)
-          const target = parts === undefined ? undefined : ids.get(parts.key)
+          // The same file's ticket first, else an identical ticket in any central file or queued for any target.
+          const target = parts === undefined ? undefined : (ids.get(parts.key) ?? anyTicket.get(parts.key))
           if (parts !== undefined && target !== undefined) {
-            if (target.toLowerCase() !== parts.id.toLowerCase()) {
-              fold[parts.id.toLowerCase()] = target
+            if (target.id.toLowerCase() !== parts.id.toLowerCase()) {
+              fold[parts.id.toLowerCase()] = target.id
             }
             folded.push(line)
-            told.push(`- ${place}/${name}: #${parts.id} folded into #${target}`)
+            foldTo[line] = target.file
+            told.push(`- ${place}/${name}: #${parts.id} folded into #${target.id}`)
             continue
           }
           toCopy.push(line)
@@ -934,13 +962,16 @@ async function consolidate($: EngineInterface): Promise<void> {
         for (const line of out) {
           const parts = foldParts(line)
           if (parts !== undefined && !ids.has(parts.key)) {
-            ids.set(parts.key, parts.id)
+            ids.set(parts.key, { id: parts.id, file: name })
+          }
+          if (parts !== undefined && !anyTicket.has(parts.key)) {
+            anyTicket.set(parts.key, { id: parts.id, file: name })
           }
         }
         if (out.length > 0) {
           sections.set(name, [...(sections.get(name) ?? []), { place, lines: out }])
         }
-        commits.push({ ...(out.length > 0 ? { target: name } : {}), file: path, renames: { ...keepOld, ...now }, folds: [...keepFolds, ...folded], told })
+        commits.push({ ...(out.length > 0 ? { target: name } : {}), file: path, renames: { ...keepOld, ...now }, folds: [...keepFolds, ...folded], foldTo, told })
       }
     }
     let files = 0
@@ -950,6 +981,7 @@ async function consolidate($: EngineInterface): Promise<void> {
       // Always replaced, an empty one too: a file copied again must not keep an older renumbering.
       renameMap = { ...renameMap, [one.file]: one.renames }
       foldMap = { ...foldMap, [one.file]: [...new Set(one.folds)] }
+      foldTargets = { ...foldTargets, [one.file]: one.foldTo }
       told.push(...one.told)
     }
     for (const one of commits.filter(c => c.target === undefined)) {
@@ -1030,6 +1062,12 @@ async function coverageOf($: EngineInterface, central: string, folders: readonly
 
     return held
   }
+  // Every central file is loaded, since a recorded fold may join an identical ticket in any of them.
+  for (const name of await mdFiles($, central, true)) {
+    await covers(name)
+  }
+  const holdsAnywhere = (key: string, preferred?: string) =>
+    (preferred !== undefined && (whole.get(preferred)?.get(key) ?? 0) > 0) || [...whole.values()].some(map => (map.get(key) ?? 0) > 0)
   const out = new Map<string, FileCover[] | undefined>()
   for (const dup of folders) {
     const files: FileCover[] = []
@@ -1058,7 +1096,7 @@ async function coverageOf($: EngineInterface, central: string, folders: readonly
       const isCovered = lines.every(line => {
         const key = coverKey(applyRenames(line, renames))
         if (folded.has(line)) {
-          return (whole.get(name)?.get(key) ?? 0) > 0
+          return holdsAnywhere(key, foldTargets[path]?.[line])
         }
         const n = left.get(key) ?? 0
         left.set(key, n - 1)

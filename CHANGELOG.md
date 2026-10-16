@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- Consolidate todos moves every ticket and note into one central `.claude_todo/TODO.md`, under a "From" section per file. It folds nothing and deletes nothing. Each old file is emptied only after its content is confirmed in the central file, and a file that changed meanwhile is left alone.
+- The delete button is now two buttons. Delete empty todos removes empty todo files, then their folders if empty. Delete duplicate tickets removes letter-for-letter identical tickets, keeps the first, and points the removed IDs to the kept one. Each button shows only when it has work, and disappears once it is done.
+- The duplicates record, the coverage checks and folding are gone.
+- Delete duplicate tickets never removes a subtask or a ticket with subtasks, and never changes the own ID of an archived ticket. Consolidate never reads, writes or empties a file through a symlink.
+
 ## 0.4.6
 
 - Consolidate merges every todo file into one central file, `.claude_todo/TODO.md` (or the main folder's only todo file), so the board ends with one file. Delete duplicate todos then also removes the main folder's own merged files, never the central file, its categories or its archive.

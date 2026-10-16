@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- A todo file that Consolidate emptied stays in the header, marked Empty, until Delete empty todos removes it. Before, it left the board at once and looked deleted.
+
 ## 0.5.0
 
 - Consolidate todos moves every ticket and note into one central `.claude_todo/TODO.md`, under a "From" section per file. It folds nothing and deletes nothing. Each old file is emptied only after its content is confirmed in the central file, and a file that changed meanwhile is left alone.

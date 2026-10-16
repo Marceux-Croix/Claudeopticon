@@ -492,7 +492,7 @@ let pendingRenames: string[] = []
 /** The duplicate tickets removed that Claude has not been told of yet. */
 let pendingRemoved: string[] = []
 /** The empty `.md` files of the known folders, found by the last scan: the Delete empty todos button's work. */
-let emptyFiles: { folder: string; path: string }[] = []
+let emptyFiles: { folder: string; path: string; name: string; rel?: string }[] = []
 /** True when the central target file holds two or more identical tickets: the Delete duplicate tickets button's work. */
 let hasDupTickets = false
 
@@ -1141,7 +1141,7 @@ async function scan($: EngineInterface, isFull = false): Promise<void> {
   await loadBook($, bookFolder, isFull)
   const known = new Map(todoFiles.map(file => [fileId(file), file]))
   const next: TodoFile[] = []
-  const empties: { folder: string; path: string }[] = []
+  const empties: { folder: string; path: string; name: string; rel?: string }[] = []
   for (const folder of folders) {
     const sources: [string, string][] = [[folder.path, ''], [`${folder.path}/archive`, 'archive/']]
     for (const [dir, prefix] of sources) {
@@ -1162,7 +1162,7 @@ async function scan($: EngineInterface, isFull = false): Promise<void> {
         const text = await $.fs.read(`${dir}/${entry.name}`).catch(() => undefined)
         // A file with nothing but blanks is empty; one that would not read is not known to be.
         if (typeof text === 'string' && text.trim() === '' && !(folder.path === centralFolder() && prefix === '' && entry.name.toLowerCase() === 'todo.md')) {
-          empties.push({ folder: folder.path, path: `${dir}/${entry.name}` })
+          empties.push({ folder: folder.path, path: `${dir}/${entry.name}`, name, ...(folder.rel === undefined ? {} : { rel: folder.rel }) })
         }
         const items = parseTodo(typeof text === 'string' ? text : '')
         next.push(prefix === '' ? { ...place, mtimeMs: entry.mtimeMs, items } : { ...place, mtimeMs: entry.mtimeMs, items, isArchived: true })
@@ -2315,6 +2315,13 @@ function start($: EngineInterface): void {
   })
 }
 
+/** Header rows for the empty top-level todo files, so a file Consolidate emptied stays in view until Delete empty todos removes it. */
+function emptyRows(): FileView[] {
+  return emptyFiles
+    .filter(file => !file.name.startsWith('archive/'))
+    .map(file => ({ name: file.name, id: `empty:${file.path}`, place: folderPlace(file.rel ?? file.folder), done: 0, active: 0, total: 0, owners: [], items: [], mtimeMs: 0, isEmpty: true }))
+}
+
 /** How many todo files the board pulls from: the top-level files with items, in every folder on the board; archives are not counted. */
 function todoCount(): number {
   return todoFiles.filter(file => file.isArchived !== true).length
@@ -2907,7 +2914,7 @@ export const register: Register = (on, options) => {
             }
             const cards = isTicketView
               ? [
-                  card(`${prefix}-${file.id}-head`, boardHead(rows)),
+                  card(`${prefix}-${file.id}-head`, boardHead([...rows, ...emptyRows()])),
                   ...sections.map(section => (
                     <Box key={`${prefix}-${file.id}-board-${section.name}`} flexDirection="column" gap={1}>
                       {section.name !== '' && (

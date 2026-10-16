@@ -40,6 +40,8 @@ export type FileView = {
   items: ItemView[]
   mtimeMs: number
   isArchived?: boolean
+  /** True for a todo file with nothing in it, such as one Consolidate emptied: its header row says Empty until Delete empty todos removes it. */
+  isEmpty?: boolean
   /** Category headings inside the card: each names the index of its first item. */
   groups?: { name: string; from: number; count: number }[]
 }
@@ -680,14 +682,14 @@ export function boardHead(files: readonly FileView[]): Card {
     // The place rides in the name's own text, so the gap is the font's, not a width guess.
     const placeSpan = placeText === undefined ? '' : `<tspan dx="10" fill="${FAINT}" font-size="12" font-weight="400">${esc(placeText)}</tspan>`
     const body = `<text x="${PAD}" y="${y}" fill="${LABEL}" font-size="14" font-weight="500">${esc(nameText)}${placeSpan}</text>
-<text x="${W - PAD}" y="${y}" text-anchor="end" fill="${SUB}" font-size="12">${file.done} of ${file.total}</text>
+<text x="${W - PAD}" y="${y}" text-anchor="end" fill="${SUB}" font-size="12">${file.isEmpty === true ? 'Empty' : `${file.done} of ${file.total}`}</text>
 ${strip(PAD, y + 9, INNER, file.done, file.active, file.total)}`
 
-    return file.isArchived === true ? `<g opacity=".55">${body}</g>` : body
+    return file.isArchived === true || file.isEmpty === true ? `<g opacity=".55">${body}</g>` : body
   })
   const height = 26 + Math.max(0, files.length - 1) * HEAD_ROW_PX + 34
 
-  return stage(height, rows.join('\n'), files.map(file => `${file.name}: ${file.done} of ${file.total} done`).join('; '))
+  return stage(height, rows.join('\n'), files.map(file => (file.isEmpty === true ? `${file.name}: empty` : `${file.name}: ${file.done} of ${file.total} done`)).join('; '))
 }
 
 // ---------------------------------------------------------------- agents

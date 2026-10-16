@@ -1608,6 +1608,11 @@ test('Consolidate moves every other file into the one target, renumbers clashes,
   // The button is gone, and the next one has work.
   expect(await ui.find({ key: 'todo-consolidate' })).toBeUndefined()
   expect(await ui.find({ key: 'todo-delete-empty' })).toBeDefined()
+  // The emptied files stay in the header, marked Empty, until Delete empty todos removes them.
+  const head = JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(head.match(/>Empty</g)?.length).toBe(2)
+  await ui.press({ key: 'todo-delete-empty' })
+  expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).not.toContain('>Empty<')
 })
 
 test('a subtask or a ticket with lines under it is never a duplicate, and a leading ID is never renamed', () => {

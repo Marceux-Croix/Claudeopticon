@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.4
+
+- Consolidate folds tickets whose text is letter-for-letter identical into one ticket, and copies everything else. A folded ticket's ID points to the ticket it was folded into.
+- A folder that was consolidated but later gains a line that is not in the main todo shows on the board again, and Consolidate picks it up.
+
 ## 0.4.3
 
 - Delete duplicate todos no longer keeps a file that was copied again after an earlier consolidation: a new copy replaces the old renumbering record.

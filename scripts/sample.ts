@@ -48,7 +48,7 @@ export const agents: AgentView[] = [
 ]
 
 export const view: View = {
-  files: [{ name: 'release.md', done: 24, active: 4, total: 40, owners: [0, 1], items, mtimeMs: NOW - MIN }],
+  files: [{ name: 'release.md', id: 'release.md', done: 24, active: 4, total: 40, owners: [0, 1], items, mtimeMs: NOW - MIN }],
   agents,
   done: 24, active: 4, total: 40, completed: 24, live: 2, now: NOW,
   usage: { tokens: 17_384_000, atCompact: 12_100_000, since: 0 },

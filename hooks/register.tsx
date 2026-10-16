@@ -283,9 +283,9 @@ export async function findTodoDirWith(fs: TodoFs): Promise<string | undefined> {
   return real !== undefined && isGlobalTodo(real) ? undefined : found
 }
 
-/** True for the global todo folder, `<home>/.claude/.claude_todo`, which the mod never reads. */
+/** True for the global todo folder, `<home>/.claude/.claude_todo`, which the mod never reads. A project's own `<repo>/.claude/.claude_todo` is not it. */
 export function isGlobalTodo(realPath: string): boolean {
-  return /\/\.claude\/\.claude_todo\/?$/.test(realPath)
+  return /^\/(Users|home)\/[^/]+\/\.claude\/\.claude_todo\/?$|^\/root\/\.claude\/\.claude_todo\/?$/.test(realPath)
 }
 
 /**
@@ -323,37 +323,827 @@ async function repoTodoDir(fs: TodoFs): Promise<string | undefined> {
   return undefined
 }
 
-/** Rereads `.claude_todo/*.md`; a file whose mtime is unchanged keeps its parse. */
-async function scan($: EngineInterface, isFull = false): Promise<void> {
-  const folder = await findTodoDir($)
-  await loadBook($, folder, isFull)
-  const known = new Map(todoFiles.map(file => [file.name, file]))
-  const next: TodoFile[] = []
-  const archive = folder === undefined ? undefined : `${folder}/archive`
-  const sources: [string | undefined, string][] = [[folder, ''], [archive, 'archive/']]
-  for (const [dir, prefix] of sources) {
-    if (dir === undefined || !(await $.fs.exists(dir))) {
+// ---------------------------------------------------------------- folders
+
+/** One `.claude_todo/` folder: `path` as the engine's fs takes it, `rel` from its checkout's root. */
+export type TodoFolder = { path: string; rel: string; isOther: boolean; real?: string }
+
+/** Most folders the pane reads: a repo with more is cut, primary folder first, then by path. */
+export const MAX_FOLDERS = 20
+
+/**
+ * The `.claude_todo/` folders in the output of `git ls-files -z`: every entry with a `.claude_todo`
+ * segment is cut to the folder path ending there. An ignored folder lists as a collapsed directory
+ * entry (`x/.claude_todo/`), which cuts the same way. Duplicates drop; the order is by path.
+ */
+export function todoFoldersIn(listing: string, root: string): { path: string; rel: string }[] {
+  const rels = new Set<string>()
+  for (const entry of listing.split('\0')) {
+    const parts = entry.split('/').filter(part => part !== '')
+    const at = parts.indexOf(DIR)
+    if (at >= 0) {
+      rels.add(parts.slice(0, at + 1).join('/'))
+    }
+  }
+
+  return [...rels].sort().map(rel => ({ path: `${root}/${rel}`, rel }))
+}
+
+/**
+ * The repo root and, from a git worktree, its main checkout, from the output of
+ * `git rev-parse --path-format=absolute --show-toplevel --git-common-dir`.
+ */
+export function repoRoots(stdout: string): { root: string; main?: string } | undefined {
+  const [top, common] = stdout.split('\n').map(line => line.trim())
+  if (top === undefined || top === '' || !top.startsWith('/')) {
+    return undefined
+  }
+  const main = common !== undefined && common !== `${top}/.git` && common.endsWith('/.git') ? common.slice(0, -'/.git'.length) : undefined
+
+  return main === undefined || main === '' ? { root: top } : { root: top, main }
+}
+
+/**
+ * The folders the pane reads from those found: the global ones dropped, a place found twice kept
+ * once (the primary's entry when it is one of them, else the first), the primary folder first and
+ * the rest by path, cut to MAX_FOLDERS. `primary` is the `path` of the one folder the nearest-up
+ * rule picks.
+ */
+export function pickFolders(found: readonly { path: string; rel: string; real?: string }[], primary: string | undefined, globals: ReadonlySet<string>): TodoFolder[] {
+  const byRel = new Map<string, { path: string; rel: string; real?: string }>()
+  for (const one of found) {
+    if (globals.has(one.path)) {
       continue
     }
-    for (const entry of await $.fs.list(dir)) {
-      if (entry.kind !== 'file' || !entry.name.endsWith('.md')) {
+    const held = byRel.get(one.rel)
+    if (held === undefined || (one.path === primary && held.path !== primary)) {
+      byRel.set(one.rel, one)
+    }
+  }
+  const kept = [...byRel.values()]
+  const first = kept.filter(one => one.path === primary)
+  const rest = kept.filter(one => one.path !== primary).sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0))
+
+  return [...first.map(one => ({ ...one, isOther: false })), ...rest.map(one => ({ ...one, isOther: true }))].slice(0, MAX_FOLDERS)
+}
+
+/** The `.claude_todo/` folders of a checkout, tracked, untracked and ignored, through git. */
+async function listFolders($: EngineInterface, root: string): Promise<{ path: string; rel: string }[]> {
+  const run = async (argv: string[]) => {
+    const done = await $.process.run(argv, { cwd: root })
+
+    return done.exitCode === 0 ? done.stdout : ''
+  }
+  const tracked = await run(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'])
+  const ignored = await run(['git', 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'])
+
+  return todoFoldersIn(`${tracked}\0${ignored}`, root)
+}
+
+/** The real path of a folder, or undefined when it cannot be resolved. */
+function realOf($: EngineInterface, path: string): Promise<string | undefined> {
+  return $.fs.stat(path, { resolve: true }).then(stat => stat.realPath).catch(() => undefined)
+}
+
+/** The repo root of the session, kept to name a folder found later by its place in the repo. */
+let repoRoot: string | undefined
+/** Where the central todo lives: the root of the main checkout (the repo root outside a worktree). */
+let centralRoot: string | undefined
+
+/**
+ * Finds every `.claude_todo/` folder of the repo (and of the main checkout, from a worktree) with
+ * git. Outside a repo, or when git fails, only the nearest one by the old rule counts. A path git
+ * lists but the disk no longer has (a tracked file deleted) is dropped.
+ */
+async function discoverFolders($: EngineInterface): Promise<TodoFolder[]> {
+  const nearest = await findTodoDir($).catch(() => undefined)
+  const nearestReal = nearest === undefined ? undefined : await realOf($, nearest)
+  const alone: TodoFolder[] = nearest === undefined ? [] : [{ path: nearest, rel: nearest, isOther: false, ...(nearestReal === undefined ? {} : { real: nearestReal }) }]
+  try {
+    const top = await $.process.run(['git', 'rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'])
+    const roots = top.exitCode === 0 ? repoRoots(top.stdout) : undefined
+    if (roots === undefined) {
+      return alone
+    }
+    repoRoot = roots.root
+    centralRoot = roots.main ?? roots.root
+    // Consolidate and Delete are off in a linked worktree and when the main folder is the global one.
+    const centralPath = `${centralRoot}/${DIR}`
+    centralBlocked = roots.main !== undefined || isGlobalTodo(centralPath) || isGlobalTodo((await realOf($, centralPath)) ?? centralPath)
+    const listed = [...(await listFolders($, roots.root)), ...(roots.main === undefined ? [] : await listFolders($, roots.main))]
+    const found: { path: string; rel: string; real?: string }[] = []
+    const globals = new Set<string>()
+    let primary: string | undefined
+    for (const one of listed) {
+      if (!(await $.fs.exists(one.path).catch(() => false))) {
         continue
       }
-      const name = `${prefix}${entry.name}`
-      const cached = known.get(name)
-      if (!isFull && cached !== undefined && cached.mtimeMs === entry.mtimeMs) {
-        next.push(cached)
+      const real = await realOf($, one.path)
+      found.push(real === undefined ? one : { ...one, real })
+      if (isGlobalTodo(real ?? one.path)) {
+        globals.add(one.path)
+      }
+      if (real !== undefined && real === nearestReal && primary === undefined) {
+        primary = one.path
+      }
+    }
+    if (nearest !== undefined && primary === undefined) {
+      // The nearest folder git did not list: keep it, named by its place in the repo when that shows.
+      found.unshift({ path: nearest, rel: relIn(nearestReal, roots.root) ?? nearest, ...(nearestReal === undefined ? {} : { real: nearestReal }) })
+      primary = nearest
+    }
+
+    return pickFolders(found, primary, globals)
+  } catch {
+    return alone
+  }
+}
+
+/** A real path from the repo root, or undefined when it lies outside the root. */
+function relIn(real: string | undefined, root: string | undefined): string | undefined {
+  return real !== undefined && root !== undefined && real.startsWith(`${root}/`) ? real.slice(root.length + 1) : undefined
+}
+
+/** The folders found when the mod started; undefined until then. Git runs once per load; a reload does it again. */
+let todoFolders: TodoFolder[] | undefined
+let folderSearch: Promise<TodoFolder[]> | undefined
+/** The nearest folder the last scan saw, to look it up among the known ones only when it changes. */
+let nearestSeen: string | undefined
+
+function ensureFolders($: EngineInterface): Promise<TodoFolder[]> {
+  if (todoFolders !== undefined) {
+    return Promise.resolve(todoFolders)
+  }
+  folderSearch ??= discoverFolders($).then(async found => {
+    await loadDuplicates($, found).catch(() => undefined)
+    todoFolders = found
+
+    return found
+  })
+
+  return folderSearch
+}
+
+// ---------------------------------------------------------------- consolidating
+
+/**
+ * Folders whose todo was copied into the central one: they stay off the board, and the Delete
+ * duplicate todos button stays while any of them exists. Kept in the store by repo root, so a reload
+ * or a new session knows them. `wasPrimary`: the folder was the primary one when it was copied.
+ */
+let dupFolders: { path: string; real?: string; wasPrimary?: boolean }[] = []
+/** By source file (absolute path): the IDs renumbered when it was copied, old (lowercase) to new. */
+let renameMap: Record<string, Record<string, string>> = {}
+/** True when Consolidate and Delete are off: a linked worktree, or a main folder that would be the global one. */
+let centralBlocked = false
+/** The renumbered IDs Claude has not been told of yet. */
+let pendingRenames: string[] = []
+
+const dupKey = (): string | undefined => (centralRoot === undefined ? undefined : `duplicates:${centralRoot}`)
+const metaKey = (): string | undefined => (centralRoot === undefined ? undefined : `duplicates-meta:${centralRoot}`)
+
+function isDuplicate(folder: { path: string; real?: string }): boolean {
+  return dupFolders.some(one => one.path === folder.path || (one.real !== undefined && one.real === folder.real))
+}
+
+/** The central folder: `<root of the main checkout>/.claude_todo`. */
+function centralFolder(): string | undefined {
+  return centralRoot === undefined ? undefined : `${centralRoot}/${DIR}`
+}
+
+/** The folders on the board: the known ones, less the duplicates. When the primary one was a duplicate, the central one takes its place. */
+function visibleFolders(): TodoFolder[] {
+  const all = todoFolders ?? []
+  const shown = all.filter(one => !isDuplicate(one))
+  const lostPrimary = all.some(one => !one.isOther && isDuplicate(one)) && !shown.some(one => !one.isOther)
+
+  return lostPrimary ? shown.map(one => (one.path === centralFolder() ? { ...one, isOther: false } : one)) : shown
+}
+
+/** True when the Consolidate todos button shows: a repo's main checkout (not a worktree, not the global folder), and more than one folder on the board. */
+function canConsolidate(): boolean {
+  return !centralBlocked && centralRoot !== undefined && visibleFolders().length > 1
+}
+
+/** True when the Delete duplicate todos button shows: the same gate, and a recorded duplicate folder. */
+function canDelete(): boolean {
+  return !centralBlocked && centralRoot !== undefined && dupFolders.length > 0
+}
+
+/** Writes the duplicate record and the renumbering record to the store. */
+async function saveRecord($: EngineInterface): Promise<void> {
+  const key = dupKey()
+  const meta = metaKey()
+  if (key === undefined || meta === undefined) {
+    return
+  }
+  await $.store.set(key, dupFolders.map(one => one.path)).catch(() => undefined)
+  await $.store.set(meta, { primary: dupFolders.filter(one => one.wasPrimary === true).map(one => one.path), renames: renameMap }).catch(() => undefined)
+}
+
+/** Keeps the recorded duplicates that still exist on disk, and rewrites the record when some are gone. */
+async function loadDuplicates($: EngineInterface, found: readonly TodoFolder[] = todoFolders ?? []): Promise<void> {
+  const key = dupKey()
+  const meta = metaKey()
+  if (key === undefined || meta === undefined) {
+    return
+  }
+  const stored = await $.store.get(key).catch(() => undefined)
+  const kept = (await $.store.get(meta).catch(() => undefined)) as { primary?: unknown; renames?: unknown } | undefined
+  const primary = new Set(Array.isArray(kept?.primary) ? kept.primary.filter((one): one is string => typeof one === 'string') : [])
+  if (typeof kept?.renames === 'object' && kept.renames !== null) {
+    renameMap = { ...(kept.renames as typeof renameMap), ...renameMap }
+  }
+  // The record and what this load already knows: a store that fails must not unhide a folder.
+  const paths = [...new Set([...(Array.isArray(stored) ? stored.filter((one): one is string => typeof one === 'string') : []), ...dupFolders.map(one => one.path)])]
+  const alive: typeof dupFolders = []
+  for (const path of paths) {
+    if (!path.startsWith('/') || !(await $.fs.exists(path).catch(() => false))) {
+      continue
+    }
+    const real = found.find(one => one.path === path)?.real ?? (await realOf($, path))
+    const was = primary.has(path) || dupFolders.some(one => one.path === path && one.wasPrimary === true)
+    alive.push({ path, ...(real === undefined ? {} : { real }), ...(was ? { wasPrimary: true } : {}) })
+  }
+  dupFolders = alive
+  if (alive.length !== paths.length) {
+    // An empty list is the cleared record.
+    await saveRecord($)
+  }
+}
+
+/** Every checkbox line of a todo file's text, as written. */
+export function itemLines(markdown: string): string[] {
+  return markdown.split('\n').filter(line => CHECKBOX.test(line))
+}
+
+/** Every line of the text with something on it, trailing spaces cut. */
+export function nonBlankLines(markdown: string): string[] {
+  return markdown.split('\n').map(line => line.trimEnd()).filter(line => line.trim() !== '')
+}
+
+/** An item line as compared between files: its box and text, with only its own leading `#T` ID taken out. */
+export function lineSignature(line: string): string {
+  const match = CHECKBOX.exec(line)
+  const box = (match?.[1] ?? ' ').replace(/[xX]/, 'x').replace('>', '~')
+
+  return `${box} ${plainText(match?.[2] ?? '').replace(/^#[A-Za-z]+\d+\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()}`
+}
+
+/** What a line must match in the central file to count as copied: the exact line (after the renumbering), item lines and prose alike. */
+export function coverKey(line: string): string {
+  return `t:${line.trimEnd()}`
+}
+
+/** The line with every `#ID` in the map replaced by its new one (one pass, so a new ID is never renamed again). */
+export function applyRenames(line: string, renames: Readonly<Record<string, string>>): string {
+  return line.replace(/#([A-Za-z]+\d+)\b/g, (whole, id: string) => {
+    const fresh = renames[id.toLowerCase()]
+
+    return fresh === undefined ? whole : `#${fresh}`
+  })
+}
+
+/**
+ * The lines of one source file with every item ID that `used` has already replaced by the next free
+ * ID of its letters (`#T3` when `#T1` and `#T2` are taken), and the references to it in the other
+ * lines of the file rewritten the same way. `used` (lowercase IDs) gains each ID the file ends up with.
+ * `renames` maps old (lowercase) to new; `pairs` lists them as written, for the toast.
+ */
+export function renumberLines(lines: readonly string[], used: Set<string>): { lines: string[]; renames: Record<string, string>; pairs: { from: string; to: string }[] } {
+  const renames: Record<string, string> = {}
+  const pairs: { from: string; to: string }[] = []
+  const nextFree = (letters: string) => {
+    let top = 0
+    for (const id of used) {
+      const m = /^([a-z]+)(\d+)$/.exec(id)
+      if (m !== null && m[1] === letters.toLowerCase()) {
+        top = Math.max(top, Number(m[2]))
+      }
+    }
+
+    return `${letters}${top + 1}`
+  }
+  for (const line of lines) {
+    const id = CHECKBOX.test(line) ? ITEM_ID.exec(line)?.[1] : undefined
+    if (id === undefined) {
+      continue
+    }
+    if (renames[id.toLowerCase()] !== undefined) {
+      continue
+    }
+    if (!used.has(id.toLowerCase())) {
+      used.add(id.toLowerCase())
+      continue
+    }
+    const fresh = nextFree(/^[A-Za-z]+/.exec(id)?.[0] ?? 'T')
+    used.add(fresh.toLowerCase())
+    renames[id.toLowerCase()] = fresh
+    pairs.push({ from: id, to: fresh })
+  }
+
+  return { lines: lines.map(line => applyRenames(line, renames)), renames, pairs }
+}
+
+/** The text of a target file with new sections added: kept as it was, then each `## From <place>` block. */
+export function appendSections(existing: string, sections: readonly { place: string; lines: readonly string[] }[]): string {
+  let text = existing
+  for (const section of sections) {
+    const gap = text.trim() === '' ? '' : text.endsWith('\n') ? '\n' : '\n\n'
+    text = `${text}${gap}## From ${section.place}\n\n${section.lines.join('\n')}\n`
+  }
+
+  return text
+}
+
+/** The non-blank lines under each `## From <place>` heading of the text, one list per heading, up to the next `## ` heading. */
+export function sectionBlocks(text: string, place: string): string[][] {
+  const blocks: string[][] = []
+  let current: string[] | undefined
+  for (const line of text.split('\n').map(one => one.trimEnd())) {
+    if (line.trim() === `## From ${place}`) {
+      current = []
+      blocks.push(current)
+    } else if (line.startsWith('## ')) {
+      current = undefined
+    } else if (current !== undefined && line.trim() !== '') {
+      current.push(line)
+    }
+  }
+
+  return blocks
+}
+
+/** True when the text already holds the `## From <place>` section of that source. */
+export function hasSection(text: string, place: string): boolean {
+  return text.split('\n').some(line => line.trim() === `## From ${place}`)
+}
+
+/** The one-time note for Claude after IDs were renumbered. */
+export function renameNote(lines: readonly string[]): string | undefined {
+  return lines.length === 0
+    ? undefined
+    : [
+        'The Claudeopticon pane (the claudeopticon mod) consolidated several .claude_todo/ folders into the repo\'s main one. These item IDs collided and were renumbered in the copies. Use the new IDs from now on:',
+        ...lines,
+      ].join('\n')
+}
+
+/** Where a folder sits in its checkout, for the heading in the central file: its path without `.claude_todo`. */
+function placeOf(rel: string): string {
+  const place = rel.slice(0, Math.max(0, rel.length - DIR.length)).replace(/\/$/, '')
+
+  return place === '' ? 'the root of another checkout' : place
+}
+
+/** The `.md` files of a folder, top level and archive, as names inside it. */
+async function mdFiles($: EngineInterface, folder: string, isStrict = false): Promise<string[]> {
+  const names: string[] = []
+  for (const [dir, prefix] of [[folder, ''], [`${folder}/archive`, 'archive/']] as const) {
+    // Strict, a folder that will not answer or list is an error, not an empty or absent folder.
+    if (!(isStrict ? await $.fs.exists(dir) : await $.fs.exists(dir).catch(() => false))) {
+      continue
+    }
+    for (const entry of isStrict ? await $.fs.list(dir) : await $.fs.list(dir).catch(() => [])) {
+      if (entry.kind === 'file' && entry.name.endsWith('.md')) {
+        names.push(`${prefix}${entry.name}`)
+      }
+    }
+  }
+
+  return names
+}
+
+/** The text of a file that must read: a failed read is an error, not an empty file. */
+async function readStrict($: EngineInterface, path: string): Promise<string> {
+  const text = await $.fs.read(path)
+  if (typeof text !== 'string') {
+    throw new Error(`could not read ${path}`)
+  }
+
+  return text
+}
+
+async function readText($: EngineInterface, path: string): Promise<string> {
+  const text = await $.fs.read(path).catch(() => '')
+
+  return typeof text === 'string' ? text : ''
+}
+
+/** Writes a file, making its folder first through `mkdir -p` (no shell) when the plain write fails. */
+async function writeFile($: EngineInterface, path: string, text: string): Promise<void> {
+  try {
+    await $.fs.write(path, text)
+  } catch (error) {
+    const dir = path.slice(0, path.lastIndexOf('/'))
+    const made = await $.process.run(['mkdir', '-p', dir]).catch(() => undefined)
+    if (made?.exitCode !== 0) {
+      throw error
+    }
+    await $.fs.write(path, text)
+  }
+}
+
+let isWorking = false
+
+/**
+ * Moves the work to one central todo, `<root of the main checkout>/.claude_todo/`: every non-blank
+ * line of every other folder's files goes into the central file of the same name (archive files
+ * into the central `archive/`), in order, under a `## From <place>` heading. An item ID the central
+ * folder already uses gets the next free one, and references to it in the same file follow. A source
+ * whose section is already there is skipped (a press that failed partway can run again without
+ * doubling). Each target file is written once; the sources are never touched. Then the folders are
+ * found again (the one discovery outside startup) and the sources join the duplicates. Off in a
+ * linked worktree and when the main folder would be the global one.
+ */
+async function consolidate($: EngineInterface): Promise<void> {
+  const central = centralFolder()
+  if (isWorking || central === undefined || !canConsolidate()) {
+    return
+  }
+  isWorking = true
+  try {
+    const realCentral = await realOf($, central)
+    const sources: { path: string; real: string; rel: string; wasPrimary: boolean }[] = []
+    for (const one of visibleFolders()) {
+      if (one.path === central || (realCentral !== undefined && one.real === realCentral) || !one.path.startsWith('/')) {
         continue
       }
-      const text = await $.fs.read(`${dir}/${entry.name}`).catch(() => '')
-      const items = parseTodo(typeof text === 'string' ? text : '')
-      next.push(prefix === '' ? { name, mtimeMs: entry.mtimeMs, items } : { name, mtimeMs: entry.mtimeMs, items, isArchived: true })
+      const real = one.real ?? (await realOf($, one.path))
+      if (real !== undefined) {
+        sources.push({ path: one.path, real, rel: one.rel, wasPrimary: !one.isOther })
+      }
+    }
+    if (sources.length === 0) {
+      return
+    }
+    const used = new Set<string>()
+    const texts = new Map<string, string>()
+    const centralText = async (name: string) => {
+      const held = texts.get(name)
+      if (held !== undefined) {
+        return held
+      }
+      const path = `${central}/${name}`
+      // An existing central file that cannot be read aborts the press: it is never written over.
+      const text = (await $.fs.exists(path)) ? await readStrict($, path) : ''
+      texts.set(name, text)
+
+      return text
+    }
+    for (const name of await mdFiles($, central, true)) {
+      for (const line of itemLines(await centralText(name))) {
+        const id = ITEM_ID.exec(line)?.[1]
+        if (id !== undefined) {
+          used.add(id.toLowerCase())
+        }
+      }
+    }
+    type Block = { place: string; lines: string[]; owner: string; file: string; renames: Record<string, string>; told: string[] }
+    const sections = new Map<string, Block[]>()
+    // A source that will not list or read stays on the board: nothing of it was copied.
+    const unreadable = new Set<string>()
+    for (const source of sources) {
+      const place = placeOf(source.rel)
+      const names = await mdFiles($, source.path, true).catch(() => undefined)
+      if (names === undefined) {
+        unreadable.add(source.path)
+        continue
+      }
+      for (const name of names) {
+        const path = `${source.path}/${name}`
+        const text = await readStrict($, path).catch(() => undefined)
+        if (text === undefined) {
+          unreadable.add(source.path)
+          continue
+        }
+        const lines = nonBlankLines(text)
+        if (lines.length === 0) {
+          continue
+        }
+        // Already copied only when its exact lines (after its renames) sit under its heading.
+        const kept = lines.map(line => applyRenames(line, renameMap[path] ?? {}))
+        if (sectionBlocks(await centralText(name), place).some(block => block.length === kept.length && block.every((line, i) => line === kept[i]))) {
+          continue
+        }
+        const out = renumberLines(lines, used)
+        sections.set(name, [...(sections.get(name) ?? []), { place, lines: out.lines, owner: source.path, file: path, renames: out.renames, told: out.pairs.map(pair => `- ${place}/${name}: #${pair.from} is now #${pair.to}`) }])
+      }
+    }
+    let files = 0
+    const told: string[] = []
+    const unfinished = new Set<string>(unreadable)
+    const skipped: string[] = []
+    for (const [name, blocks] of sections) {
+      const path = `${central}/${name}`
+      // The target may have changed since the press read it: then it is not written, and its sources stay on the board.
+      const now = (await $.fs.exists(path)) ? await readStrict($, path) : ''
+      if (now !== (await centralText(name))) {
+        skipped.push(`${DIR}/${name}`)
+        for (const block of blocks) {
+          unfinished.add(block.owner)
+        }
+        continue
+      }
+      await writeFile($, path, appendSections(now, blocks))
+      files += 1
+      for (const block of blocks) {
+        told.push(...block.told)
+        if (Object.keys(block.renames).length > 0) {
+          renameMap = { ...renameMap, [block.file]: block.renames }
+        }
+      }
+      // The renumbering is kept as each file lands, so a press that fails later still knows it.
+      const meta = metaKey()
+      if (meta !== undefined) {
+        await $.store.set(meta, { primary: dupFolders.filter(one => one.wasPrimary === true).map(one => one.path), renames: renameMap }).catch(() => undefined)
+      }
+    }
+    // The union of the old record and the new sources, in memory at once, then in the store.
+    const fresh = sources.filter(one => !unfinished.has(one.path)).map(one => ({ path: one.path, real: one.real, ...(one.wasPrimary ? { wasPrimary: true as const } : {}) }))
+    dupFolders = [...dupFolders.filter(one => !fresh.some(now => now.path === one.path)), ...fresh]
+    await saveRecord($)
+    pendingRenames = [...pendingRenames, ...told]
+    // The one discovery outside startup: the git index again, now with the central folder in it.
+    todoFolders = undefined
+    folderSearch = undefined
+    nearestSeen = undefined
+    await ensureFolders($)
+    await scan($, true)
+    if (skipped.length > 0) {
+      $.ui.toast(`Not written, changed meanwhile: ${skipped.join(', ')}. Their folders stay on the board. Press Consolidate todos again.`)
+    }
+    $.ui.toast(`Consolidated ${files} ${files === 1 ? 'file' : 'files'} into ${DIR}/ at the repo root.${unfinished.size === 0 ? ' The old folders are off the board.' : ''}${told.length > 0 ? ` Renumbered: ${told.map(line => line.slice(2)).join('; ')}` : ''}`)
+  } catch (error) {
+    $.ui.toast(`Could not consolidate: ${error instanceof Error ? error.message : String(error)}`)
+  } finally {
+    isWorking = false
+    redraw($)
+  }
+}
+
+/**
+ * Whether files may be removed from a recorded duplicate folder: an absolute path with no `..`,
+ * ending in `.claude_todo`, that is its own real path (so no symlink is in it), inside the main
+ * checkout, and neither the central folder nor the global one.
+ */
+async function isTrustedFolder($: EngineInterface, path: string, central: string, realCentral: string | undefined): Promise<boolean> {
+  const parts = path.split('/')
+  if (!path.startsWith('/') || parts.includes('..') || parts.filter(part => part !== '').pop() !== DIR || path === central) {
+    return false
+  }
+  const real = await realOf($, path)
+  const root = centralRoot === undefined ? undefined : await realOf($, centralRoot)
+  if (real === undefined || real !== path || root === undefined || !real.startsWith(`${root}/`) || isGlobalTodo(real)) {
+    return false
+  }
+
+  return realCentral === undefined || real !== realCentral
+}
+
+/** True for a regular file that is its own real path: no symlink in the file or the folders above it. */
+async function isPlainFile($: EngineInterface, path: string): Promise<boolean> {
+  const stat = await $.fs.stat(path).catch(() => undefined)
+
+  return stat !== undefined && stat.kind === 'file' && (await realOf($, path)) === path
+}
+
+/**
+ * Merges the entries of a duplicate folder's `categories.json` into the central book, keys mapped to
+ * the central items (a renumbered ID follows its rename). True when the central book now holds them.
+ */
+async function mergeBook($: EngineInterface, dup: { path: string }, central: string): Promise<boolean> {
+  try {
+    const mine = JSON.parse(await readText($, `${dup.path}/categories.json`)) as Partial<CategoryBook>
+    // An existing central book that will not read stops the merge: it is never replaced blind.
+    const hasBook = await $.fs.exists(`${central}/categories.json`).catch(() => false)
+    const text = hasBook ? await readStrict($, `${central}/categories.json`) : ''
+    const theirs = text.trim() === '' ? ({} as Partial<CategoryBook>) : (JSON.parse(text) as Partial<CategoryBook>)
+    const names = Array.isArray(theirs.categories) ? theirs.categories.filter((name): name is string => typeof name === 'string') : []
+    const items: Record<string, string> = typeof theirs.items === 'object' && theirs.items !== null ? { ...theirs.items } : {}
+    const renames = Object.assign({}, ...Object.entries(renameMap).filter(([file]) => file.startsWith(`${dup.path}/`)).map(([, map]) => map)) as Record<string, string>
+    for (const [key, category] of Object.entries(typeof mine.items === 'object' && mine.items !== null ? mine.items : {})) {
+      if (typeof category !== 'string') {
+        continue
+      }
+      const bare = key.includes('::') ? key.slice(key.indexOf('::') + 2) : key
+      const fresh = bare.startsWith('#') ? renames[bare.slice(1)] : undefined
+      const mapped = fresh === undefined ? bare : `#${fresh.toLowerCase()}`
+      if (!names.includes(category) && names.length < MAX_CATEGORIES) {
+        names.push(category)
+      }
+      // A category the central book has no room for: keep the old book rather than lose it.
+      if (!names.includes(category)) {
+        return false
+      }
+      if (items[mapped] === undefined) {
+        items[mapped] = category
+      }
+    }
+    // Changed since the read: skip it, so an edit made meanwhile is not lost.
+    if ((hasBook ? await readStrict($, `${central}/categories.json`) : '') !== text) {
+      return false
+    }
+    await $.fs.write(`${central}/categories.json`, `${JSON.stringify({ categories: names, items }, null, 2)}\n`)
+
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Checks each duplicate folder's files against the central folder, whole file: every non-blank line
+ * must be in the central file of the same name (item lines by box and text, a renumbered ID allowed;
+ * any other line verbatim), and a central line covers only one source line. A file that passes is
+ * read again right before its removal, and removed with `rm -- <path>` (no shell, no glob, no -r or
+ * -f, one call per file) only if it did not change. A file that fails, changed, is empty, or sits
+ * somewhere untrusted is kept and named in a toast. Its `categories.json` goes only when every `.md`
+ * file went, the folder was not the primary one when copied, and the entries are merged into the
+ * central book. Then `rmdir -- <dir>` for `archive/` and the folder, which fails on a non-empty
+ * directory: the intended guard. Off in a linked worktree and when the main folder is the global one.
+ */
+async function deleteDuplicates($: EngineInterface): Promise<void> {
+  const central = centralFolder()
+  if (isWorking || central === undefined || !canDelete()) {
+    return
+  }
+  isWorking = true
+  try {
+    const realCentral = await realOf($, central)
+    const have = new Map<string, Map<string, number>>()
+    const covers = async (name: string) => {
+      let held = have.get(name)
+      if (held === undefined) {
+        held = new Map()
+        for (const line of nonBlankLines(await readText($, `${central}/${name}`))) {
+          held.set(coverKey(line), (held.get(coverKey(line)) ?? 0) + 1)
+        }
+        have.set(name, held)
+      }
+
+      return held
+    }
+    const run = async (argv: string[]) => (await $.process.run(argv).catch(() => undefined))?.exitCode === 0
+    const kept: string[] = []
+    let removed = 0
+    for (const dup of dupFolders) {
+      if (!(await isTrustedFolder($, dup.path, central, realCentral))) {
+        kept.push(`${dup.path} (not a folder this mod may delete from)`)
+        continue
+      }
+      const verified: { path: string; text: string }[] = []
+      // A folder that will not list keeps everything, its book too: nothing is known gone.
+      const dupNames = await mdFiles($, dup.path, true).catch(() => undefined)
+      let isAllGone = dupNames !== undefined
+      for (const name of dupNames ?? []) {
+        const path = `${dup.path}/${name}`
+        const text = await readText($, path)
+        const lines = nonBlankLines(text)
+        const renames = renameMap[path] ?? {}
+        const held = await covers(name)
+        const left = new Map(held)
+        const isCovered =
+          lines.length > 0 &&
+          (await isPlainFile($, path)) &&
+          lines.every(line => {
+            const key = coverKey(applyRenames(line, renames))
+            const n = left.get(key) ?? 0
+            left.set(key, n - 1)
+
+            return n > 0
+          })
+        if (isCovered) {
+          // A central line covers one source line only: the used lines stay used for the next file.
+          for (const [key, n] of left) {
+            held.set(key, n)
+          }
+          verified.push({ path, text })
+        } else {
+          isAllGone = false
+          kept.push(path)
+        }
+      }
+      for (const file of verified) {
+        if ((await readText($, file.path)) !== file.text) {
+          isAllGone = false
+          kept.push(`${file.path} (changed since the check)`)
+        } else if (await run(['rm', '--', file.path])) {
+          removed += 1
+        } else {
+          isAllGone = false
+          kept.push(file.path)
+        }
+      }
+      const book = `${dup.path}/categories.json`
+      if (isAllGone && dup.wasPrimary !== true && (await $.fs.exists(book).catch(() => false)) && (await isPlainFile($, book)) && (await mergeBook($, dup, central)) && (await run(['rm', '--', book]))) {
+        removed += 1
+      }
+      for (const dir of [`${dup.path}/archive`, dup.path]) {
+        // Fails on a directory that still holds files, which keeps it.
+        await run(['rmdir', '--', dir])
+      }
+    }
+    // Folders that are gone leave the record; the button hides when none remains.
+    const left: typeof dupFolders = []
+    for (const dup of dupFolders) {
+      if (await $.fs.exists(dup.path).catch(() => false)) {
+        left.push(dup)
+      }
+    }
+    dupFolders = left
+    await saveRecord($)
+    if (kept.length > 0) {
+      $.ui.toast(`Kept: ${kept.join(', ')}`)
+    }
+    $.ui.toast(`Removed ${removed} duplicate ${removed === 1 ? 'file' : 'files'}, each fully in the central todo.`)
+    await scan($, true).catch(() => undefined)
+  } finally {
+    isWorking = false
+    redraw($)
+  }
+}
+
+/**
+ * The cheap check each scan makes, with no git: the nearest folder by the old rule. A folder made
+ * after the mod loaded (Claude creating `.claude_todo/` in a repo that had none) joins the known
+ * ones: as the primary folder when there is none, else as one more folder. A known folder that was
+ * only "other" becomes the primary when there is none.
+ */
+async function noteNearest($: EngineInterface, folders: TodoFolder[]): Promise<TodoFolder[]> {
+  const near = await findTodoDir($).catch(() => undefined)
+  if (near === undefined || near === nearestSeen) {
+    return folders
+  }
+  nearestSeen = near
+  const real = await realOf($, near)
+  const hasPrimary = folders.some(one => !one.isOther)
+  const known = folders.find(one => one.path === near || (real !== undefined && one.real === real))
+  if (known !== undefined) {
+    return hasPrimary || !known.isOther ? folders : folders.map(one => (one === known ? { ...one, isOther: false } : one))
+  }
+  if (folders.length >= MAX_FOLDERS) {
+    return folders
+  }
+  const added: TodoFolder = { path: near, rel: relIn(real, repoRoot) ?? near, isOther: hasPrimary, ...(real === undefined ? {} : { real }) }
+
+  return hasPrimary ? [...folders, added] : [added, ...folders]
+}
+
+/** A file's unique ID in the pane: its folder and its name. */
+export function fileId(file: { folder: string; name: string }): string {
+  return `${file.folder}/${file.name}`
+}
+
+/** A file's path from the repo root, for prompts: `mods/x/.claude_todo/TODO.md`. */
+export function filePath(file: { folder: string; rel?: string; name: string }): string {
+  return `${file.rel ?? file.folder}/${file.name}`
+}
+
+/** An item's key for the categories book: qualified by its folder outside the primary one. */
+export function qualifiedKey(file: { rel?: string; folder: string; isOther?: true }, item: { text: string; id?: string }): string {
+  return file.isOther === true ? `${file.rel ?? file.folder}::${itemKey(item)}` : itemKey(item)
+}
+
+/** Rereads the `.md` files of every known folder; a file whose mtime is unchanged keeps its parse. */
+async function scan($: EngineInterface, isFull = false): Promise<void> {
+  todoFolders = await noteNearest($, await ensureFolders($))
+  if (isFull) {
+    await loadDuplicates($).catch(() => undefined)
+  }
+  const folders = visibleFolders()
+  // The book lives in the primary folder only. With no primary folder the items are not sorted.
+  const bookFolder = folders.find(one => !one.isOther)?.path
+  await loadBook($, bookFolder, isFull)
+  const known = new Map(todoFiles.map(file => [fileId(file), file]))
+  const next: TodoFile[] = []
+  for (const folder of folders) {
+    const sources: [string, string][] = [[folder.path, ''], [`${folder.path}/archive`, 'archive/']]
+    for (const [dir, prefix] of sources) {
+      if (!(await $.fs.exists(dir).catch(() => false))) {
+        continue
+      }
+      for (const entry of await $.fs.list(dir).catch(() => [])) {
+        if (entry.kind !== 'file' || !entry.name.endsWith('.md')) {
+          continue
+        }
+        const name = `${prefix}${entry.name}`
+        const place = { name, folder: folder.path, rel: folder.rel, ...(folder.isOther ? { isOther: true as const } : {}) }
+        const cached = known.get(fileId(place))
+        if (!isFull && cached !== undefined && cached.mtimeMs === entry.mtimeMs) {
+          next.push(cached)
+          continue
+        }
+        const text = await $.fs.read(`${dir}/${entry.name}`).catch(() => '')
+        const items = parseTodo(typeof text === 'string' ? text : '')
+        next.push(prefix === '' ? { ...place, mtimeMs: entry.mtimeMs, items } : { ...place, mtimeMs: entry.mtimeMs, items, isArchived: true })
+      }
     }
   }
   const kept = next.filter(file => file.items.length > 0)
   const isSame = isFull
     ? JSON.stringify(todoFiles) === JSON.stringify(kept)
-    : todoFiles.length === kept.length && todoFiles.every((file, i) => file.name === kept[i]?.name && file.mtimeMs === kept[i]?.mtimeMs)
+    : todoFiles.length === kept.length && todoFiles.every((file, i) => fileId(file) === (kept[i] === undefined ? '' : fileId(kept[i])) && file.mtimeMs === kept[i]?.mtimeMs)
   if (!isSame) {
     todoFiles = kept
     redraw($)
@@ -364,7 +1154,9 @@ async function scan($: EngineInterface, isFull = false): Promise<void> {
 // ---------------------------------------------------------------- categories
 
 /**
- * Categories Claude gives the open items, kept in `.claude_todo/categories.json`. An item keeps the
+ * Categories Claude gives the open items, kept in `categories.json` in the primary `.claude_todo/`
+ * folder (the first folder when none is primary); items of other folders carry their folder in the
+ * key. An item keeps the
  * category it was first given; new categories are made only while there are fewer than five.
  */
 export type CategoryBook = { categories: string[]; items: Record<string, string> }
@@ -474,9 +1266,9 @@ async function sortItems($: EngineInterface): Promise<void> {
   }
   const open = todoFiles
     .filter(file => file.isArchived !== true)
-    .flatMap(file => file.items)
-    .filter(item => item.status !== 'completed' && book.items[itemKey(item)] === undefined)
-  const unsorted = [...new Map(open.map(item => [itemKey(item), item.text])).entries()]
+    .flatMap(file => file.items.map(item => ({ item, key: qualifiedKey(file, item) })))
+    .filter(one => one.item.status !== 'completed' && book.items[one.key] === undefined)
+  const unsorted = [...new Map(open.map(one => [one.key, one.item.text])).entries()]
   if (unsorted.length === 0) {
     return
   }
@@ -766,6 +1558,7 @@ export function labelNote(text: string, rows: readonly AgentRow[]): string | und
 
 // ---------------------------------------------------------------- links
 
+/** `file` is the file's pane ID (its folder and name), `index` the item's place in it. */
 export type Link = { file: string; index: number; item: TodoItem }
 
 /**
@@ -778,7 +1571,7 @@ export function linkAgents(list: readonly TodoFile[], rows: readonly AgentRow[])
   const links = new Map<string, Link[]>()
   const open = list
     .filter(file => file.isArchived !== true)
-    .flatMap(file => file.items.map((item, index) => ({ file: file.name, index, item })))
+    .flatMap(file => file.items.map((item, index) => ({ file: fileId(file), index, item })))
     .filter(link => link.item.status !== 'completed')
   for (const row of rows) {
     if (isEnded(row.status)) {
@@ -836,9 +1629,17 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     }
   })
 
-  const files: FileView[] = list.map(file => {
-    const { done, active, total } = count(file.items)
-    const indexed = file.items.map((item, index) => ({ item, index, owners: itemOwners.get(`${file.name}:${index}`) ?? [] }))
+  // Files of one name, in whatever folders, are one board: the pane never shows the folders. Each
+  // item keeps its source (folder, file, path) for the writes and the prompts. Sources run primary
+  // folder first, then by folder path, so the order inside a board is stable.
+  const sources = [...list].sort((a, b) => Number(a.isOther === true) - Number(b.isOther === true) || ((a.rel ?? a.folder) < (b.rel ?? b.folder) ? -1 : (a.rel ?? a.folder) > (b.rel ?? b.folder) ? 1 : 0))
+  const boards = new Map<string, TodoFile[]>()
+  for (const file of sources) {
+    boards.set(file.name, [...(boards.get(file.name) ?? []), file])
+  }
+  const files: FileView[] = [...boards.entries()].map(([name, group]) => {
+    const { done, active, total } = count(group.flatMap(file => file.items))
+    const indexed = group.flatMap(file => file.items.map((item, index) => ({ file, item, owners: itemOwners.get(`${fileId(file)}:${index}`) ?? [] })))
     const linked = indexed.filter(one => one.owners.length > 0)
     const rest = [
       ...indexed.filter(one => one.item.status === 'in_progress'),
@@ -848,14 +1649,24 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     const shown = [...linked, ...rest]
 
     return {
-      name: file.name,
+      name,
+      id: name,
       done,
       active,
       total,
-      owners: fileOwners.get(file.name) ?? [],
-      items: shown.map(one => ({ text: one.item.text, status: one.item.status, owners: one.owners, key: itemKey(one.item) })),
-      mtimeMs: file.mtimeMs,
-      ...(file.isArchived === true ? { isArchived: true } : {}),
+      owners: [...new Set(group.flatMap(file => fileOwners.get(fileId(file)) ?? []))],
+      items: shown.map(one => ({
+        text: one.item.text,
+        status: one.item.status,
+        owners: one.owners,
+        key: qualifiedKey(one.file, one.item),
+        localKey: itemKey(one.item),
+        folder: one.file.folder,
+        file: one.file.name,
+        path: filePath(one.file),
+      })),
+      mtimeMs: Math.max(...group.map(file => file.mtimeMs)),
+      ...(group[0]?.isArchived === true ? { isArchived: true } : {}),
     }
   })
   files.sort((a, b) => {
@@ -944,9 +1755,9 @@ function wake(id: string): void {
 }
 
 /** The prompt a ticket sends to Claude: the item, where it lives, and how to keep the pane in step. */
-export function ticketPrompt(file: string, text: string): string {
+export function ticketPrompt(path: string, text: string): string {
   return [
-    `Process this todo item from .claude_todo/${file}:`,
+    `Process this todo item from ${path}:`,
     '',
     text,
     '',
@@ -1004,7 +1815,7 @@ export function ticketColumns(given: readonly ItemView[], current: CategoryBook,
  * A ticket's corner button: its name, one-glyph label, hover tip and toast; then either the prompt
  * it sends to Claude, or, for a manual move, the box it writes in the todo file (no prompt).
  */
-type TicketAction = { name: string; glyph: string; tip: string; toast: string; prompt: (file: string, text: string) => string; mark?: ItemStatus }
+type TicketAction = { name: string; glyph: string; tip: string; toast: string; prompt: (path: string, text: string) => string; mark?: ItemStatus }
 
 /** On an open ticket: three chevrons, sending the item to Claude to build. */
 const SEND_ACTION: TicketAction = { name: 'send', glyph: '\u22D9', tip: 'Send to Claude', toast: 'Sent to Claude', prompt: ticketPrompt }
@@ -1047,28 +1858,51 @@ const userMoves = new Map<string, ItemStatus>()
 
 const STATUS_NAMES: Record<string, ItemStatus> = { open: 'pending', in_progress: 'in_progress', done: 'completed' }
 
+export type Found = { file: string; folder: string; rel: string; item: TodoItem }
+
 /**
- * The live todo item a reference names: its `#T` ID, or else the item whose text the reference
- * quotes or closely paraphrases, best match first. Archived files are left out.
+ * Every live item a reference may name: all items with its `#T` ID (folders may share IDs), else
+ * the items of the best text match. Archived files are left out. Several files may match.
  */
-export function findTicket(list: readonly TodoFile[], ref: string): { file: string; item: TodoItem } | undefined {
-  const all = list.filter(file => file.isArchived !== true).flatMap(file => file.items.map(item => ({ file: file.name, item })))
+export function findTickets(list: readonly TodoFile[], ref: string): Found[] {
+  const all = list
+    .filter(file => file.isArchived !== true)
+    .flatMap(file => file.items.map(item => ({ file: file.name, folder: file.folder, rel: file.rel ?? file.folder, item })))
   const id = /#?\b(T\d+)\b/i.exec(ref)?.[1]?.toLowerCase()
-  const byId = id === undefined ? undefined : all.find(one => one.item.id?.toLowerCase() === id)
-  if (byId !== undefined) {
+  const byId = id === undefined ? [] : all.filter(one => one.item.id?.toLowerCase() === id)
+  if (byId.length > 0) {
     return byId
   }
   const scored = all.map(one => ({ one, score: claimScore(ref, one.item) })).filter(x => x.score > 0)
+  const best = Math.max(0, ...scored.map(x => x.score))
 
-  return scored.sort((x, y) => y.score - x.score)[0]?.one
+  return scored.filter(x => x.score === best).map(x => x.one)
+}
+
+/**
+ * The matches in the one place `folder` names, exactly: a folder path as the prompts give it
+ * (`mods/x/.claude_todo`, or the absolute one), or a file path in it (`mods/x/.claude_todo/TODO.md`).
+ * No word search: a stray word in the reference never picks a folder.
+ */
+export function narrowTickets(hits: readonly Found[], folder: string): Found[] {
+  const clean = folder.trim().replace(/^\.\//, '').replace(/\/+$/, '')
+
+  return hits.filter(one => [one.rel, one.folder, `${one.rel}/${one.file}`, `${one.folder}/${one.file}`].includes(clean))
+}
+
+/** The live todo item a reference names, best match first; the first when several files have one. */
+export function findTicket(list: readonly TodoFile[], ref: string, folder?: string): Found | undefined {
+  const hits = findTickets(list, ref)
+
+  return (folder === undefined ? hits : narrowTickets(hits, folder))[0]
 }
 
 /** The question the move tool asks the user, in the engine's own dialog. */
-export function moveQuestion(file: string, item: TodoItem, to: ItemStatus, reason: string, isUserMove: boolean): string {
+export function moveQuestion(path: string, item: TodoItem, to: ItemStatus, reason: string, isUserMove: boolean): string {
   const from = STATUS_WORDS[item.status]
   const said = reason.trim() === '' ? '' : ` Claude's reason: ${ticketSummary(reason.trim(), 300)}`
 
-  return `Claude asks to move "${ticketSummary(item.text, 120)}" (${file}) from ${from} to ${STATUS_WORDS[to]}.${isUserMove ? ' You moved it by hand.' : ''}${said} Allow this move?`
+  return `Claude asks to move "${ticketSummary(item.text, 120)}" (${path}) from ${from} to ${STATUS_WORDS[to]}.${isUserMove ? ' You moved it by hand.' : ''}${said} Allow this move?`
 }
 
 /** Answers a move_ticket call: asks the user, and writes the box only on a yes. */
@@ -1080,33 +1914,43 @@ async function moveTicket($: EngineInterface, input: Record<string, unknown>): P
     return 'Not moved: "to" must be open, in_progress or done.'
   }
   await scan($).catch(() => undefined)
-  const found = findTicket(todoFiles, ref)
-  if (found === undefined) {
+  const all = findTickets(todoFiles, ref)
+  if (all.length === 0) {
     return `Not moved: no live todo item matches "${ref}". Add the item to .claude_todo/ first.`
   }
-  const { file, item } = found
+  const where = typeof input.folder === 'string' ? input.folder.trim() : ''
+  const hits = where === '' ? all : narrowTickets(all, where)
+  if (hits.length === 0) {
+    return `Not moved: "${ref}" has no match in "${where}". Matches are in: ${[...new Set(all.map(one => `${one.rel}/${one.file}`))].join(', ')}.`
+  }
+  const places = [...new Set(hits.map(one => `${one.rel}/${one.file}`))]
+  if (places.length > 1) {
+    return `Not moved: "${ref}" matches items in more than one file (${places.join(', ')}). Call move_ticket again with folder set to one of these paths.`
+  }
+  const found = hits[0]!
+  const { file, folder, rel, item } = found
+  const path = `${rel}/${file}`
   if (item.status === to) {
     return `Not moved: "${ticketSummary(item.text, 80)}" is already ${STATUS_WORDS[to]}.`
   }
-  const key = `${file}:${itemKey(item)}`
+  const key = `${folder}/${file}:${itemKey(item)}`
   const yes = 'Move it'
   const answer = await $.ui
-    .ask(moveQuestion(file, item, to, reason, userMoves.has(key)), { options: [yes, 'Keep it where it is'], header: 'Ticket' })
+    .ask(moveQuestion(path, item, to, reason, userMoves.has(key)), { options: [yes, 'Keep it where it is'], header: 'Ticket' })
     .catch(() => undefined)
   if (answer !== yes) {
     return `Not moved: the user kept "${ticketSummary(item.text, 80)}" ${STATUS_WORDS[item.status]}${answer === undefined || answer === 'Keep it where it is' ? '' : ` and said: ${answer}`}. Do not move it again unless the user asks.`
   }
-  const folder = await findTodoDir($)
-  const text = folder === undefined ? undefined : await $.fs.read(`${folder}/${file}`).catch(() => undefined)
+  const text = await $.fs.read(`${folder}/${file}`).catch(() => undefined)
   const next = typeof text === 'string' ? setBox(text, itemKey(item), to) : undefined
-  if (folder === undefined || next === undefined) {
-    return `Not moved: the line for "${ticketSummary(item.text, 80)}" was not found in ${file}.`
+  if (next === undefined) {
+    return `Not moved: the line for "${ticketSummary(item.text, 80)}" was not found in ${path}.`
   }
   await $.fs.write(`${folder}/${file}`, next)
   userMoves.delete(key)
   await scan($).catch(() => undefined)
 
-  return `Moved with the user's approval: "${ticketSummary(item.text, 80)}" is now ${STATUS_WORDS[to]} in .claude_todo/${file}.`
+  return `Moved with the user's approval: "${ticketSummary(item.text, 80)}" is now ${STATUS_WORDS[to]} in ${path}.`
 }
 
 /** The note the next prompt carries: the moves, as information, with no action asked. */
@@ -1120,31 +1964,36 @@ export function movesNote(moves: readonly string[]): string | undefined {
       ].join('\n')
 }
 
+/** The notes waiting for Claude: the moves made by hand, and the IDs a consolidation renumbered. */
+function queuedNotes(): string[] {
+  return [movesNote(pendingMoves), renameNote(pendingRenames)].filter((note): note is string => note !== undefined)
+}
+
 /** Writes a manual move into the item's todo file, rereads the folder, and queues the note for Claude. */
-async function markTicket($: EngineInterface, file: string, item: ItemView, status: ItemStatus, toast: string): Promise<void> {
-  const folder = await findTodoDir($)
-  if (folder === undefined || file.startsWith('archive/')) {
+async function markTicket($: EngineInterface, item: ItemView, status: ItemStatus, toast: string): Promise<void> {
+  if (item.folder === undefined || item.file === undefined || item.file.startsWith('archive/')) {
     return
   }
-  const path = `${folder}/${file}`
+  // Only the file the item came from is written: its folder and its name. The pane shows neither.
+  const path = `${item.folder}/${item.file}`
   const text = await $.fs.read(path)
-  const next = setBox(typeof text === 'string' ? text : '', item.key, status)
+  const next = setBox(typeof text === 'string' ? text : '', item.localKey ?? item.key, status)
   if (next === undefined) {
-    $.ui.toast(`Not found in ${file}: ${ticketSummary(item.text, 60)}`)
+    $.ui.toast(`Not found in ${item.file}: ${ticketSummary(item.text, 60)}`)
 
     return
   }
   await $.fs.write(path, next)
-  userMoves.set(`${file}:${item.key}`, status)
-  pendingMoves = [...pendingMoves, `- "${ticketSummary(item.text, 160)}" in .claude_todo/${file}: ${STATUS_WORDS[item.isHeld === true ? 'pending' : item.status]} -> ${STATUS_WORDS[status]}`]
+  userMoves.set(`${path}:${item.localKey ?? item.key}`, status)
+  pendingMoves = [...pendingMoves, `- "${ticketSummary(item.text, 160)}" in ${item.path ?? path}: ${STATUS_WORDS[item.isHeld === true ? 'pending' : item.status]} -> ${STATUS_WORDS[status]}`]
   $.ui.toast(`${toast}: ${ticketSummary(item.text, 60)}`)
   await scan($)
 }
 
 /** The prompt a ticket in progress sends: a short status update in the chat, and no new work. */
-export function statusPrompt(file: string, text: string): string {
+export function statusPrompt(path: string, text: string): string {
   return [
-    `Give me a short status update on this todo item from .claude_todo/${file}:`,
+    `Give me a short status update on this todo item from ${path}:`,
     '',
     text,
     '',
@@ -1397,6 +2246,26 @@ function start($: EngineInterface): void {
   })
 }
 
+/** How many todo files the board pulls from: the top-level files with items, in every folder on the board; archives are not counted. */
+function todoCount(): number {
+  return todoFiles.filter(file => file.isArchived !== true).length
+}
+
+/** The dim text after the Todo heading: the counts, then the number of files they come from. */
+function todoDetail(view: View): string {
+  const files = todoCount()
+  const counts = view.total === 0 && view.completed === 0 ? 'No checkbox items in .claude_todo/' : `${view.done} of ${view.total} done, ${view.active} in progress`
+  return files === 0 ? counts : `${counts}. Pulling todo from ${files} ${files === 1 ? 'file' : 'files'}`
+}
+
+/** The heading's buttons for many folders: Consolidate todos with more than one folder, Delete duplicate todos while a duplicate is recorded. */
+function todoActions($: EngineInterface): { key: string; label: string; onPress: () => void }[] {
+  return [
+    ...(canDelete() ? [{ key: 'todo-delete-duplicates', label: 'Delete duplicate todos', onPress: () => void deleteDuplicates($).catch(() => undefined) }] : []),
+    ...(canConsolidate() ? [{ key: 'todo-consolidate', label: 'Consolidate todos', onPress: () => void consolidate($).catch(() => undefined) }] : []),
+  ]
+}
+
 // ---------------------------------------------------------------- hooks
 
 /**
@@ -1406,12 +2275,12 @@ function start($: EngineInterface): void {
 export const RULES = [
   'This session runs the Claudeopticon mod. Its Claudeopticon pane reads the project todo and shows the agents working on it. Follow these rules for the todo:',
   '',
-  "- Todo items go in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's). Create the folder when the repo has none. Each repo keeps its own items, and only its own.",
+  "- Todo items go in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's). Create the folder when the repo has none. Each repo keeps its own items, and only its own. Other `.claude_todo/` folders in the repo also show on the board: keep each item in the folder it is in.",
   '- Write each item as one Markdown checkbox line in a `.md` file at the top level of `.claude_todo/`: `- [ ]` open, `- [~]` in progress, `- [x]` done. Prose, tables and headings may surround the items; only checkbox lines count. Update the box the moment the status changes.',
   '- Give each item a short ID, unique in the project, in its line: `#T<n>` (`- [ ] #T12 Fix the parser`). When you dispatch an agent for an item, put its ID in the Agent call\'s description and mark the item `[~]`: the pane links the agent to the item by that ID.',
   '- Never delete a done item, and never fold done items into a summary line: check it off (`- [x]`) and leave it in place, as the ledger of completed work. When every item in a file is done, move the whole file to `.claude_todo/archive/`.',
   '- All work is ticketed. Before you start any work, find its item or add one, and mark it `[~]`. Never do work that has no item.',
-  '- The user can move items by hand on the Claudeopticon pane board. You are told of each move with your next tool result or prompt. Follow it: stop work on an item moved to open or done. Never change the box of an item the user moved by hand yourself. If you think a move is wrong, call `mcp__claudeopticon__move_ticket`, which asks the user and writes the box only on a yes.',
+  '- The user can move items by hand on the Claudeopticon pane board. You are told of each move with your next tool result or prompt. Follow it: stop work on an item moved to open or done. Never change the box of an item the user moved by hand yourself. If you think a move is wrong, call `mcp__claudeopticon__move_ticket`, which asks the user and writes the box only on a yes. If the item is in more than one file, it refuses and lists them: call it again with `folder` set to the item\'s folder path.',
 ].join('\n')
 
 export const register: Register = (on, options) => {
@@ -1460,6 +2329,7 @@ export const register: Register = (on, options) => {
           type: 'object',
           properties: {
             item: { type: 'string', description: "The item's #T ID, or its text quoted from its line" },
+            folder: { type: 'string', description: "Only when the item ID or text is in more than one file: the item's folder path as the prompts give it (mods/x/.claude_todo), or its file path (mods/x/.claude_todo/TODO.md)" },
             to: { type: 'string', enum: ['open', 'in_progress', 'done'], description: 'Where to move it' },
             reason: { type: 'string', description: 'Why, in one or two sentences, shown to the user' },
           },
@@ -1579,13 +2449,14 @@ export const register: Register = (on, options) => {
       }
     }
     // Moves made by hand reach the main conversation with its next tool result, mid-turn.
-    const moves = id === undefined ? movesNote(pendingMoves) : undefined
-    if (moves === undefined || ran.deny !== undefined) {
+    const queued = id === undefined ? queuedNotes() : []
+    if (queued.length === 0 || ran.deny !== undefined) {
       return ran
     }
     pendingMoves = []
+    pendingRenames = []
 
-    return { ...ran, context: [...(ran.context ?? []), moves] }
+    return { ...ran, context: [...(ran.context ?? []), ...queued] }
   })
 
   on('prompt.submit', async ($, e, next) => {
@@ -1602,14 +2473,15 @@ export const register: Register = (on, options) => {
       }
     }
     // Moves not yet told with a tool result ride on the next prompt, a ticket button's own included.
-    const moves = movesNote(pendingMoves)
+    const moves = queuedNotes()
     pendingMoves = []
+    pendingRenames = []
     const isLabeled = LABEL.test(e.text)
     LABEL.lastIndex = 0
     if (isLabeled) {
       await refreshAgents($).catch(() => undefined)
     }
-    const notes = [moves, isLabeled ? labelNote(e.text, agentRows) : undefined].filter(note => note !== undefined)
+    const notes = [...moves, isLabeled ? labelNote(e.text, agentRows) : undefined].filter(note => note !== undefined)
     orchestrator = { ...orchestrator, isActive: true }
     redraw($)
 
@@ -1700,13 +2572,17 @@ export const register: Register = (on, options) => {
       const card = (key: string, drawn: { source: string; width: number; alt: string }) => (
         <Svg key={key} source={drawn.source} alt={drawn.alt} width={drawn.width} />
       )
-      const section = (key: string, title: string, detail: string, buttonLabel: string | undefined, toggle: () => void) => (
+      const section = (key: string, title: string, detail: string, buttonLabel: string | undefined, toggle: () => void, extra: { key: string; label: string; onPress: () => void }[] = []) => (
         <Box key={key} flexDirection="row" justifyContent="space-between" alignItems="center" marginTop={1}>
           <Box flexDirection="row" gap={2}>
             <Text bold>{title}</Text>
             <Text dimColor>{detail}</Text>
           </Box>
-          {buttonLabel !== undefined && <Button key={`${key}-toggle`} label={buttonLabel} onPress={toggle} />}
+          <Box flexDirection="row" gap={1}>
+            {extra.filter(one => one.key !== 'todo-consolidate').map(one => <Button key={one.key} label={one.label} onPress={one.onPress} />)}
+            {buttonLabel !== undefined && <Button key={`${key}-toggle`} label={buttonLabel} onPress={toggle} />}
+            {extra.filter(one => one.key === 'todo-consolidate').map(one => <Button key={one.key} label={one.label} onPress={one.onPress} />)}
+          </Box>
         </Box>
       )
 
@@ -1794,12 +2670,13 @@ export const register: Register = (on, options) => {
           {section(
             'todo',
             'Todo',
-            view.total === 0 && view.completed === 0 ? 'No checkbox items in .claude_todo/' : `${view.done} of ${view.total} done, ${view.active} in progress`,
+            todoDetail(view),
             view.completed === 0 ? undefined : isCompletedShown ? 'Hide completed' : `Show completed (${view.completed})`,
             () => {
               isCompletedShown = !isCompletedShown
               redraw($)
             },
+            todoActions($),
           )}
           {(
             <Box key="todo-controls" flexDirection="row" gap={1} alignItems="center">
@@ -1879,7 +2756,7 @@ export const register: Register = (on, options) => {
               ? categoryGroups(withoutHidden(todoLedger(view), book, hiddenCategories), book).map(file => ({ file, prefix: 'category' }))
               : withoutHidden(todoLedger(view), book, hiddenCategories).map(file => ({ file, prefix: 'file' }))
           ).flatMap(({ file, prefix }) => {
-            const id = `${prefix}:${file.name}`
+            const id = `${prefix}:${file.id}`
             const isExpanded = expandedFiles.has(id)
             const limit = isExpanded ? file.items.length : ITEMS_SHOWN
             const isTextOpen = openText.has(id)
@@ -1894,7 +2771,7 @@ export const register: Register = (on, options) => {
             const columnCount = isStacked ? 1 : sideBy
             const ticketW = Math.floor((cardWidth() - (columnCount - 1) * CELL_PX) / columnCount)
             const ticket = (item: ItemView, k: number) => {
-              const sentKey = `${file.name}:${item.key}`
+              const sentKey = `${file.id}:${item.key}`
               const isSent = sentTickets.has(sentKey)
               const category = book.items[item.key]
               const id = /#[A-Za-z]+\d+\b/.exec(item.text)?.[0]
@@ -1909,14 +2786,14 @@ export const register: Register = (on, options) => {
               const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, actions: actions.length })
               const press = (action: TicketAction) => {
                 if (action.mark !== undefined) {
-                  void markTicket($, file.name, item, action.mark, action.toast).catch(() => undefined)
+                  void markTicket($, item, action.mark, action.toast).catch(() => undefined)
 
                   return
                 }
                 if (action === SEND_ACTION) {
                   sentTickets.add(sentKey)
                 }
-                void $.prompt.submit({ text: action.prompt(file.name, item.text), asUser: true }).catch(() => undefined)
+                void $.prompt.submit({ text: action.prompt(item.path ?? `${DIR}/${file.name}`, item.text), asUser: true }).catch(() => undefined)
                 $.ui.toast(`${action.toast}: ${ticketSummary(item.text, 60)}`)
                 redraw($)
               }
@@ -1924,11 +2801,11 @@ export const register: Register = (on, options) => {
               // The buttons sit over the card's bottom row, which the card keeps free for them;
               // pointing at one reveals its tip in the same row, left of them all, cut to fit.
               return (
-                <Box key={`${prefix}-${file.name}-t${k}-${item.key}`} flexDirection="column" position="relative">
-                  {card(`${prefix}-${file.name}-c${k}-${item.key}`, drawn)}
+                <Box key={`${prefix}-${file.id}-t${k}-${item.key}`} flexDirection="column" position="relative">
+                  {card(`${prefix}-${file.id}-c${k}-${item.key}`, drawn)}
                   {actions.map(action => (
                     <Box
-                      key={`${prefix}-${file.name}-tip-${action.name}-${item.key}`}
+                      key={`${prefix}-${file.id}-tip-${action.name}-${item.key}`}
                       position="absolute"
                       left={2}
                       right={ACTION_RIGHT + actions.length * ACTION_CELLS}
@@ -1943,7 +2820,7 @@ export const register: Register = (on, options) => {
                     <Box position="absolute" right={ACTION_RIGHT} bottom={ACTION_BOTTOM} flexDirection="row" gap={1}>
                       {actions.map(action => (
                         <Button
-                          key={action === SEND_ACTION || action === STATUS_ACTION ? `ticket-${file.name}-${item.key}` : `ticket-${action.name}-${file.name}-${item.key}`}
+                          key={action === SEND_ACTION || action === STATUS_ACTION ? `ticket-${file.id}-${item.key}` : `ticket-${action.name}-${file.id}-${item.key}`}
                           label={action.glyph}
                           hover={{ scope: sendScope(`${action.name}:${sentKey}`), bold: true }}
                           onPress={() => press(action)}
@@ -1956,9 +2833,9 @@ export const register: Register = (on, options) => {
             }
             const cards = isTicketView
               ? [
-                  ...fileCards(file, view, 0).map(drawn => card(`${prefix}-${file.name}-head`, drawn)),
+                  ...fileCards(file, view, 0).map(drawn => card(`${prefix}-${file.id}-head`, drawn)),
                   ...sections.map(section => (
-                    <Box key={`${prefix}-${file.name}-board-${section.name}`} flexDirection="column" gap={1}>
+                    <Box key={`${prefix}-${file.id}-board-${section.name}`} flexDirection="column" gap={1}>
                       {section.name !== '' && (
                         <Box flexDirection="row" gap={1} marginTop={1}>
                           <Text bold>{section.name}</Text>
@@ -1967,7 +2844,7 @@ export const register: Register = (on, options) => {
                       )}
                       <Box flexDirection={isStacked ? 'column' : 'row'} gap={1} alignItems="flex-start">
                         {section.columns.map(column => (
-                          <Box key={`${prefix}-${file.name}-col-${section.name}-${column.name}`} flexDirection="column" gap={1} width={columnCount === 3 ? '32%' : columnCount === 2 ? '49%' : '100%'}>
+                          <Box key={`${prefix}-${file.id}-col-${section.name}-${column.name}`} flexDirection="column" gap={1} width={columnCount === 3 ? '32%' : columnCount === 2 ? '49%' : '100%'}>
                             <Box flexDirection="row" gap={1}>
                               <Text dimColor bold>{column.name}</Text>
                               <Text dimColor>{String(column.items.length)}</Text>
@@ -1979,7 +2856,7 @@ export const register: Register = (on, options) => {
                     </Box>
                   )),
                 ]
-              : fileCards(file, view, limit, isTextOpen).map((drawn, k) => card(`${prefix}-${file.name}-${k}`, drawn))
+              : fileCards(file, view, limit, isTextOpen).map((drawn, k) => card(`${prefix}-${file.id}-${k}`, drawn))
             const more = isTicketView
               ? sections.flatMap(section => section.columns).reduce((sum, column) => sum + Math.max(0, column.items.length - ITEMS_SHOWN), 0)
               : file.items.length - ITEMS_SHOWN
@@ -1997,17 +2874,17 @@ export const register: Register = (on, options) => {
               ? cards
               : [
                   ...cards,
-                  <Box key={`${prefix}-${file.name}-more`} flexDirection="row" justifyContent="flex-end" gap={1}>
+                  <Box key={`${prefix}-${file.id}-more`} flexDirection="row" justifyContent="flex-end" gap={1}>
                     {long > 0 && (
                       <Button
-                        key={`${prefix}-text-${file.name}`}
+                        key={`${prefix}-text-${file.id}`}
                         label={isTextOpen ? 'Shorten long items' : `Show full text (${long} long ${long === 1 ? 'item' : 'items'})`}
                         onPress={toggle(openText)}
                       />
                     )}
                     {more > 0 && (
                       <Button
-                        key={`${prefix}-toggle-${file.name}`}
+                        key={`${prefix}-toggle-${file.id}`}
                         label={isExpanded ? 'Show fewer' : `Show all ${file.items.length} items`}
                         onPress={toggle(expandedFiles)}
                       />
@@ -2085,7 +2962,10 @@ export const register: Register = (on, options) => {
             </Box>
           )
         })}
-        {heading('Todo', view.total === 0 ? '' : `${view.done} of ${view.total} done, ${view.active} in progress`)}
+        {heading('Todo', view.total === 0 && todoCount() === 0 ? '' : todoDetail(view))}
+        {todoActions($).map(one => (
+          <Button key={one.key} label={one.label} onPress={one.onPress} />
+        ))}
         {view.total > 0 && <Text color={ACCENT}>{`${bar(view.done, view.total, width)} ${Math.round((view.done / view.total) * 100)}%`}</Text>}
         {view.completed > 0 && (
           <Button
@@ -2098,12 +2978,12 @@ export const register: Register = (on, options) => {
           />
         )}
         {todoLedger(view).map(file => (
-          <Box key={file.name} flexDirection="column" marginTop={1}>
+          <Box key={file.id} flexDirection="column" marginTop={1}>
             <Text dimColor={file.done === file.total} bold={file.done < file.total}>
               {`${clip(file.name, columns - 24)}  ${bar(file.done, file.total, 10)} ${file.done}/${file.total}`}
             </Text>
-            {file.items.slice(0, expandedFiles.has(`file:${file.name}`) ? file.items.length : ITEMS_SHOWN).map((item, k) => (
-              <Box key={`${file.name}:${k}`}>
+            {file.items.slice(0, expandedFiles.has(`file:${file.id}`) ? file.items.length : ITEMS_SHOWN).map((item, k) => (
+              <Box key={`${file.id}:${k}`}>
                 <Text dimColor={item.status !== 'completed'}>
                   {item.status === 'in_progress' ? ' • ' : item.status === 'completed' ? ' ✓ ' : ' ○ '}
                 </Text>
@@ -2115,13 +2995,13 @@ export const register: Register = (on, options) => {
             ))}
             {file.items.length > ITEMS_SHOWN && (
               <Button
-                key={`file-toggle-${file.name}`}
-                label={expandedFiles.has(`file:${file.name}`) ? 'Show fewer' : `Show all ${file.items.length} items`}
+                key={`file-toggle-${file.id}`}
+                label={expandedFiles.has(`file:${file.id}`) ? 'Show fewer' : `Show all ${file.items.length} items`}
                 onPress={() => {
-                  if (expandedFiles.has(`file:${file.name}`)) {
-                    expandedFiles.delete(`file:${file.name}`)
+                  if (expandedFiles.has(`file:${file.id}`)) {
+                    expandedFiles.delete(`file:${file.id}`)
                   } else {
-                    expandedFiles.add(`file:${file.name}`)
+                    expandedFiles.add(`file:${file.id}`)
                   }
                   redraw($)
                 }}

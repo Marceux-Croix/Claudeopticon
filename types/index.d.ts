@@ -8,8 +8,14 @@ export type TodoItem = {
 }
 
 export type TodoFile = {
-  /** The file's path under `.claude_todo/`: `OPEN.md`, or `archive/OLD.md` for an archived one. */
+  /** The file's path under its `.claude_todo/` folder: `OPEN.md`, or `archive/OLD.md` for an archived one. */
   name: string
+  /** The path of the `.claude_todo/` folder the file lives in, as the engine's fs takes it. Folder plus name identify a file. */
+  folder: string
+  /** The folder's path from the repo root, ending in `.claude_todo` (`mods/x/.claude_todo`); `folder` when not known. */
+  rel?: string
+  /** True for a folder other than the primary one (the nearest to the session folder): its item keys carry its place, so equal IDs stay apart. The pane never shows the folder. */
+  isOther?: true
   mtimeMs: number
   items: TodoItem[]
   /** True for a file in `.claude_todo/archive/`: finished work, listed in the completed ledger. */

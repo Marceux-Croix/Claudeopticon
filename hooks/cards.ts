@@ -14,14 +14,23 @@ export type ItemView = {
   text: string
   status: ItemStatus
   owners: number[]
-  /** The item's stable key: its ID (`#t12`) when it has one, else its normalized text. */
+  /** The item's stable key: its ID (`#t12`) when it has one, else its normalized text; qualified by folder outside the primary folder. */
   key: string
+  /** The key without the folder: how the line is found in its file. Same as `key` when absent. */
+  localKey?: string
+  /** The source of the item, which the pane never shows: its folder, its file in that folder, and its path from the repo root. */
+  folder?: string
+  file?: string
+  path?: string
   /** Shown in progress only because a live agent works on it: its box is still `- [ ]`. */
   isHeld?: true
 }
 
 export type FileView = {
+  /** The file's path inside its folder. Files of that name in every folder are one board. */
   name: string
+  /** The board's ID in the pane: the name. */
+  id: string
   done: number
   active: number
   total: number

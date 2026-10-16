@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- The board shows the tickets of every `.claude_todo/` folder in the repo together, as one todo. Each change still goes back to the file the ticket came from. The folders are found once, when the pane starts.
+- The Todo heading says how many files the board pulls from.
+- **Consolidate todos** copies the other folders' todo files, whole, into the repo's own root `.claude_todo/`. **Delete duplicate todos** then removes the old files, but only those whose every line is in the copy.
+- `move_ticket` takes an optional `folder`, and refuses when an ID matches tickets in more than one file.
+- A project's own `.claude/.claude_todo` folder now shows; only the home folder's global one stays hidden.
+- The README notes how far to trust the agent progress bars.
+
 ## 0.3.6
 
 - The pane reads the nearest `.claude_todo/`, from the folder the session started in up to the repo root, so a subfolder can keep its own todo.

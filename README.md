@@ -109,6 +109,8 @@ Tickets that are not done have buttons on the bottom edge:
 
 The move buttons are for work you do yourself, such as a human review. They change the checkbox in your todo file and nothing else. Claude is told at its next action, so it does not work on a ticket you closed. It is not asked to do anything.
 
+The Todo heading says how many todo files the board pulls from ("Pulling todo from 3 files"; archives are not counted). With more than one `.claude_todo/` folder, **Consolidate todos** copies whole files (tickets and notes, every non-blank line) from the other folders into the central one at the repo root, under a `## From <folder>` heading. An item whose `#T` ID the central folder already uses gets the next free ID, references to it in the same file follow, and Claude is told the new IDs once. The old folders are not changed, but they leave the board. Then **Delete duplicate todos** appears, and stays after a reload while an old folder exists. It removes an old file only after checking that every line of it is in the central file and that the file did not change meanwhile. It keeps any file that fails, naming it, and it merges an old `categories.json` into the central one before removing it. Both buttons are off in a git worktree and when the repo root is `~/.claude`.
+
 Other controls:
 
 - **Show as list** shows each file as a list. **Arrange by category** groups the list.
@@ -130,7 +132,9 @@ The mod reads checkbox lines in the Markdown files at the top level of `.claude_
 - Prose, tables and headings may surround the items. Only checkbox lines count.
 - When an item is done, check it off and leave it in the file. Checked items are your record of finished work.
 - When every item in a file is done, move the file to `.claude_todo/archive/`.
-- The folder usually lives at the root of the repo. The pane reads the nearest one, from the folder the session started in up to the repo root, so a subfolder can keep its own. A git worktree uses the main checkout's folder.
+- The pane shows the tickets of every `.claude_todo/` folder in the repo together, as if they were one todo. It finds the folders with git (tracked, untracked and ignored ones; at most 20) and adds the main checkout's folders from a git worktree. It never reads the global `~/.claude/.claude_todo`.
+- Files of the same name in different folders are one board. Each change goes back to the file the ticket came from. Two folders may use the same `#T` ID: they stay two tickets.
+- `categories.json` lives in the folder nearest to the session folder. With no such folder, items are not sorted into categories.
 
 ## Rules for Claude
 
@@ -178,9 +182,12 @@ All requests go through your own Claude Code session. The mod sends nothing anyw
 
 - The token count starts the first time the mod sees a session.
 - The Orchestrator history is kept in memory, so a reload clears it.
-- Agent data is saved per session, so `/reload-plugins` keeps it. An agent that started while the mod was off shows its model after its next request.
-- An agent that started while the mod was off shows its model after its next request, and its run time counts from the load.
+- Agent data is saved per session, so `/reload-plugins` keeps it. An agent that started while the mod was off shows its model after its next request, and its run time counts from the load.
+- An agent's progress bar comes from the agent's own reports, not from a measurement. It works well for work with clear steps, such as editing a set of files or running tests. For open-ended work, such as research, debugging or review, the agent cannot know its steps in advance, so the total may grow as it goes (step 3 of 5 can become step 4 of 9), or the reports may stop. Some agents skip the reports, and a custom agent without `report_progress` in its tool list shows no bar at all.
 - Ticket buttons sit over the card, so their position is approximate.
+- The pane finds the `.claude_todo/` folders once, when it starts. A new `.claude_todo/` in the session's folder or a folder above it shows at once. One made elsewhere needs `/reload-plugins` (or a new session).
+- **Consolidate todos** and **Delete duplicate todos** are off in a repo whose root folder is the home `.claude` folder (`~/.claude`), because there the repo's root `.claude_todo/` is Claude Code's global todo folder, which the mod never writes to. They are also off in a git worktree. In every other repo the central todo is the repo's own root `.claude_todo/`.
+- The files in the known folders stay live: new items, edits, checkbox changes, new files and archived files show within a few seconds, with no restart.
 
 [How it works](docs/how-it-works.md) explains the hooks, the linking and the drawing.
 

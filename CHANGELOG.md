@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.5
+
+- An agent that finished its work but was never stopped now shows as Idle, with the time it finished. It no longer counts as live, its timeline bar stops at that time, and its last command reads "Last:". The Stop button stays so you can close it.
+
 ## 0.3.4
 
 - The README and the plugin description lead with the ticket system.

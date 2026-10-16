@@ -16,6 +16,8 @@ Claudeopticon is one hooks module, `hooks/register.tsx`, plus the card drawings 
 
 A clock tick each second refreshes running agents. An agent missing from the agent list for 15 seconds ends with the status `ended`. Agent rows (the last 200) are saved per session, so a reload keeps start times, counts, links and progress.
 
+An agent is idle when its turn ends (`turn.complete` with its ID) and no tool call or model request of its own follows, while it waits on no background task it started. Claude Code keeps such an agent open until something stops it. The card shows it as Idle, out of the live count, its time and timeline bar stopped at the end of the turn, and its last command as "Last:". Its next call or request ends the idle time.
+
 **Stop** runs the `TaskStop` tool with the agent's ID. That aborts the agent's loop: no more turns, no summary.
 
 The todo folder is scanned every 3 seconds, and fully reread once a minute.

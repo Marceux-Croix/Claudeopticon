@@ -1,3 +1,5 @@
+![Claudeopticon: see everything Claude Code is doing, in one live pane](docs/images/social-preview.png)
+
 # Claudeopticon
 
 **A ticket system for Claude Code. Plan the work, hand it to Claude, and watch it get done.**

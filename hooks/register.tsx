@@ -6,6 +6,8 @@ import type { AgentView, FileView, ItemStatus, ItemView, TaskView, Usage, View }
 
 const PANE = 'claudeopticon'
 const TITLE = 'Claudeopticon'
+/** Whether this load of the mod has reopened a pane that carried an older title. */
+let isRetitled = false
 const DIR = '.claude_todo'
 const TICK_MS = 1000
 const SCAN_EVERY = 3
@@ -1627,6 +1629,14 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    // A pane opened under an older title keeps it through a plugin reload: opening it again, just
+    // after this draw, gives it the current one.
+    if (e.props.title !== undefined && e.props.title !== TITLE && !isRetitled) {
+      isRetitled = true
+      void Promise.resolve().then(() => $.ui.open({ id: PANE, title: TITLE })).catch(() => {
+        isRetitled = false
+      })
+    }
     const table = $.ui.resolve(e)
     const { Box, Button, Text } = table
     const Input = 'Input' in table ? table.Input : undefined

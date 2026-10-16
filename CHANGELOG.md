@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3
+
+- A pane opened before 0.3.2 takes the Claudeopticon title after `/reload-plugins`, without a restart.
+
 ## 0.3.2
 
 - The pane's title is now Claudeopticon instead of Work.

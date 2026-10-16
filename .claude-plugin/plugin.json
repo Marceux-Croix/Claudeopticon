@@ -1,6 +1,6 @@
 {
   "name": "claudeopticon",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "A side panel for Claude Code that shows what Claude is doing: your todo list as a ticket board, each step Claude takes, the helper agents and background tasks it starts, and which ticket each one works on.",
   "types": "./types/index.d.ts",
   "author": {

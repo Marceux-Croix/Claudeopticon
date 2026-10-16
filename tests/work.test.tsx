@@ -1181,3 +1181,20 @@ test("a background task a helper agent started ends when that agent ends; the ma
   expect(endAgentTasks(tasks, [], 5_000).map(one => one.status)).toEqual(['running', 'running', 'running', 'running'])
   expect(taskLines(ended)[0]?.line).toBe('t1')
 })
+
+test('a pane drawn under an older title is opened again once, with the current one', async ($, on) => {
+  mock.clock(on)
+  on('fs.exists', () => ({ value: false }))
+  on('agent.list', () => ({ value: [] }))
+  const opened: unknown[] = []
+  on('ui.open', (_$, e) => {
+    opened.push((e as { title?: string }).title)
+
+    return { value: undefined } as never
+  })
+  const old = { ...PANE, props: { ...(PANE.props as object), title: 'Work' } } as never as typeof PANE
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...old })
+  await ui.drawn()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(opened).toEqual(['Claudeopticon'])
+})

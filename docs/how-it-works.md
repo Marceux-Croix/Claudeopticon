@@ -54,6 +54,12 @@ Haiku sorts open items into at most five categories, kept in `.claude_todo/categ
 
 `⋙` and `?` send a prompt to Claude. The manual moves rewrite one checkbox. Each move is queued as a note that goes to Claude with its next tool result or your next message. To change a move, Claude calls `move_ticket`, which asks you and writes only on a yes.
 
+## The top graph
+
+The top card plots two series over the last 30 minutes: the live agent count, recorded each time it changes, and tokens since the last compaction, recorded at each usage report. A compaction adds a marker and a point at zero, and the token line breaks there. The series are stored per session (`series:<session id>`, at most 2000 points each), so a reload keeps them. Each axis grows only when a value would leave it, to the next step (agents 4, 6, 8, 12, 16, 24, 32 and so on; tokens 150k, 300k, 600k, 900k, 1.5M, 3M and so on, with 4 grid intervals), and shrinks only after every visible value has stayed below half for 5 minutes. Token reports redraw it at most every 5 s, and an idle redraw every 30 s scrolls the time axis. X positions snap to 30 s, so redraws in between send the same markup. Agents are blue (`#60A5FA`, `#2563EB` in the light theme) and tokens orange (`#FB923C`, `#EA580C`).
+
+When a ticket leaves a column or a list, a transparent card of the same height takes its place, so the cards below keep their position. The spaces clear at the next press of any control in the pane, or after 60 s, and at most 10 are kept.
+
 ## Drawing
 
 Each card is an SVG image. Its markup does not change with the clock alone, so a redraw with no new data does not reload the image. Motion is CSS and stops under `prefers-reduced-motion`. A light palette follows the system theme. Ticket columns stack when a ticket would be under 300 px wide.

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="1857" viewBox="0 0 760 1857">
-<rect width="760" height="1857" rx="14" fill="#1C1C1E"/>
-<svg x="20" y="20" xmlns="http://www.w3.org/2000/svg" width="720" height="166" viewBox="0 0 720 166" role="img" aria-label="Todo 27 of 46 done. 2 of 3 agents live. 17.38M tokens used, 5.28M since compact.">
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="1991" viewBox="0 0 760 1991">
+<rect width="760" height="1991" rx="14" fill="#1C1C1E"/>
+<svg x="20" y="20" xmlns="http://www.w3.org/2000/svg" width="720" height="300" viewBox="0 0 720 300" role="img" aria-label="Last 30 minutes: live agents and tokens since compact. Agents: 2 live, 33 of 35 finished. Tokens: 44.81M since compact, 623.59M total.">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -11,24 +11,50 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 @keyframes pulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
 @media (prefers-reduced-motion:reduce){.blink,.pulse{animation:none}.pulse{opacity:0}}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
-
+@media (prefers-color-scheme:light){.fa{fill:#2563EB}.sa{stroke:#2563EB}.ft{fill:#EA580C}.st{stroke:#EA580C}.pt{stop-color:#EA580C}}
 </style>
-<rect width="720" height="166" rx="12" fill="#07080F"/>
-<circle cx="124" cy="62" r="34" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="6"/><path d="M 124 28 A 34 34 0 1 1 106.33 91.05" fill="none" stroke="url(#progress)" stroke-width="6" stroke-linecap="round"/>
-<text x="124" y="69.04" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="22" font-weight="700">59<tspan fill="rgba(255,255,255,.62)" font-size="13" font-weight="500">%</tspan></text>
-<text x="124" y="120" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Todo</text>
-<text x="124" y="138" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">27 of 46 done</text><circle cx="360" cy="62" r="34" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="6"/><path d="M 360 28 A 34 34 0 1 1 357.46 95.90" fill="none" stroke="url(#progress)" stroke-width="6" stroke-linecap="round"/>
-<text x="360" y="69.04" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="22" font-weight="700">2<tspan fill="rgba(255,255,255,.62)" font-size="13" font-weight="500"> live</tspan></text>
-<text x="360" y="120" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Agents</text>
-<text x="360" y="138" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">1 of 3 agents finished</text><text x="596" y="73" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="32" font-weight="700" letter-spacing="-0.5">17.38M</text>
-<text x="596" y="120" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Tokens</text>
-<text x="596" y="138" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">5.28M since compact</text><circle cx="700" cy="20" r="4" fill="#8B5CF6" class="pulse"/>
+<rect width="720" height="300" rx="12" fill="#07080F"/>
+<text x="24" y="30" font-size="13"><tspan fill="rgba(255,255,255,.88)" font-weight="600">623.59M</tspan><tspan fill="rgba(255,255,255,.62)"> tokens total</tspan><tspan fill="rgba(255,255,255,.38)">  ·  </tspan><tspan fill="rgba(255,255,255,.88)" font-weight="600">33 of 35</tspan><tspan fill="rgba(255,255,255,.62)"> agents finished</tspan></text>
+<circle cx="700" cy="20" r="4" fill="#8B5CF6" class="pulse"/>
 <circle cx="700" cy="20" r="4" fill="#8B5CF6"/>
-<text x="690" y="24" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">Live</text></svg>
-<text x="20" y="218" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="15" font-weight="600" fill="rgba(255,255,255,.88)">Orchestrator</text>
-<text x="137" y="218" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" fill="rgba(255,255,255,.55)">Working</text>
+<text x="690" y="24" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">Live</text>
+<line x1="24" y1="47" x2="38" y2="47" stroke="#60A5FA" class="sa" stroke-width="2.5" stroke-linecap="round"/><text x="44" y="51" fill="rgba(255,255,255,.62)" font-size="12">Live agents (left axis)</text>
+<line x1="216" y1="47" x2="230" y2="47" stroke="#FB923C" class="st" stroke-width="2.5" stroke-linecap="round"/><text x="236" y="51" fill="rgba(255,255,255,.62)" font-size="12">Tokens since compact (right axis)</text>
+<line x1="64" y1="250" x2="656" y2="250" stroke="rgba(255,255,255,.08)"/>
+<text x="54" y="254" text-anchor="end" fill="#60A5FA" class="fa" font-size="11.5" font-weight="500">0</text>
+<text x="666" y="254" fill="#FB923C" class="ft" font-size="11.5" font-weight="500">0M</text>
+<line x1="64" y1="203" x2="656" y2="203" stroke="rgba(255,255,255,.08)"/>
+<text x="54" y="207" text-anchor="end" fill="#60A5FA" class="fa" font-size="11.5" font-weight="500">1</text>
+<text x="666" y="207" fill="#FB923C" class="ft" font-size="11.5" font-weight="500">15M</text>
+<line x1="64" y1="156" x2="656" y2="156" stroke="rgba(255,255,255,.08)"/>
+<text x="54" y="160" text-anchor="end" fill="#60A5FA" class="fa" font-size="11.5" font-weight="500">2</text>
+<text x="666" y="160" fill="#FB923C" class="ft" font-size="11.5" font-weight="500">30M</text>
+<line x1="64" y1="109" x2="656" y2="109" stroke="rgba(255,255,255,.08)"/>
+<text x="54" y="113" text-anchor="end" fill="#60A5FA" class="fa" font-size="11.5" font-weight="500">3</text>
+<text x="666" y="113" fill="#FB923C" class="ft" font-size="11.5" font-weight="500">45M</text>
+<line x1="64" y1="62" x2="656" y2="62" stroke="rgba(255,255,255,.08)"/>
+<text x="54" y="66" text-anchor="end" fill="#60A5FA" class="fa" font-size="11.5" font-weight="500">4</text>
+<text x="666" y="66" fill="#FB923C" class="ft" font-size="11.5" font-weight="500">60M</text>
+<text x="64" y="270" text-anchor="start" fill="rgba(255,255,255,.38)" font-size="11.5">30m ago</text>
+<text x="261.3" y="270" text-anchor="middle" fill="rgba(255,255,255,.38)" font-size="11.5">20m ago</text>
+<text x="458.7" y="270" text-anchor="middle" fill="rgba(255,255,255,.38)" font-size="11.5">10m ago</text>
+<text x="656" y="270" text-anchor="end" fill="rgba(255,255,255,.38)" font-size="11.5">Now</text>
+<line x1="300.8" y1="62" x2="300.8" y2="250" stroke="rgba(255,255,255,.38)" stroke-dasharray="3 4"/>
+<text x="305.8" y="74" text-anchor="start" fill="rgba(255,255,255,.38)" font-size="11">Compacted</text>
+<defs><linearGradient id="tk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FB923C" class="pt" stop-opacity=".16"/><stop offset="1" stop-color="#FB923C" class="pt" stop-opacity="0"/></linearGradient></defs>
+<polygon points="64,250 64,152.9 83.7,147.4 103.5,141.9 123.2,136.4 142.9,131 162.7,125.5 182.4,120 202.1,114.5 221.9,109.1 241.6,103.6 261.3,98.1 281.1,92.6 300.8,92.6 300.8,250" fill="url(#tk)"/>
+<polyline points="64,152.9 83.7,147.4 103.5,141.9 123.2,136.4 142.9,131 162.7,125.5 182.4,120 202.1,114.5 221.9,109.1 241.6,103.6 261.3,98.1 281.1,92.6 300.8,92.6" fill="none" stroke="#FB923C" class="st" stroke-width="1.25" stroke-linejoin="round"/>
+<polygon points="300.8,250 300.8,247 320.5,239.3 340.3,231.7 360,224.1 379.7,216.4 399.5,208.8 419.2,201.2 438.9,193.5 458.7,185.9 478.4,178.3 498.1,170.6 517.9,163 537.6,155.4 557.3,147.8 577.1,140.1 596.8,132.5 616.5,124.9 636.3,117.2 656,109.6 656,250" fill="url(#tk)"/>
+<polyline points="300.8,247 320.5,239.3 340.3,231.7 360,224.1 379.7,216.4 399.5,208.8 419.2,201.2 438.9,193.5 458.7,185.9 478.4,178.3 498.1,170.6 517.9,163 537.6,155.4 557.3,147.8 577.1,140.1 596.8,132.5 616.5,124.9 636.3,117.2 656,109.6" fill="none" stroke="#FB923C" class="st" stroke-width="1.25" stroke-linejoin="round"/>
+<path d="M 64 203 H 123.2 V 156 H 202.1 V 109 H 281.1 V 156 H 379.7 V 203 H 438.9 V 156 H 517.9 V 109 H 577.1 V 156 H 656" fill="none" stroke="#60A5FA" class="sa" stroke-width="1.5" stroke-linejoin="round"/>
+<circle cx="656" cy="156" r="3.5" fill="#60A5FA" class="fa" stroke="#07080F" stroke-width="2"/>
+<text x="646" y="147" text-anchor="end" fill="#60A5FA" class="fa" font-size="12" font-weight="600">2 live</text>
+<circle cx="656" cy="109.6" r="3.5" fill="#FB923C" class="ft" stroke="#07080F" stroke-width="2"/>
+<text x="646" y="100.6" text-anchor="end" fill="#FB923C" class="ft" font-size="12" font-weight="600">44.81M</text></svg>
+<text x="20" y="352" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="15" font-weight="600" fill="rgba(255,255,255,.88)">Orchestrator</text>
+<text x="137" y="352" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" fill="rgba(255,255,255,.55)">Working</text>
 
-<svg x="20" y="240" xmlns="http://www.w3.org/2000/svg" width="720" height="212" viewBox="0 0 720 212" role="img" aria-label="Orchestrator: 14:39:40 Run the parser tests; 14:38:45 Read the config loader; 14:37:40 Search the docs for the plugin API; 14:36:10 Edit the release checklist; 14:34:30 Start an agent for the config migration">
+<svg x="20" y="374" xmlns="http://www.w3.org/2000/svg" width="720" height="212" viewBox="0 0 720 212" role="img" aria-label="Orchestrator: 14:39:40 Run the parser tests; 14:38:45 Read the config loader; 14:37:40 Search the docs for the plugin API; 14:36:10 Edit the release checklist; 14:34:30 Start an agent for the config migration">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -57,14 +83,14 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <circle cx="21" cy="178" r="3" fill="rgba(255,255,255,.38)"/><text x="34" y="182" fill="rgba(255,255,255,.62)" font-size="13">Start an agent for the config migration</text>
 <text x="704" y="182" text-anchor="end" fill="rgba(255,255,255,.38)" font-size="10.5" class="mono">14:34:30</text>
 <text x="34" y="196" fill="rgba(255,255,255,.38)" font-size="11" class="mono">general-purpose, sonnet</text></svg>
-<text x="20" y="484" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" fill="rgba(255,255,255,.55)">Newest 5 of 38</text>
-<rect x="140" y="464" width="61" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
-<text x="170.5" y="484" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Older</text>
-<text x="20" y="532" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="15" font-weight="600" fill="rgba(255,255,255,.88)">Agents</text>
-<text x="86" y="532" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" fill="rgba(255,255,255,.55)">2 live, 1 finished</text>
-<rect x="538" y="512" width="202" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
-<text x="639" y="532" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Show finished agents (1)</text>
-<svg x="20" y="554" xmlns="http://www.w3.org/2000/svg" width="720" height="106" viewBox="0 0 720 106" role="img" aria-label="Timeline of 2 agents">
+<text x="20" y="618" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" fill="rgba(255,255,255,.55)">Newest 5 of 38</text>
+<rect x="140" y="598" width="61" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
+<text x="170.5" y="618" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Older</text>
+<text x="20" y="666" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="15" font-weight="600" fill="rgba(255,255,255,.88)">Agents</text>
+<text x="86" y="666" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" fill="rgba(255,255,255,.55)">2 live, 1 finished</text>
+<rect x="538" y="646" width="202" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
+<text x="639" y="666" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Show finished agents (1)</text>
+<svg x="20" y="688" xmlns="http://www.w3.org/2000/svg" width="720" height="106" viewBox="0 0 720 106" role="img" aria-label="Timeline of 2 agents">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -100,7 +126,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <circle cx="652" cy="54" r="4" fill="#8B5CF6" class="pulse"/>
 <circle cx="652" cy="54" r="3.5" fill="#8B5CF6"/>
 <text x="704" y="58" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">6m 00s</text></g></svg>
-<svg x="20" y="672" xmlns="http://www.w3.org/2000/svg" width="720" height="105" viewBox="0 0 720 105" role="img" aria-label="O, Orchestrator: Running, Harden the parser against bad input">
+<svg x="20" y="806" xmlns="http://www.w3.org/2000/svg" width="720" height="105" viewBox="0 0 720 105" role="img" aria-label="O, Orchestrator: Running, Harden the parser against bad input">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -125,7 +151,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <text x="66" y="56" fill="rgba(255,255,255,.62)" font-size="12">Working on <tspan fill="#1fa7b8" font-weight="500">Fix the parser crash on empty input</tspan></text>
 <text x="52" y="76" fill="rgba(255,255,255,.62)" font-size="12">Orchestrator · main conversation · 57 tool calls</text>
 <text x="52" y="96" fill="rgba(255,255,255,.62)" font-size="12" class="mono">Run the parser tests</text></svg>
-<svg x="20" y="789" xmlns="http://www.w3.org/2000/svg" width="720" height="133" viewBox="0 0 720 133" role="img" aria-label="A1, Write the v2 config migration: Running">
+<svg x="20" y="923" xmlns="http://www.w3.org/2000/svg" width="720" height="133" viewBox="0 0 720 133" role="img" aria-label="A1, Write the v2 config migration: Running">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -157,7 +183,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <text x="52" y="124" fill="rgba(255,255,255,.62)" font-size="12" class="mono">Edit src/config/migrate.ts</text><rect x="609" y="21" width="30" height="22" rx="6" fill="rgba(255,255,255,.1)"/>
 <circle cx="624" cy="32" r="7.5" fill="rgba(255,255,255,.88)"/>
 <rect x="619.5" y="30.75" width="9" height="2.5" fill="#07080F"/></svg>
-<svg x="20" y="934" xmlns="http://www.w3.org/2000/svg" width="720" height="133" viewBox="0 0 720 133" role="img" aria-label="A2, Draft the plugin API docs: Running">
+<svg x="20" y="1068" xmlns="http://www.w3.org/2000/svg" width="720" height="133" viewBox="0 0 720 133" role="img" aria-label="A2, Draft the plugin API docs: Running">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -189,28 +215,28 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <text x="52" y="124" fill="rgba(255,255,255,.62)" font-size="12" class="mono">Read docs/plugins.md</text><rect x="609" y="21" width="30" height="22" rx="6" fill="rgba(255,255,255,.1)"/>
 <circle cx="624" cy="32" r="7.5" fill="rgba(255,255,255,.88)"/>
 <rect x="619.5" y="30.75" width="9" height="2.5" fill="#07080F"/></svg>
-<text x="20" y="1099" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="15" font-weight="600" fill="rgba(255,255,255,.88)">Todo</text>
-<text x="68" y="1099" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" fill="rgba(255,255,255,.55)">27 of 46 done, 5 in progress</text>
-<rect x="575" y="1079" width="165" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
-<text x="657.5" y="1099" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Show completed (24)</text>
-<rect x="20" y="1121" width="220" height="30" rx="8" fill="none" stroke="rgba(255,255,255,.22)"/>
-<text x="32" y="1141" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" fill="rgba(255,255,255,.55)">Search open and done items</text>
-<rect x="248" y="1121" width="68" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
-<text x="282" y="1141" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Search</text>
-<rect x="324" y="1121" width="113" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
-<text x="380.5" y="1141" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Show as list</text>
-<rect x="445" y="1121" width="113" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
-<text x="501.5" y="1141" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Recategorize</text>
-<text x="20" y="1183" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" fill="rgba(255,255,255,.55)">Categories</text>
-<rect x="104" y="1163" width="68" height="30" rx="8" fill="#FFFFFF"/>
-<text x="138" y="1183" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="#111114">Config</text>
-<rect x="180" y="1163" width="54" height="30" rx="8" fill="#FFFFFF"/>
-<text x="207" y="1183" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="#111114">Docs</text>
-<rect x="242" y="1163" width="68" height="30" rx="8" fill="#FFFFFF"/>
-<text x="276" y="1183" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="#111114">Parser</text>
-<rect x="318" y="1163" width="76" height="30" rx="8" fill="#FFFFFF"/>
-<text x="356" y="1183" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="#111114">Release</text>
-<svg x="20" y="1205" xmlns="http://www.w3.org/2000/svg" width="720" height="104" viewBox="0 0 720 104" role="img" aria-label="release.md: 24 of 40 done; docs.md: 3 of 6 done">
+<text x="20" y="1233" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="15" font-weight="600" fill="rgba(255,255,255,.88)">Todo</text>
+<text x="68" y="1233" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" fill="rgba(255,255,255,.55)">27 of 46 done, 5 in progress</text>
+<rect x="575" y="1213" width="165" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
+<text x="657.5" y="1233" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Show completed (24)</text>
+<rect x="20" y="1255" width="220" height="30" rx="8" fill="none" stroke="rgba(255,255,255,.22)"/>
+<text x="32" y="1275" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" fill="rgba(255,255,255,.55)">Search open and done items</text>
+<rect x="248" y="1255" width="68" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
+<text x="282" y="1275" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Search</text>
+<rect x="324" y="1255" width="113" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
+<text x="380.5" y="1275" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Show as list</text>
+<rect x="445" y="1255" width="113" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
+<text x="501.5" y="1275" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Recategorize</text>
+<text x="20" y="1317" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" fill="rgba(255,255,255,.55)">Categories</text>
+<rect x="104" y="1297" width="68" height="30" rx="8" fill="#FFFFFF"/>
+<text x="138" y="1317" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="#111114">Config</text>
+<rect x="180" y="1297" width="54" height="30" rx="8" fill="#FFFFFF"/>
+<text x="207" y="1317" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="#111114">Docs</text>
+<rect x="242" y="1297" width="68" height="30" rx="8" fill="#FFFFFF"/>
+<text x="276" y="1317" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="#111114">Parser</text>
+<rect x="318" y="1297" width="76" height="30" rx="8" fill="#FFFFFF"/>
+<text x="356" y="1317" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="#111114">Release</text>
+<svg x="20" y="1339" xmlns="http://www.w3.org/2000/svg" width="720" height="104" viewBox="0 0 720 104" role="img" aria-label="release.md: 24 of 40 done; docs.md: 3 of 6 done">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -234,8 +260,8 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="16" y="79" width="688" height="4" rx="2" fill="rgba(255,255,255,.22)"/>
 <rect x="360" y="79" width="114.66666666666666" height="4" rx="2" fill="rgba(255,255,255,.38)"/>
 <rect x="16" y="79" width="344" height="4" rx="2" fill="url(#progress)"/></svg>
-<text x="20" y="1337" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="600" fill="rgba(255,255,255,.55)">In progress  3</text>
-<svg x="20" y="1357" xmlns="http://www.w3.org/2000/svg" width="354" height="152" viewBox="0 0 354 152" role="img" aria-label="In progress: Write the migration for the v2 config format">
+<text x="20" y="1471" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="600" fill="rgba(255,255,255,.55)">In progress  3</text>
+<svg x="20" y="1491" xmlns="http://www.w3.org/2000/svg" width="354" height="152" viewBox="0 0 354 152" role="img" aria-label="In progress: Write the migration for the v2 config format">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
@@ -255,13 +281,13 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="14" y="58" width="28" height="18" rx="9" fill="#3987e5"/>
 <text x="28" y="71" text-anchor="middle" fill="#FFFFFF" font-size="10.5" font-weight="700">A1</text>
 <text x="50" y="71" fill="rgba(255,255,255,.62)" font-size="11">Write the v2 config migration</text></svg>
-<rect x="332" y="1471" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="346" y="1489" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">?</text>
-<rect x="298" y="1471" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="312" y="1489" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">↩</text>
-<rect x="264" y="1471" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="278" y="1489" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">✓</text>
-<svg x="20" y="1521" xmlns="http://www.w3.org/2000/svg" width="354" height="152" viewBox="0 0 354 152" role="img" aria-label="In progress: Document the plugin API">
+<rect x="332" y="1605" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="346" y="1623" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">?</text>
+<rect x="298" y="1605" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="312" y="1623" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">↩</text>
+<rect x="264" y="1605" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="278" y="1623" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">✓</text>
+<svg x="20" y="1655" xmlns="http://www.w3.org/2000/svg" width="354" height="152" viewBox="0 0 354 152" role="img" aria-label="In progress: Document the plugin API">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
@@ -281,13 +307,13 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="14" y="58" width="28" height="18" rx="9" fill="#d95926"/>
 <text x="28" y="71" text-anchor="middle" fill="#FFFFFF" font-size="10.5" font-weight="700">A2</text>
 <text x="50" y="71" fill="rgba(255,255,255,.62)" font-size="11">Draft the plugin API docs</text></svg>
-<rect x="332" y="1635" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="346" y="1653" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">?</text>
-<rect x="298" y="1635" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="312" y="1653" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">↩</text>
-<rect x="264" y="1635" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="278" y="1653" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">✓</text>
-<svg x="20" y="1685" xmlns="http://www.w3.org/2000/svg" width="354" height="152" viewBox="0 0 354 152" role="img" aria-label="In progress: Fix the parser crash on empty input">
+<rect x="332" y="1769" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="346" y="1787" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">?</text>
+<rect x="298" y="1769" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="312" y="1787" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">↩</text>
+<rect x="264" y="1769" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="278" y="1787" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">✓</text>
+<svg x="20" y="1819" xmlns="http://www.w3.org/2000/svg" width="354" height="152" viewBox="0 0 354 152" role="img" aria-label="In progress: Fix the parser crash on empty input">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
@@ -307,14 +333,14 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="14" y="58" width="21" height="18" rx="9" fill="#1fa7b8"/>
 <text x="24.5" y="71" text-anchor="middle" fill="#FFFFFF" font-size="10.5" font-weight="700">O</text>
 <text x="43" y="71" fill="rgba(255,255,255,.62)" font-size="11">Harden the parser against bad input</text></svg>
-<rect x="332" y="1799" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="346" y="1817" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">?</text>
-<rect x="298" y="1799" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="312" y="1817" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">↩</text>
-<rect x="264" y="1799" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="278" y="1817" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">✓</text>
-<text x="386" y="1337" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="600" fill="rgba(255,255,255,.55)">Open  3</text>
-<svg x="386" y="1357" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Open: Draft the release notes">
+<rect x="332" y="1933" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="346" y="1951" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">?</text>
+<rect x="298" y="1933" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="312" y="1951" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">↩</text>
+<rect x="264" y="1933" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="278" y="1951" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">✓</text>
+<text x="386" y="1471" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="600" fill="rgba(255,255,255,.55)">Open  3</text>
+<svg x="386" y="1491" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Open: Draft the release notes">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
@@ -330,11 +356,11 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="78.5" y="9.5" width="58" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>
 <text x="107" y="23" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="11" font-weight="500">Release</text>
 <text x="14" y="48" fill="rgba(255,255,255,.88)" font-size="13"><tspan x="14" dy="0">Draft the release notes</tspan></text></svg>
-<rect x="698" y="1445" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="712" y="1463" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">⋙</text>
-<rect x="664" y="1445" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="678" y="1463" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">◐</text>
-<svg x="386" y="1495" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Open: Review the error messages">
+<rect x="698" y="1579" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="712" y="1597" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">⋙</text>
+<rect x="664" y="1579" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="678" y="1597" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">◐</text>
+<svg x="386" y="1629" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Open: Review the error messages">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
@@ -350,11 +376,11 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="78.5" y="9.5" width="40" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>
 <text x="98" y="23" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="11" font-weight="500">Docs</text>
 <text x="14" y="48" fill="rgba(255,255,255,.88)" font-size="13"><tspan x="14" dy="0">Review the error messages</tspan></text></svg>
-<rect x="698" y="1583" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="712" y="1601" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">⋙</text>
-<rect x="664" y="1583" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="678" y="1601" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">◐</text>
-<svg x="386" y="1633" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Open: Announce the release">
+<rect x="698" y="1717" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="712" y="1735" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">⋙</text>
+<rect x="664" y="1717" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="678" y="1735" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">◐</text>
+<svg x="386" y="1767" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Open: Announce the release">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
@@ -370,8 +396,8 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="78.5" y="9.5" width="58" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>
 <text x="107" y="23" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="11" font-weight="500">Release</text>
 <text x="14" y="48" fill="rgba(255,255,255,.88)" font-size="13"><tspan x="14" dy="0">Announce the release</tspan></text></svg>
-<rect x="698" y="1721" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="712" y="1739" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">⋙</text>
-<rect x="664" y="1721" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="678" y="1739" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">◐</text>
+<rect x="698" y="1855" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="712" y="1873" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">⋙</text>
+<rect x="664" y="1855" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="678" y="1873" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="rgba(255,255,255,.88)">◐</text>
 </svg>

@@ -1,9 +1,9 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { labelFontSize, setLabelBase, agentLabel as labelOf, ORCH, boardHead, clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
-import { psPath, readKeptIds, closedBlocks, removeBlocks, addToArchive, openCommand, nextTicketIds, nextIdsLine, ticketValue, insertIds, numberedNote, archiveName, isSubstantialChange, readKeptArchived, applyRefRenames, removeDuplicateTickets, removedNote, foldParts, itemLines, renumberLines, appendSections, applyRenames, nonBlankLines, renameNote, notifiedEnd, RULES, callSummary, callDetail, orchestratorTitle, readTitle, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, readKeptTickets, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
+import { HERO_H, QUANT_MS, SERIES_CAP, SHRINK_MS, WINDOW_MS, addCompact, addPoint, emptySeries, heroText, listRowPx, niceMax, readKeptSeries, spaceSvg, stepAxes, stepAxis, labelFontSize, setLabelBase, agentLabel as labelOf, ORCH, boardHead, clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
+import { MAX_SPACES, SPACE_MS, clearSpaces, columnSlots, expireSpaces, newLayout, psPath, readKeptIds, closedBlocks, removeBlocks, addToArchive, openCommand, nextTicketIds, nextIdsLine, ticketValue, insertIds, numberedNote, archiveName, isSubstantialChange, readKeptArchived, applyRefRenames, removeDuplicateTickets, removedNote, foldParts, itemLines, renumberLines, appendSections, applyRenames, nonBlankLines, renameNote, notifiedEnd, RULES, callSummary, callDetail, orchestratorTitle, readTitle, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, readKeptTickets, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
 import type { AgentRow, TodoFile } from '../types'
-import type { FileView } from '../hooks/cards'
+import type { FileView, Point, Series } from '../hooks/cards'
 
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
@@ -315,7 +315,7 @@ test('the scan reads the archive folder as finished work', async ($, on) => {
   // The archive's done tickets are in the counts, but not on the board; the toggle is gone.
   const board = JSON.stringify(await ui.findAll({ type: 'Svg' }))
   expect(board).not.toContain('old one')
-  expect(board).toContain('Todo 2 of 3 done')
+  expect(await ui.find({ type: 'Text', text: /2 of 3 done/ })).toBeDefined()
   expect(await ui.find({ key: 'todo-toggle' })).toBeUndefined()
   // Search covers the archive.
   await ui.input({ key: 'todo-search', text: 'old', kind: 'change' })
@@ -749,17 +749,252 @@ test('ticket view is the default: the toggle reads Show as list, Arrange by cate
   expect(await ui.find({ key: 'todo-sort' })).toBeDefined()
 })
 
-test('the third slot is the token burn as a number, with the burn since the last compaction', async () => {
+const MIN = 60_000
+const HERO_NOW = 100 * MIN
+
+/** A view with a series, as the pane builds it: the axes stepped once. */
+function graphView(series: Series, usage?: { tokens: number; atCompact?: number }, now = HERO_NOW) {
+  const base = buildView([], [], now)
+
+  return { ...base, series, axes: stepAxes(undefined, series, now), ...(usage === undefined ? {} : { usage: { ...usage, since: 0 } }) }
+}
+
+test('the token burn is the total in the top-left line, and the burn since the last compaction in the text and the right-axis label', async () => {
   const base = buildView([], [], 0)
-  const after = heroSvg({ ...base, usage: { tokens: 1_234_567, atCompact: 900_000, since: 0 } }).source
-  expect(after).toContain('>Tokens<')
+  const usage = { tokens: 1_234_567, atCompact: 900_000, since: 0 }
+  const after = heroSvg({ ...base, usage }).source
   expect(after).toContain('>1.23M<')
-  expect(after).toContain('334.6k since compact')
-  expect(after).not.toContain('>Cost<')
-  expect(heroSvg({ ...base, usage: { tokens: 950, since: 0 } }).source).toContain('No compaction yet')
-  expect(heroSvg(base).source).toContain('None counted yet')
+  expect(after).toContain('tokens total')
+  expect(heroText({ ...base, usage })).toBe('Agents: none yet. Tokens: 334.6k since compact, 1.23M total.')
+  expect(heroText({ ...base, usage: { tokens: 950, since: 0 } })).toContain('950 since compact, 950 total')
+  expect(heroText(base)).toBe('Agents: none yet. Tokens: none counted yet.')
   expect([tokens(950), tokens(84_321), tokens(1_234_567), tokens(23_456_789)]).toEqual(['950', '84.3k', '1.23M', '23.46M'])
   expect(turnTokens({ input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 3, cache_creation_input_tokens: 4 })).toBe(10)
+})
+
+test('the top card has the token total and agents finished in one line, a legend, and no Todo ring', async () => {
+  const rows = [row({ id: 'a', status: 'completed', endedAt: 5 }), row({ id: 'b', status: 'completed', endedAt: 5 }), row({ id: 'c' })]
+  const view = { ...buildView([], rows, HERO_NOW), usage: { tokens: 623_590_000, atCompact: 578_780_000, since: 0 } }
+  const card = heroSvg(view)
+  const svg = card.source
+  expect(svg).toContain('>623.59M</tspan><tspan fill="rgba(255,255,255,.62)"> tokens total</tspan>')
+  expect(svg).toContain('>2 of 3</tspan>')
+  expect(svg).toContain('agents finished')
+  expect(svg).toContain('Live agents (left axis)')
+  expect(svg).toContain('Tokens since compact (right axis)')
+  expect(svg).toContain('30m ago')
+  expect(svg).toContain('>20m ago<')
+  expect(svg).toContain('>10m ago<')
+  expect(svg).toContain('>Now<')
+  expect(svg).toContain('>Live<')
+  // The Todo ring is gone: no ring track, no Todo title, no percent.
+  expect(svg).not.toContain('stroke-width="6"')
+  expect(svg).not.toContain('>Todo<')
+  expect(svg).not.toMatch(/>\d+%</)
+  expect(svg).not.toContain('NaN')
+  expect(card.height).toBe(HERO_H)
+  // The card keeps its height with data, without, and with a stacked legend at a narrow width.
+  setWidth(300)
+  expect(heroSvg(view).height).toBe(HERO_H)
+  setWidth(384)
+})
+
+test('the trace colors: agents blue and tokens orange, dark as drawn and light by class', async () => {
+  const series = { agents: [[HERO_NOW - 5 * MIN, 1], [HERO_NOW - 2 * MIN, 2]] as Point[], tokens: [[HERO_NOW - 4 * MIN, 1_000_000]] as Point[], compacts: [] }
+  const svg = heroSvg(graphView(series, { tokens: 1_000_000 })).source
+  expect(svg).toContain('stroke="#60A5FA" class="sa" stroke-width="1.5"')
+  expect(svg).toContain('stroke="#FB923C" class="st" stroke-width="1.25"')
+  expect(svg).toContain('.fa{fill:#2563EB}.sa{stroke:#2563EB}.ft{fill:#EA580C}.st{stroke:#EA580C}.pt{stop-color:#EA580C}')
+  expect(svg).toContain('stop-color="#FB923C" class="pt" stop-opacity=".16"')
+  expect(svg).not.toContain('#8B5CF6" class="sa"')
+  // Axis labels and end values take their trace's color.
+  expect(svg).toMatch(/fill="#60A5FA" class="fa" font-size="11.5"[^>]*>4</)
+  expect(svg).toMatch(/fill="#FB923C" class="ft" font-size="11.5"[^>]*>1.5M</)
+  expect(svg).toMatch(/class="fa" font-size="12" font-weight="600">2 live</)
+  expect(svg).toMatch(/class="ft" font-size="12" font-weight="600">1.00M</)
+})
+
+test('the series records a point only when the value changes, and keeps 30 minutes plus one point before', async () => {
+  let live: Point[] = []
+  live = addPoint(live, 0, 0)
+  live = addPoint(live, 1 * MIN, 0)
+  expect(live).toEqual([[0, 0]])
+  live = addPoint(live, 2 * MIN, 1)
+  live = addPoint(live, 10 * MIN, 3)
+  live = addPoint(live, 20 * MIN, 2)
+  expect(live.length).toBe(4)
+  // At 35 minutes the window starts at 5: the point at 2 is the one before it and stays; the one at 0 goes.
+  live = addPoint(live, 35 * MIN, 1)
+  expect(live).toEqual([[2 * MIN, 1], [10 * MIN, 3], [20 * MIN, 2], [35 * MIN, 1]])
+  // At 60 minutes the window starts at 30: the point at 20 is the one before it.
+  live = addPoint(live, 60 * MIN, 0)
+  expect(live).toEqual([[20 * MIN, 2], [35 * MIN, 1], [60 * MIN, 0]])
+  expect(WINDOW_MS).toBe(30 * MIN)
+  // A series is capped.
+  let many: Point[] = []
+  for (let i = 0; i < SERIES_CAP + 500; i += 1) {
+    many = addPoint(many, 1000 + i, i % 2)
+  }
+  expect(many.length).toBe(SERIES_CAP)
+})
+
+test('the plot starts the line at the left edge from the point before the window, and ignores older points', async () => {
+  const series = { agents: [[HERO_NOW - 50 * MIN, 1], [HERO_NOW - 40 * MIN, 3], [HERO_NOW - 10 * MIN, 2]] as Point[], tokens: [], compacts: [] }
+  const svg = heroSvg(graphView(series)).source
+  // The point 40 minutes ago (value 3) is the last one before the window: the path starts at the left edge, x=48, at 3 of 4 (y=121: the legend is stacked at 384 px, so the plot top is 78).
+  expect(svg).toMatch(/<path d="M 48 121 H /)
+  expect(svg).not.toContain('>No activity yet<')
+})
+
+test('a compaction drops the token line to zero and shows a dashed line labeled Compacted', async () => {
+  let series: Series = emptySeries()
+  series = { ...series, tokens: addPoint(series.tokens, HERO_NOW - 20 * MIN, 5_000_000) }
+  series = { ...series, tokens: addPoint(series.tokens, HERO_NOW - 12 * MIN, 9_000_000) }
+  series = addCompact(series, HERO_NOW - 10 * MIN)
+  series = { ...series, tokens: addPoint(series.tokens, HERO_NOW - 5 * MIN, 1_000_000) }
+  expect(series.tokens.map(point => point[1])).toEqual([5_000_000, 9_000_000, 0, 1_000_000])
+  expect(series.compacts).toEqual([HERO_NOW - 10 * MIN])
+  const svg = heroSvg(graphView(series, { tokens: 10_000_000, atCompact: 9_000_000 })).source
+  expect(svg).toContain('>Compacted<')
+  expect(svg).toContain('stroke-dasharray="3 4"')
+  // Two token segments: the line before the compaction and the one after it.
+  expect(svg.match(/<polyline /g)?.length).toBe(2)
+  // The axis tops out at 9M, so the first segment's peak sits on the top gridline, and the second segment starts at the bottom.
+  expect(svg).toContain('>9M<')
+})
+
+test('a stored series reads back whole, and malformed entries are dropped', async () => {
+  let series: Series = emptySeries()
+  series = { ...series, agents: addPoint(series.agents, 1000, 2) }
+  series = { ...series, tokens: addPoint(series.tokens, 2000, 500) }
+  series = addCompact(series, 3000)
+  expect(readKeptSeries(JSON.parse(JSON.stringify(series)))).toEqual(series)
+  expect(readKeptSeries({ agents: [[1, 2], [3], 'x', [4, NaN]], tokens: 5, compacts: [1, 'a'] })).toEqual({ agents: [[1, 2]], tokens: [], compacts: [1] })
+  expect(readKeptSeries(undefined)).toEqual(emptySeries())
+})
+
+test('the pane keeps the series in the store, so a reload keeps the trace, and a token report adds a point', async ($, on) => {
+  const store = new Map<string, unknown>([['series:sess-1', { agents: [[1000, 0], [2000, 2]], tokens: [[1500, 40_000]], compacts: [] }]])
+  const { state } = orchSetup($, on, store)
+  void state
+  await begin($)
+  const used = { input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 20_000, cache_creation_input_tokens: 0, model: 'm' }
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', usage: used } as never).catch(() => undefined)
+  const kept = store.get('series:sess-1') as Series
+  expect(kept.agents[0]).toEqual([1000, 0])
+  expect(kept.agents.some(point => point[1] === 2)).toBe(true)
+  expect(kept.tokens[0]).toEqual([1500, 40_000])
+  expect(kept.tokens.map(point => point[1])).toContain(21_500)
+})
+
+test('compacting the conversation records a marker and a drop in the stored series', async ($, on) => {
+  const store = new Map<string, unknown>()
+  orchSetup($, on, store)
+  on('session.compact', (_$, e) => ({ messages: e.messages }) as never)
+  await begin($)
+  const used = { input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 20_000, cache_creation_input_tokens: 0, model: 'm' }
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', usage: used } as never).catch(() => undefined)
+  await $.session.compact({ messages: [{ role: 'user', text: 'hi', toolUses: [] }] } as never).catch(() => undefined)
+  expect((store.get('tokens:sess-1') as { atCompact?: number }).atCompact).toBe(21_500)
+  // The series is stored a few microtasks after the redraw.
+  for (let i = 0; i < 10; i += 1) {
+    await Promise.resolve()
+  }
+  const kept = store.get('series:sess-1') as Series
+  expect(kept.compacts.length).toBe(1)
+  expect(kept.tokens[kept.tokens.length - 1]?.[1]).toBe(0)
+})
+
+test('with no data the card draws the empty axes and says no activity yet', async () => {
+  const svg = heroSvg(graphView(emptySeries())).source
+  expect(svg).toContain('>No activity yet<')
+  expect(svg).toContain('>150k<')
+  expect(svg).toContain('>0k<')
+  expect(svg).not.toContain('<polyline')
+  expect(svg).not.toContain('class="sa" stroke-width="1.5"')
+  // Zeros alone are no activity.
+  expect(heroSvg(graphView({ agents: [[HERO_NOW - MIN, 0]], tokens: [], compacts: [] })).source).toContain('>No activity yet<')
+})
+
+test('the nice axis tops: agents 4, 6, 8, 12, 16, 24; tokens 150k, 300k, 600k, 900k, 1.5M, 3M', async () => {
+  const up = (kind: 'agents' | 'tokens', peaks: number[]) => peaks.map(peak => niceMax(kind, peak))
+  expect(up('agents', [0, 4, 5, 6, 7, 9, 13, 17, 25, 33])).toEqual([4, 4, 6, 6, 8, 12, 16, 24, 32, 48])
+  expect(up('tokens', [0, 150_000, 150_001, 400_000, 700_000, 1_000_000, 1_600_000, 44_810_000, 70_000_000, 100_000_000])).toEqual([
+    150_000, 150_000, 300_000, 600_000, 900_000, 1_500_000, 3_000_000, 60_000_000, 90_000_000, 150_000_000,
+  ])
+})
+
+test('an axis grows to the next step when a value would leave the plot, and shrinks only after 5 minutes below half', async () => {
+  let axis = stepAxis(undefined, 'agents', 3, 0)
+  expect(axis.max).toBe(4)
+  axis = stepAxis(axis, 'agents', 4, 1000)
+  expect(axis.max).toBe(4)
+  axis = stepAxis(axis, 'agents', 5, 2000)
+  expect(axis.max).toBe(6)
+  axis = stepAxis(axis, 'agents', 9, 3000)
+  expect(axis.max).toBe(12)
+  // Below half (6) from here: no shrink before 5 minutes.
+  axis = stepAxis(axis, 'agents', 2, 10 * MIN)
+  expect(axis).toEqual({ max: 12, lowSince: 10 * MIN })
+  axis = stepAxis(axis, 'agents', 5, 12 * MIN)
+  expect(axis.max).toBe(12)
+  axis = stepAxis(axis, 'agents', 5, 14 * MIN + 59_000)
+  expect(axis.max).toBe(12)
+  // A value back at half or above restarts the timer.
+  axis = stepAxis(axis, 'agents', 6, 15 * MIN)
+  expect(axis).toEqual({ max: 12 })
+  axis = stepAxis(axis, 'agents', 3, 16 * MIN)
+  axis = stepAxis(axis, 'agents', 3, 16 * MIN + SHRINK_MS - 1)
+  expect(axis.max).toBe(12)
+  axis = stepAxis(axis, 'agents', 3, 16 * MIN + SHRINK_MS)
+  expect(axis.max).toBe(4)
+  // Tokens use the same rule.
+  let tokensAxis = stepAxis(undefined, 'tokens', 44_810_000, 0)
+  expect(tokensAxis.max).toBe(60_000_000)
+  tokensAxis = stepAxis(tokensAxis, 'tokens', 1_000_000, MIN)
+  expect(tokensAxis.max).toBe(60_000_000)
+  tokensAxis = stepAxis(tokensAxis, 'tokens', 1_000_000, MIN + SHRINK_MS)
+  expect(tokensAxis.max).toBe(1_500_000)
+})
+
+test('stepAxes plots the visible values only, so a value that left the window no longer holds the axis up', async () => {
+  const series = { agents: [[HERO_NOW - 60 * MIN, 20], [HERO_NOW - 40 * MIN, 1]] as Point[], tokens: [], compacts: [] }
+  expect(stepAxes(undefined, series, HERO_NOW).agents.max).toBe(4)
+  const high = { ...series, agents: [[HERO_NOW - 20 * MIN, 20]] as Point[] }
+  expect(stepAxes(undefined, high, HERO_NOW).agents.max).toBe(24)
+})
+
+test('the axis labels: 4 grid intervals, whole numbers on the left, M and k on the right', async () => {
+  const series = { agents: [[HERO_NOW - 5 * MIN, 5]] as Point[], tokens: [[HERO_NOW - 5 * MIN, 44_810_000]] as Point[], compacts: [] }
+  const svg = heroSvg(graphView(series, { tokens: 44_810_000 })).source
+  // Left top is 6, labeled 0, 3 and 6 only (1.5 and 4.5 are not whole). Right top is 60M: 0M, 15M, 30M, 45M, 60M.
+  expect((svg.match(/class="fa" font-size="11.5"/g) ?? []).length).toBe(3)
+  for (const label of ['0M', '15M', '30M', '45M', '60M']) {
+    expect(svg).toContain(`>${label}<`)
+  }
+  expect(svg.match(/<line x1="48" /g)?.length).toBe(5)
+  expect(svg).toContain('>44.81M<')
+  expect(svg).toContain('>5 live<')
+})
+
+test('the top card changes only with the data and each 30 s step of time, so a redraw between steps sends the same markup', async () => {
+  const series = { agents: [[HERO_NOW - 20 * MIN, 1]] as Point[], tokens: [[HERO_NOW - 20 * MIN, 1_000_000]] as Point[], compacts: [] }
+  const one = heroSvg(graphView(series, { tokens: 1_000_000 }, HERO_NOW + 1000)).source
+  const two = heroSvg(graphView(series, { tokens: 1_000_000 }, HERO_NOW + 29_000)).source
+  expect(one).toBe(two)
+  const later = heroSvg(graphView(series, { tokens: 1_000_000 }, HERO_NOW + QUANT_MS + 1000)).source
+  expect(later).not.toBe(one)
+  expect(QUANT_MS).toBe(30_000)
+})
+
+test('the terminal view shows one line for agents and tokens in place of the gauges', async ($, on) => {
+  const store = new Map<string, unknown>()
+  orchSetup($, on, store)
+  await begin($)
+  const used = { input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 20_000, cache_creation_input_tokens: 0, model: 'm' }
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', usage: used } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'terminal', ...PANE })
+  expect(await ui.find({ type: 'Text', text: /Agents: 1 live, 0 of 1 finished\. Tokens: 21\.5k since compact, 21\.5k total\./ })).toBeDefined()
 })
 
 test('each finished turn adds its tokens to the burn, main and subagent alike', async ($, on) => {
@@ -1168,7 +1403,7 @@ test('an agent whose turn ended with nothing after it is idle: not live, still s
   expect(svgs).toContain('>Idle<')
   expect(svgs).toContain('not stopped')
   expect(svgs).toContain('Last: ')
-  expect(svgs).toContain('0 of 1 agent live')
+  expect(svgs).toContain('Agents: 0 live, 1 of 1 finished.')
   expect(await ui.find({ type: 'Text', text: /0 live, 1 idle, 0 finished/ })).toBeDefined()
   const labels = (await ui.findAll({ type: 'Button' })).map(button => (button as { props?: { label?: string } }).props?.label)
   expect(labels).toContain('\u2296')
@@ -2001,7 +2236,7 @@ const ORCH_FILE = '- [ ] #T1 Ship the parser\n- [ ] #T2 Review the copy\n- [~] #
 /** A pane over one todo file the test can edit; `edit` is what the main conversation or a helper does to it. */
 function orchSetup($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1], store = new Map<string, unknown>()) {
   const state = { file: ORCH_FILE, mtime: 1 }
-  mock.clock(on)
+  const clock = mock.clock(on)
   on('store.get', (_$, e) => ({ value: store.get(e.key) }) as never)
   on('store.set', (_$, e) => {
     store.set(e.key, e.value)
@@ -2023,7 +2258,7 @@ function orchSetup($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<
     return $.tool.call({ tool: 'Edit', file_path: '/repo/.claude_todo/OPEN.md', ...(agentId === undefined ? {} : { agentId }) } as never)
   }
 
-  return { state, store, edit }
+  return { state, store, edit, clock }
 }
 
 /** Opens the pane's session as a start would: the scan, then the first agent list, which also loads the kept data. */
@@ -2086,7 +2321,7 @@ test('a ticket the main conversation sets in progress by an edit is the orchestr
   expect(card).not.toContain('#T3 Check the invoice')
   // The orchestrator leads the Agents card, before A1, and is not one of the agents counted on top.
   expect(after.indexOf('O, Orchestrator')).toBeLessThan(after.indexOf('A1, Helper'))
-  expect(after).toContain('0 of 1 agent')
+  expect(after).toContain('Agents: 1 live, 0 of 1 finished.')
 })
 
 test('a main-conversation report_progress that names a ticket makes it the orchestrator\'s; a helper\'s does not', async ($, on) => {
@@ -2443,7 +2678,7 @@ test('a closed ticket moves to archive/<same file> after 5 seconds, under its he
   const drawn = JSON.stringify(await ui.findAll({ type: 'Svg' }))
   expect(drawn).toContain('Done parser')
   expect(drawn).toContain('Done docs')
-  expect(drawn).toContain('Todo 3 of 5 done')
+  expect(await ui.find({ type: 'Text', text: /3 of 5 done/ })).toBeDefined()
   // A ticket closed later is newer: it leads the Done column.
   files['/repo/.claude_todo/TODO.md'] += '\n- [x] #T6 Later done'
   await clock.advance(6000)
@@ -3307,4 +3542,119 @@ test('the next prompt names the in-progress tickets the orchestrator claimed, an
   await clock.advance(2 * 60 * 1000)
   await $.prompt.submit({ text: 'four' } as never)
   expect(contexts[3] ?? '').toContain('Still in progress from earlier: #T0026 Ship the parser')
+})
+
+// ---------------------------------------------------------------- stable layout when a ticket leaves
+
+const ids = (slots: readonly { id: string; isSpace?: true }[]) => slots.map(slot => (slot.isSpace === true ? 'space' : slot.id))
+const entries3 = [{ id: 'a', h: 100 }, { id: 'b', h: 140 }, { id: 'c', h: 100 }]
+
+test('a ticket that leaves a column keeps an empty space of its height in its place', async () => {
+  const layout = newLayout()
+  expect(ids(columnSlots(layout, 'progress', 'w', entries3, 0))).toEqual(['a', 'b', 'c'])
+  const slots = columnSlots(layout, 'progress', 'w', [entries3[0]!, entries3[2]!], 1000)
+  expect(ids(slots)).toEqual(['a', 'space', 'c'])
+  expect(slots[1]?.h).toBe(140)
+  // The same data drawn again changes nothing, and makes no second space.
+  expect(ids(columnSlots(layout, 'progress', 'w', [entries3[0]!, entries3[2]!], 2000))).toEqual(['a', 'space', 'c'])
+  expect(layout.spaces.length).toBe(1)
+  // A second ticket leaves: its space joins the first.
+  expect(ids(columnSlots(layout, 'progress', 'w', [entries3[0]!], 3000))).toEqual(['a', 'space', 'space'])
+  // Another column is untouched, and a new width forgets the spaces of a column.
+  expect(ids(columnSlots(layout, 'open', 'w', [{ id: 'x', h: 90 }], 3000))).toEqual(['x'])
+  expect(ids(columnSlots(layout, 'progress', 'narrow', [entries3[0]!], 4000))).toEqual(['a'])
+})
+
+test('the next press of any control clears the spaces; a ticket button keeps what was drawn so the ticket it moves leaves one', async () => {
+  const layout = newLayout()
+  columnSlots(layout, 'progress', 'w', entries3, 0)
+  columnSlots(layout, 'progress', 'w', [entries3[0]!, entries3[2]!], 10)
+  expect(clearSpaces(layout, false)).toBe(true)
+  expect(layout.spaces.length).toBe(0)
+  expect(ids(columnSlots(layout, 'progress', 'w', [entries3[0]!, entries3[2]!], 20))).toEqual(['a', 'c'])
+  expect(clearSpaces(layout, false)).toBe(false)
+  columnSlots(layout, 'progress', 'w', [entries3[0]!, entries3[2]!], 25)
+  // A ticket button: spaces go, the drawn list stays, so the move it makes leaves a space.
+  clearSpaces(layout, true)
+  expect(ids(columnSlots(layout, 'progress', 'w', [entries3[0]!], 30))).toEqual(['a', 'space'])
+})
+
+test('a space goes 60 seconds after its ticket left', async () => {
+  const layout = newLayout()
+  columnSlots(layout, 'progress', 'w', entries3, 0)
+  columnSlots(layout, 'progress', 'w', [entries3[0]!, entries3[2]!], 5000)
+  expect(SPACE_MS).toBe(60_000)
+  expect(expireSpaces(layout, 5000 + SPACE_MS - 1)).toBe(false)
+  expect(layout.spaces.length).toBe(1)
+  expect(expireSpaces(layout, 5000 + SPACE_MS)).toBe(true)
+  expect(ids(columnSlots(layout, 'progress', 'w', [entries3[0]!, entries3[2]!], 66_000))).toEqual(['a', 'c'])
+})
+
+test('never more than 10 spaces: the oldest go first, and the rest keep their places', async () => {
+  const layout = newLayout()
+  const all = Array.from({ length: 14 }, (_, i) => ({ id: `t${i}`, h: 100 + i }))
+  columnSlots(layout, 'progress', 'w', all, 0)
+  let left = all
+  // The tickets leave one by one, from the front: t0 first.
+  for (let k = 0; k < 12; k += 1) {
+    left = left.slice(1)
+    columnSlots(layout, 'progress', 'w', left, 1000 + k)
+  }
+  expect(MAX_SPACES).toBe(10)
+  expect(layout.spaces.length).toBe(10)
+  const slots = columnSlots(layout, 'progress', 'w', left, 2000)
+  expect(slots.filter(slot => slot.isSpace === true).length).toBe(10)
+  // The two oldest (t0, t1) are gone: the spaces held are those of t2 to t11, in their order.
+  expect(slots.filter(slot => slot.isSpace === true).map(slot => slot.h)).toEqual(Array.from({ length: 10 }, (_, i) => 102 + i))
+  expect(ids(slots).slice(10)).toEqual(['t12', 't13'])
+  // Across columns the cap is shared.
+  columnSlots(layout, 'open', 'w', [{ id: 'p', h: 50 }, { id: 'q', h: 50 }], 3000)
+  columnSlots(layout, 'open', 'w', [], 3001)
+  expect(layout.spaces.length).toBe(10)
+})
+
+test('a space is a transparent card of its height with no text and no buttons', async () => {
+  const space = spaceSvg(300, 142)
+  expect([space.width, space.height]).toEqual([300, 142])
+  expect(space.source).toContain('height="142"')
+  expect(space.source).not.toContain('<text')
+  expect(space.source).not.toContain('<rect')
+  expect(space.source).not.toContain('fill=')
+})
+
+test('the list view keeps the place of a row that left', async () => {
+  const items = [0, 1, 2].map(i => ({ text: `Row ${i}`, status: 'pending' as const, owners: [], key: `r${i}` }))
+  const file = (list: typeof items): FileView => ({ name: 'A.md', id: 'A.md', done: 0, active: 0, total: list.length, owners: [], items: list, mtimeMs: 1 })
+  const view = buildView([], [], 0)
+  const whole = fileCards(file(items), view, 12)[0]!
+  const fewer = fileCards(file([items[0]!, items[2]!]), view, 12)[0]!
+  const held = fileCards(file([items[0]!, items[2]!]), view, 12, false, new Map([[1, listRowPx(items[1]!)]]))[0]!
+  expect(fewer.height).toBeLessThan(whole.height)
+  expect(held.height).toBe(whole.height)
+})
+
+test('a ticket leaving In progress keeps its space until the next press, and a space expires after 60 seconds', async ($, on) => {
+  const three = (second: string) => `- [~] #T1 First thing\n- [${second}] #T2 Second thing\n- [~] #T3 Third thing`
+  const { edit, clock } = orchSetup($, on)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const spaces = async () => JSON.stringify(await ui.findAll({ type: 'Svg' })).split('role=\\"presentation\\"').length - 1
+  await edit(three('~'))
+  await ui.press({ key: 'todo-tickets' })
+  await ui.press({ key: 'todo-tickets' })
+  expect(await spaces()).toBe(0)
+  await edit(three('x'))
+  expect(await spaces()).toBe(1)
+  // The space is not a ticket: no text, no buttons of its own.
+  expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('Second thing')
+  await ui.press({ key: 'todo-tickets' })
+  await ui.press({ key: 'todo-tickets' })
+  expect(await spaces()).toBe(0)
+  // Another ticket leaves; 60 s without a press clears it.
+  await edit(three('~'))
+  await edit(three('x'))
+  await edit(`- [~] #T1 First thing\n- [x] #T2 Second thing\n- [x] #T3 Third thing`)
+  expect(await spaces()).toBeGreaterThan(0)
+  await clock.advance(SPACE_MS + 2000)
+  expect(await spaces()).toBe(0)
 })

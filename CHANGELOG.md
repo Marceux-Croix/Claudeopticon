@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+
+- The top card is now a live graph of the last 30 minutes: live agents in blue on the left axis, and tokens since the last compaction in orange on the right axis. The totals sit in small text at the top left. The axes rescale rarely, and a reload keeps the history. The Todo ring is gone; todo progress stays in the Todo header.
+- When a ticket leaves a column, its space stays until your next click or for a minute, so the pane does not shift while you read.
+
 ## 0.7.0
 
 - Closed tickets move to the archive on their own. About 5 seconds after a ticket is checked off, the mod moves it to the file of the same name in `.claude_todo/archive/`, under the heading it had, and makes the archive file when it is missing. The live todo holds only open and in-progress tickets. Nothing is deleted.

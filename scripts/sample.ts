@@ -1,6 +1,7 @@
 /** Sample data for the README images: a fictional CLI tool with a parser, docs and a release. */
 import { ORCH } from '../hooks/cards.ts'
-import type { AgentView, ItemStatus, ItemView, View } from '../hooks/cards.ts'
+import { stepAxes } from '../hooks/cards.ts'
+import type { AgentView, ItemStatus, ItemView, Point, Series, View } from '../hooks/cards.ts'
 
 export const NOW = Date.UTC(2026, 9, 15, 14, 40, 0)
 const MIN = 60_000
@@ -68,7 +69,35 @@ export const view: View = {
   agents,
   orchestrator,
   done: 27, active: 5, total: 46, archived: 24, live: 2, now: NOW,
-  usage: { tokens: 17_384_000, atCompact: 12_100_000, since: 0 },
+  usage: { tokens: 623_590_000, atCompact: 578_780_000, since: 0 },
+}
+
+/** Minutes before NOW. */
+const ago = (min: number) => NOW - Math.round(min * MIN)
+
+/**
+ * The top card's trace: live agents stepping between 1 and 3, a compaction 18 minutes ago (12 minutes into the
+ * window), and the count since the last compaction climbing to 44.81M. The totals are those of a long session:
+ * 623.59M tokens, 33 of 35 agents finished.
+ */
+const plotted: Series = {
+  agents: [[0, 1], [3, 2], [7, 3], [11, 2], [16, 1], [19, 2], [23, 3], [26, 2]].map(([at, n]) => [ago(30 - at!), n!] as Point),
+  // 31M at the left edge to 51.8M at the compaction, then 1M to 44.81M now; a point a minute.
+  tokens: [
+    ...Array.from({ length: 12 }, (_, i) => [ago(30 - i), Math.round((31_000_000 + (i / 11.9) * 20_800_000) / 10_000) * 10_000] as Point),
+    [ago(18), 970_000] as Point,
+    ...Array.from({ length: 18 }, (_, i) => [ago(17 - i), Math.round((970_000 + ((i + 1) / 18) * 43_840_000) / 10_000) * 10_000] as Point),
+  ],
+  compacts: [ago(18)],
+}
+view.series = plotted
+view.axes = stepAxes(undefined, plotted, NOW)
+
+/** The top card counts every agent of the session: 35, of which 33 finished. */
+export const heroView: View = {
+  ...view,
+  agents: [...agents, ...Array.from({ length: 32 }, (_, i): AgentView => ({ ...agents[2]!, index: 3 + i }))],
+  live: 2,
 }
 
 export const entries = [

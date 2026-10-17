@@ -1,8 +1,8 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { AgentRow, AgentRowStatus, Progress, TodoFile, TodoItem, TodoStatus } from '../types'
-import { ACCENT, DANGER, GREEN, ORCH, clock, tokens, orchestratorSvg, plural, agentColor, agentLabel, setLabelBase, agentSvg, stopInsetPx, cardWidth, elapsed, boardHead, fileCards, heroSvg, longItems, ticketSvg, setWidth, timelineSvg } from './cards'
-import type { AgentView, FileView, ItemStatus, ItemView, Usage, View } from './cards'
+import { ACCENT, DANGER, GREEN, ORCH, addCompact, addPoint, clock, emptySeries, heroText, listRowPx, readKeptSeries, spaceSvg, stepAxes, tokens, orchestratorSvg, plural, agentColor, agentLabel, setLabelBase, agentSvg, stopInsetPx, cardWidth, elapsed, boardHead, fileCards, heroSvg, longItems, ticketSvg, setWidth, timelineSvg } from './cards'
+import type { AgentView, Axes, FileView, ItemStatus, ItemView, Series, Usage, View } from './cards'
 
 const PANE = 'claudeopticon'
 const TITLE = 'Claudeopticon'
@@ -167,9 +167,130 @@ const NOTE_MS = 4000
 let sortBy: 'file' | 'category' = 'file'
 let query = ''
 function redraw($: EngineInterface): void {
+  noteLive()
   $.ui.invalidate('ui.render')
   saveAgents($)
 }
+
+// ---------------------------------------------------------------- the top card's series
+
+/** What the top card plots; kept in the store per session, so a reload keeps the trace. */
+let series: Series = emptySeries()
+/** The axes the top card plots on: in memory, per session, stepped at each draw. */
+let axes: Axes | undefined
+let savedSeries = ''
+/** The last time any code here read the clock, ms: a sync stand-in for `$.clock.now()` in the render. */
+let wallMs = 0
+/** When the pane last redrew for a token report, and whether a later report still waits for its redraw (CLOCK_MS throttle). */
+let lastBurnDraw = 0
+let isBurnDirty = false
+/** The top card redraws this often when nothing else does, so its time axis scrolls. */
+const IDLE_DRAW_MS = 30_000
+let lastIdleDraw = 0
+
+function nowSync(): number {
+  return Math.max(wallMs, clockMs)
+}
+
+/** Records the live-agent count when it changed. Waits until the kept series is loaded, so a reload cannot overwrite it. */
+function noteLive(): void {
+  if (!isAgentsLoaded) {
+    return
+  }
+  const count = agentRows.filter(row => !isEnded(row.status) && row.idleSince === undefined).length
+  series = { ...series, agents: addPoint(series.agents, nowSync(), count) }
+}
+
+async function seriesKey($: EngineInterface): Promise<string> {
+  return `series:${await $.session.id()}`
+}
+
+// ---------------------------------------------------------------- stable layout when a ticket leaves
+
+/** A drawn entry of a column or list: a ticket (or row) by ID, or the space of one that left. */
+export type Slot = { id: string; h: number; isSpace?: true }
+/** The space of a ticket that left: where it was in the column's drawn sequence, how high, and since when. */
+export type Space = { col: string; index: number; h: number; at: number; seq: number }
+export type Layout = { spaces: Space[]; drawn: Map<string, { sig: string; slots: Slot[] }>; seq: number }
+
+/** A space lasts this long if no control is pressed. */
+export const SPACE_MS = 60_000
+/** Most spaces held at once, over all columns; the oldest go first. */
+export const MAX_SPACES = 10
+
+export const newLayout = (): Layout => ({ spaces: [], drawn: new Map(), seq: 0 })
+
+/** Removes one space. The spaces after it in its column move up one place, and it leaves the column's last drawn sequence. */
+function dropSpace(layout: Layout, space: Space): void {
+  layout.spaces = layout.spaces.filter(one => one !== space)
+  for (const one of layout.spaces) {
+    if (one.col === space.col && one.index > space.index) {
+      one.index -= 1
+    }
+  }
+  const last = layout.drawn.get(space.col)
+  if (last !== undefined) {
+    last.slots = last.slots.filter(slot => slot.id !== `space:${space.seq}`)
+  }
+}
+
+/**
+ * The sequence to draw for one column (or list) whose entries are now `items`. An entry that was
+ * drawn last time (same `sig`: same width, same limit) and is gone now leaves a space of its height
+ * at its place, so what is below does not move. Never more than MAX_SPACES in all.
+ */
+export function columnSlots(layout: Layout, col: string, sig: string, items: readonly { id: string; h: number }[], now: number): Slot[] {
+  const last = layout.drawn.get(col)
+  if (last !== undefined && last.sig !== sig) {
+    for (const space of layout.spaces.filter(one => one.col === col)) {
+      dropSpace(layout, space)
+    }
+  } else if (last !== undefined) {
+    const present = new Set(items.map(item => item.id))
+    last.slots.forEach((slot, index) => {
+      if (slot.isSpace !== true && !present.has(slot.id)) {
+        layout.seq += 1
+        layout.spaces.push({ col, index, h: slot.h, at: now, seq: layout.seq })
+      }
+    })
+    while (layout.spaces.length > MAX_SPACES) {
+      dropSpace(layout, layout.spaces.reduce((oldest, one) => (one.seq < oldest.seq ? one : oldest)))
+    }
+  }
+  const slots: Slot[] = items.map(item => ({ id: item.id, h: item.h }))
+  for (const space of layout.spaces.filter(one => one.col === col).sort((a, b) => a.index - b.index)) {
+    slots.splice(Math.min(space.index, slots.length), 0, { id: `space:${space.seq}`, h: space.h, isSpace: true })
+  }
+  layout.drawn.set(col, { sig, slots })
+
+  return slots
+}
+
+/** Removes every space at a press. A press that moves no ticket by itself also forgets what was drawn, so its changes reflow. */
+export function clearSpaces(layout: Layout, isKept: boolean): boolean {
+  const had = layout.spaces.length > 0
+  layout.spaces = []
+  for (const last of layout.drawn.values()) {
+    last.slots = last.slots.filter(slot => slot.isSpace !== true)
+  }
+  if (!isKept) {
+    layout.drawn.clear()
+  }
+
+  return had
+}
+
+/** Removes the spaces older than SPACE_MS. True when any went. */
+export function expireSpaces(layout: Layout, now: number): boolean {
+  const old = layout.spaces.filter(one => now - one.at >= SPACE_MS)
+  for (const space of old) {
+    dropSpace(layout, space)
+  }
+
+  return old.length > 0
+}
+
+const layout = newLayout()
 
 // ---------------------------------------------------------------- agents kept across a reload
 
@@ -294,6 +415,13 @@ async function loadAgents($: EngineInterface): Promise<void> {
   }
   const keptArchived = readKeptArchived(await $.store.get(await archivedKey($)).catch(() => undefined))
   archivedNow = [...archivedNow, ...keptArchived.filter(one => !archivedNow.some(now => now.key === one.key && now.path === one.path))].slice(0, KEPT_ARCHIVED)
+  const keptSeries = readKeptSeries(await $.store.get(await seriesKey($)).catch(() => undefined))
+  const after = (points: readonly (readonly [number, number])[], from: readonly (readonly [number, number])[]) => [...from, ...points.filter(point => point[0] > (from[from.length - 1]?.[0] ?? -Infinity))]
+  series = {
+    agents: after(series.agents, keptSeries.agents),
+    tokens: after(series.tokens, keptSeries.tokens),
+    compacts: [...keptSeries.compacts, ...series.compacts.filter(one => one > (keptSeries.compacts[keptSeries.compacts.length - 1] ?? -Infinity))],
+  }
   const seen = new Set(agentRows.map(row => row.id))
   agentRows = [...kept.filter(row => !seen.has(row.id)), ...agentRows]
   for (const row of kept) {
@@ -327,6 +455,11 @@ function saveAgents($: EngineInterface): void {
   if (reserved !== savedReserved) {
     savedReserved = reserved
     void reservedKey($).then(key => $.store.set(key, [...reservedIds])).catch(() => undefined)
+  }
+  const plotted = JSON.stringify(series)
+  if (plotted !== savedSeries) {
+    savedSeries = plotted
+    void seriesKey($).then(key => $.store.set(key, series)).catch(() => undefined)
   }
   const archived = JSON.stringify(archivedNow)
   if (archived !== savedArchived) {
@@ -2483,6 +2616,7 @@ let lastClock = 0
  */
 async function refreshAgents($: EngineInterface, isForced = false): Promise<void> {
   const time = await $.clock.now()
+  wallMs = time
   await loadAgents($).catch(() => undefined)
   const listed = await $.agent.list()
   const rows = agentRows
@@ -2947,6 +3081,8 @@ const STATUS_ACTION: TicketAction = { name: 'status', glyph: '?', tip: 'Ask Clau
 const START_ACTION: TicketAction = { name: 'start', glyph: '\u25D0', tip: 'Mark in progress', toast: 'Marked in progress', prompt: () => '', mark: 'in_progress' }
 const DONE_ACTION: TicketAction = { name: 'done', glyph: '\u2713', tip: 'Mark done', toast: 'Marked done', prompt: () => '', mark: 'completed' }
 const REOPEN_ACTION: TicketAction = { name: 'reopen', glyph: '\u21A9', tip: 'Move back to open', toast: 'Moved back to open', prompt: () => '', mark: 'pending' }
+/** The labels of the ticket buttons: a press on one keeps the layout, so the ticket it moves leaves its space. */
+const TICKET_GLYPHS = new Set([SEND_ACTION, STATUS_ACTION, START_ACTION, DONE_ACTION, REOPEN_ACTION].map(action => action.glyph))
 
 const BOXES: Record<ItemStatus, string> = { pending: ' ', in_progress: '~', completed: 'x' }
 const STATUS_WORDS: Record<ItemStatus, string> = { pending: 'open', in_progress: 'in progress', completed: 'done' }
@@ -3423,11 +3559,22 @@ export function turnTokens(used: { input_tokens: number; output_tokens: number; 
 
 async function addBurn($: EngineInterface, used: number, isCompact = false): Promise<void> {
   await readUsage($)
+  await loadAgents($).catch(() => undefined)
   const time = await $.clock.now()
+  wallMs = time
   const base = usage ?? { tokens: 0, since: time }
   usage = isCompact ? { ...base, atCompact: base.tokens } : { ...base, tokens: base.tokens + used }
+  // The plot: the count since the last compaction, one point per report; a compaction is a marker and a fall to zero.
+  series = isCompact ? addCompact(series, time) : { ...series, tokens: addPoint(series.tokens, time, usage.tokens - (usage.atCompact ?? 0)) }
   await $.store.set(await burnKey($), usage).catch(() => undefined)
-  redraw($)
+  // Redraw at most every CLOCK_MS; the tick draws a report that came sooner.
+  if (isCompact || time - lastBurnDraw >= CLOCK_MS) {
+    lastBurnDraw = time
+    isBurnDirty = false
+    redraw($)
+  } else {
+    isBurnDirty = true
+  }
 }
 
 /**
@@ -3450,8 +3597,24 @@ function start($: EngineInterface): void {
   ticker = $.clock.every(TICK_MS, () => {
     ticks += 1
     void (async () => {
-      if (recatNote !== undefined && (await $.clock.now()) >= recatNote.until) {
+      const now = await $.clock.now()
+      wallMs = now
+      if (recatNote !== undefined && now >= recatNote.until) {
         recatNote = undefined
+        redraw($)
+      }
+      // The spaces of tickets that left go after SPACE_MS; a token report that came within CLOCK_MS of the last draw is drawn; the top card scrolls its time axis.
+      if (expireSpaces(layout, now)) {
+        redraw($)
+      }
+      if (isBurnDirty && now - lastBurnDraw >= CLOCK_MS) {
+        isBurnDirty = false
+        lastBurnDraw = now
+        redraw($)
+      }
+      if (now - lastIdleDraw >= IDLE_DRAW_MS) {
+        lastIdleDraw = now
+        clockMs = Math.max(clockMs, now)
         redraw($)
       }
       if (ticks % RESYNC_EVERY === 0) {
@@ -3814,14 +3977,28 @@ export const register: Register = (on, options) => {
       })
     }
     const table = $.ui.resolve(e)
-    const { Box, Button, Text } = table
+    const { Box, Button: RawButton, Text } = table
+    // Any press clears the spaces of tickets that left. A ticket's own button keeps what was drawn, so the ticket it moves leaves a space;
+    // every other press forgets it, so the change it makes (a filter, a view switch, a search) reflows.
+    const Button = ((props: Parameters<typeof RawButton>[0]) => (
+      <RawButton
+        {...props}
+        onPress={() => {
+          if (clearSpaces(layout, TICKET_GLYPHS.has(String(props.label)))) {
+            redraw($)
+          }
+          props.onPress?.()
+        }}
+      />
+    )) as typeof RawButton
     const Input = 'Input' in table ? table.Input : undefined
     const rows = agentRows
     const time = Math.max(clockMs, ...rows.map(row => row.endedAt ?? row.startedAt))
     if (pruneTickets()) {
       saveAgents($)
     }
-    const view = { ...buildView(todoFiles, rows, time, orchestratorState()), ...(usage === undefined ? {} : { usage }) }
+    axes = stepAxes(axes, series, time)
+    const view = { ...buildView(todoFiles, rows, time, orchestratorState()), ...(usage === undefined ? {} : { usage }), series, axes }
 
     const Svg = e.surface !== 'terminal' && 'Svg' in table ? table.Svg : undefined
     if (Svg !== undefined) {
@@ -3934,10 +4111,12 @@ export const register: Register = (on, options) => {
                   value={query}
                   submitLabel="Search"
                   onInput={(value: string) => {
+                    clearSpaces(layout, false)
                     query = value
                     redraw($)
                   }}
                   onSubmit={(value: string) => {
+                    clearSpaces(layout, false)
                     query = value
                     redraw($)
                   }}
@@ -4031,13 +4210,17 @@ export const register: Register = (on, options) => {
             const isStacked = Math.floor((cardWidth() - (sideBy - 1) * CELL_PX) / sideBy) < MIN_TICKET_PX
             const columnCount = isStacked ? 1 : sideBy
             const ticketW = Math.floor((cardWidth() - (columnCount - 1) * CELL_PX) / columnCount)
-            const ticket = (item: ItemView, k: number) => {
+            // What one ticket draws, worked out once per render: the slots need its height before it is placed.
+            const prepared = new Map<ItemView, { sentKey: string; isSent: boolean; actions: TicketAction[]; drawn: ReturnType<typeof ticketSvg> }>()
+            const prepare = (item: ItemView) => {
+              const known = prepared.get(item)
+              if (known !== undefined) {
+                return known
+              }
               const sentKey = `${item.file ?? file.name}:${item.key}`
               const isSent = sentTickets.has(sentKey)
               const category = book.items[item.key]
               const id = new RegExp(`#${ID_SRC}\\b`).exec(item.text)?.[0]
-              // The buttons, left to right: the manual moves, which only mark the box, then Claude's
-              // action in the corner: an open ticket sends itself, one in progress (or sent) asks for status.
               const actions: TicketAction[] =
                 item.status === 'completed'
                   ? []
@@ -4045,6 +4228,13 @@ export const register: Register = (on, options) => {
                     ? [START_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
                     : [...(item.isHeld === true ? [] : [REOPEN_ACTION]), DONE_ACTION, STATUS_ACTION]
               const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, actions: actions.length })
+              const one = { sentKey, isSent, actions, drawn }
+              prepared.set(item, one)
+
+              return one
+            }
+            const ticket = (item: ItemView, k: number) => {
+              const { sentKey, actions, drawn } = prepare(item)
               const press = (action: TicketAction) => {
                 if (action.mark !== undefined) {
                   void markTicket($, item, action.mark, action.toast).catch(() => undefined)
@@ -4112,14 +4302,46 @@ export const register: Register = (on, options) => {
                               <Text dimColor bold>{column.name}</Text>
                               <Text dimColor>{String(column.items.length)}</Text>
                             </Box>
-                            {column.items.slice(0, isExpanded ? column.items.length : ITEMS_SHOWN).map(ticket)}
+                            {(() => {
+                              const shown = column.items.slice(0, isExpanded ? column.items.length : ITEMS_SHOWN)
+                              // Two tickets with one key get distinct slot IDs.
+                              const seen = new Map<string, number>()
+                              const slotId = (item: ItemView) => {
+                                const base = prepare(item).sentKey
+                                const n = seen.get(base) ?? 0
+                                seen.set(base, n + 1)
+
+                                return n === 0 ? base : `${base}#${n}`
+                              }
+                              const ids = shown.map(slotId)
+                              const byId = new Map(shown.map((item, i) => [ids[i]!, item]))
+                              // A ticket that left keeps an empty space of its height, until a press or SPACE_MS.
+                              return columnSlots(layout, `${prefix}-${file.id}-col-${section.name}-${column.name}`, `${isExpanded}:${ticketW}:${isStacked}`, shown.map((item, i) => ({ id: ids[i]!, h: prepare(item).drawn.height })), nowSync()).map((slot, k) =>
+                                slot.isSpace === true ? card(`${prefix}-${file.id}-${slot.id}`, spaceSvg(ticketW, slot.h)) : ticket(byId.get(slot.id)!, k),
+                              )
+                            })()}
                           </Box>
                         ))}
                       </Box>
                     </Box>
                   )),
                 ]
-              : fileCards(file, view, limit, isTextOpen).map((drawn, k) => card(`${prefix}-${file.id}-${k}`, drawn))
+              : (() => {
+                  // The list view keeps a row's place the same way.
+                  const shown = file.items.slice(0, limit)
+                  const slots = columnSlots(layout, `list:${prefix}-${file.id}`, `${limit}:${isTextOpen}:${cardWidth()}`, shown.map(item => ({ id: `${item.file ?? file.name}:${item.key}`, h: listRowPx(item, isTextOpen) })), nowSync())
+                  const gaps = new Map<number, number>()
+                  let at = 0
+                  for (const slot of slots) {
+                    if (slot.isSpace === true) {
+                      gaps.set(at, (gaps.get(at) ?? 0) + slot.h)
+                    } else {
+                      at += 1
+                    }
+                  }
+
+                  return fileCards(file, view, limit, isTextOpen, gaps).map((drawn, k) => card(`${prefix}-${file.id}-${k}`, drawn))
+                })()
             const more = isTicketView
               ? sections.flatMap(section => section.columns).reduce((sum, column) => sum + Math.max(0, column.items.length - ITEMS_SHOWN), 0)
               : file.items.length - ITEMS_SHOWN
@@ -4175,6 +4397,7 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column">
+        <Text key="hero-line" dimColor>{heroText(view)}</Text>
         {heading('Orchestrator', orchestrator.isActive ? '' : 'Idle')}
         {orchestratorView(orchestrator.history, 0).entries.slice(0, 5).map(entry => (
           <Text key={`orchestrator-${entry.id}`} dimColor={!entry.isRunning}>

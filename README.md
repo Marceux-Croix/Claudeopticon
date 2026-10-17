@@ -6,7 +6,7 @@
 
 Claudeopticon is a mod for Claude Code. It adds a work pane next to your conversation which shows your todo list as a ticket board, what Claude is doing, and what its helpers (Claude Code calls them agents) are doing. You can send a ticket to Claude, ask how it is going, or move it yourself.
 
-![The whole Claudeopticon pane: the top card, then Orchestrator, Agents and the Todo board, top to bottom](docs/images/pane.svg)
+![The whole Claudeopticon pane: the graph of agents and tokens, then Orchestrator, Agents and the Todo board, top to bottom](docs/images/pane.svg)
 
 At its core is a ticket system that lives in your repo. Each line in `.claude_todo/` is a ticket with an ID such as `#T002A`. From the board you can send a ticket to Claude, ask for a status update, or move it between Open, In progress and Done. Claude keeps each ticket's state up to date as it works, and every helper agent is linked to the tickets it works on.
 
@@ -57,11 +57,14 @@ The pane opens at the start of each session. To open it again, run `/claudeoptic
 
 ### Top card
 
-![The top card: todo done, live agents, and session tokens](docs/images/top.svg)
+![The top card: a graph of live agents and tokens since the last compaction over the last 30 minutes](docs/images/top.svg)
 
-- **Todo:** how much of your todo is done.
-- **Agents:** how many agents run, and how far along they are together.
-- **Tokens:** how much text Claude has processed this session (a token is the unit of Claude's usage). The line below counts since the last compaction, when Claude Code shrinks a long conversation to free up room.
+The top card is a live graph of the last 30 minutes, with two lines:
+
+- **Live agents** (blue, left axis): how many helper agents run at each moment.
+- **Tokens since compact** (orange, right axis): how much text Claude has processed since the last compaction, when Claude Code shrinks a long conversation to free up room. A token is the unit of Claude's usage. At a compaction the line drops to zero, and a dashed line marks it.
+
+The small text at the top left gives the totals: all tokens this session, and how many agents have finished. Each line ends in a dot with its current value. The axes grow when a line would leave the graph, and shrink only after the values stay below half for 5 minutes, so they rarely move. The graph redraws at most every 5 seconds while numbers change, and every 30 seconds otherwise. A reload keeps the last 30 minutes. Todo progress is in the Todo section's header.
 
 ### Orchestrator: what Claude is doing
 
@@ -205,6 +208,12 @@ Other values are constants in `hooks/register.tsx`. To change one, edit the file
 | `CLAIM_MIN_CHARS`, `CLAIM_MIN_WORDS`, `CLAIM_MIN_SHARE` | 12, 3, 0.7 | How closely a progress report must match a ticket's text to claim it |
 | `CLAIM_CHECK_MS` | 600000 | Milliseconds a ticket claim stands before the next progress reply asks the agent to confirm it |
 | `MIN_TICKET_PX` | 300 | Narrowest ticket before the board columns stack |
+| `WINDOW_MS` | 1800000 | Milliseconds of history the top graph shows |
+| `SHRINK_MS` | 300000 | Milliseconds a graph axis waits below half before it shrinks |
+| `IDLE_DRAW_MS` | 30000 | Milliseconds between graph redraws when nothing changes |
+| `SERIES_CAP` | 2000 | Points kept per graph line |
+| `SPACE_MS` | 60000 | Milliseconds the space of a removed ticket stays |
+| `MAX_SPACES` | 10 | Most such spaces at once |
 | `TITLE_MAX` | 80 | Longest Orchestrator headline kept, in characters |
 | `DETAIL_MAX` | 300 | Longest action detail kept on the Orchestrator card, in characters |
 
@@ -226,6 +235,7 @@ All requests go through your own Claude Code session. The mod sends nothing anyw
 - Agent data is saved per session, so `/reload-plugins` keeps it. An agent that started while the mod was off shows its model after its next request, and its run time counts from the load.
 - An agent's progress bar comes from the agent's own reports, not from a measurement. It works well for work with clear steps, such as editing a set of files or running tests. For open-ended work, such as research, debugging or review, the agent cannot know its steps in advance, so the total may grow as it goes (step 3 of 5 can become step 4 of 9), or the reports may stop. Some agents skip the reports, and a custom agent without `report_progress` in its tool list shows no bar at all.
 - Ticket buttons sit over the card, so their position is approximate.
+- When a ticket leaves a column or list, its space stays empty until your next click on the pane, or for one minute, so the cards below do not move while you read.
 - The pane finds the `.claude_todo/` folders once, when it starts. A new `.claude_todo/` in the session's folder or a folder above it shows at once. One made elsewhere needs `/reload-plugins` (or a new session).
 - **Consolidate todos**, **Delete empty todos** and **Delete duplicate tickets** are off in a repo whose root folder is the home `.claude` folder (`~/.claude`), because there the repo's root `.claude_todo/` is Claude Code's global todo folder, which the mod never writes to. They are also off in a git worktree. In every other repo the central todo is the repo's own root `.claude_todo/`.
 - Delete empty todos uses the system's own trash command: `trash` or Finder on macOS, `gio trash`, `trash-put` or `kioclient5` on Linux, and PowerShell on Windows. A Linux system with none of these keeps the files. On Windows it works only on a local fixed drive whose Recycle Bin is on, because elsewhere Windows deletes the file outright; on any other drive it keeps the file. Only the macOS command has been run on a real system. The Linux and Windows commands are covered by the mod's own tests only.

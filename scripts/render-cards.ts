@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { agentSvg, boardHead, orchestratorSvg, heroSvg, setWidth, ticketSvg, timelineSvg, type Card } from '../hooks/cards.ts'
-import { agents, entries, orchestrator, openTickets, progressTickets, view } from './sample.ts'
+import { agents, entries, heroView, orchestrator, openTickets, progressTickets, view } from './sample.ts'
 
 const WIDTH = 720
 const GAP = 12
@@ -158,7 +158,7 @@ function pane(): string {
     y += h.height + GAP
   }
 
-  add(heroSvg(view))
+  add(heroSvg(heroView))
   head('Orchestrator', 'Working')
   add(orchestratorSvg(entries))
   const pages = buttonRow(PANE_PAD + 120, y, ['Older'])
@@ -207,7 +207,7 @@ ${parts.join('\n')}
 
 setWidth(WIDTH)
 const files: Record<string, string> = {
-  'top.svg': heroSvg(view).source,
+  'top.svg': heroSvg(heroView).source,
   'orchestrator.svg': orchestratorSvg(entries).source,
   'agents.svg': stack([timelineSvg(view, agents), agentSvg(orchestrator, view), withStop(agentSvg(agents[0]!, view), 'Running'), withStop(agentSvg(agents[1]!, view), 'Running')]),
   'board.svg': board(),

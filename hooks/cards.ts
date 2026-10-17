@@ -86,6 +86,9 @@ export type View = {
   now: number
   /** The session's token burn, when the mod has counted any. */
   usage?: Usage
+  /** What the top card plots, and the axes it plots on (held by the pane across draws). */
+  series?: Series
+  axes?: Axes
 }
 
 /**
@@ -379,34 +382,166 @@ function badge(right: number, y: number, label: string, kind: 'live' | 'ok' | 'd
 <text x="${right - w / 2}" y="${y}" text-anchor="middle" fill="${ink}" font-size="12" font-weight="500">${esc(label)}</text>`
 }
 
-// ---------------------------------------------------------------- summary
+// ---------------------------------------------------------------- top card: live graph
 
-function ringArc(cx: number, cy: number, r: number, share: number): string {
-  const sweep = Math.min(Math.max(share, 0.0001), 0.9999)
-  const a1 = (sweep - 0.25) * 2 * Math.PI
+/** A sample: [time in ms, value]. */
+export type Point = readonly [number, number]
 
-  return `M ${cx} ${cy - r} A ${r} ${r} 0 ${sweep > 0.5 ? 1 : 0} 1 ${(cx + r * Math.cos(a1)).toFixed(2)} ${(cy + r * Math.sin(a1)).toFixed(2)}`
+/**
+ * What the top card plots, kept per session in the store: live agents (a point at each change of
+ * the count), tokens since the last compaction (a point at each usage report), and the times of
+ * the compactions. Points older than the window are dropped, except the last one before it.
+ */
+export type Series = { agents: Point[]; tokens: Point[]; compacts: number[] }
+
+/** The time axis spans the last 30 minutes. */
+export const WINDOW_MS = 30 * 60_000
+/** Most points kept per series. */
+export const SERIES_CAP = 2000
+/** X positions snap to this step, so a redraw between steps sends the same markup. */
+export const QUANT_MS = 30_000
+/** An axis shrinks only after every visible value stayed below half of it for this long. */
+export const SHRINK_MS = 5 * 60_000
+/** The top card's fixed height, in px. */
+export const HERO_H = 300
+/** The smallest axis: 4 agents, 150k tokens. */
+export const AGENT_AXIS_MIN = 4
+export const TOKEN_AXIS_MIN = 150_000
+/** Trace colors, dark theme as drawn; HERO_LIGHT_CSS swaps them in the light theme. */
+export const AGENT_LINE = '#60A5FA'
+export const AGENT_LINE_LIGHT = '#2563EB'
+export const TOKEN_LINE = '#FB923C'
+export const TOKEN_LINE_LIGHT = '#EA580C'
+
+/**
+ * Trace colors by class, not by LIGHT attribute: the orange here is DANGER's dark value, which
+ * LIGHT darkens for text, and the traces want their own light step.
+ */
+const HERO_LIGHT_CSS = `@media (prefers-color-scheme:light){.fa{fill:${AGENT_LINE_LIGHT}}.sa{stroke:${AGENT_LINE_LIGHT}}.ft{fill:${TOKEN_LINE_LIGHT}}.st{stroke:${TOKEN_LINE_LIGHT}}.pt{stop-color:${TOKEN_LINE_LIGHT}}}`
+
+export const emptySeries = (): Series => ({ agents: [], tokens: [], compacts: [] })
+
+/** Drops points older than the window, keeping the last one before it so the line starts at the left edge. */
+export function trimPoints(points: readonly Point[], now: number): Point[] {
+  const from = now - WINDOW_MS
+  const first = points.findIndex(point => point[0] >= from)
+  const start = first === -1 ? Math.max(0, points.length - 1) : Math.max(0, first - 1)
+
+  return points.slice(start).slice(-SERIES_CAP)
 }
 
-/** A figure in a gauge's place: the number large, then its title and line, aligned with the rings. */
-function stat(cx: number, cy: number, value: string, title: string, detail: string): string {
-  const r = 34
-  // 32 px, smaller when the number would not fit its third of the card (a bold digit is about 0.6 em).
-  const size = Math.min(32, Math.floor((W / 3 - 16) / (value.length * 0.6)))
+/** Adds a point when the value changed (or the series is empty), then trims. Returns the same array when nothing changed. */
+export function addPoint(points: readonly Point[], at: number, value: number): Point[] {
+  const last = points[points.length - 1]
+  if (last !== undefined && last[1] === value) {
+    return trimPoints(points, at)
+  }
 
-  return `<text x="${cx}" y="${cy + 11}" text-anchor="middle" fill="${LABEL}" font-size="${size}" font-weight="700" letter-spacing="-0.5">${esc(value)}</text>
-<text x="${cx}" y="${cy + r + 24}" text-anchor="middle" fill="${LABEL}" font-size="14" font-weight="500">${esc(title)}</text>
-<text x="${cx}" y="${cy + r + 42}" text-anchor="middle" fill="${SUB}" font-size="12">${esc(detail)}</text>`
+  return trimPoints([...points, [at, value]], at)
 }
 
-function gauge(cx: number, cy: number, share: number | undefined, value: string, unit: string, title: string, detail: string, stroke = 'url(#progress)', valueSize = 22): string {
-  const r = 34
-  const arc = share === undefined || share <= 0 ? '' : `<path d="${ringArc(cx, cy, r, share)}" fill="none" stroke="${stroke}" stroke-width="6" stroke-linecap="round"/>`
+/** Records a compaction: the marker, and the token line falling to zero. */
+export function addCompact(series: Series, at: number): Series {
+  const from = at - WINDOW_MS
 
-  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}" stroke-width="6"/>${arc}
-<text x="${cx}" y="${cy + valueSize * 0.32}" text-anchor="middle" fill="${LABEL}" font-size="${valueSize}" font-weight="700">${esc(value)}<tspan fill="${SUB}" font-size="13" font-weight="500">${esc(unit)}</tspan></text>
-<text x="${cx}" y="${cy + r + 24}" text-anchor="middle" fill="${LABEL}" font-size="14" font-weight="500">${esc(title)}</text>
-<text x="${cx}" y="${cy + r + 42}" text-anchor="middle" fill="${SUB}" font-size="12">${esc(detail)}</text>`
+  return { ...series, tokens: trimPoints([...series.tokens, [at, 0]], at), compacts: [...series.compacts.filter(one => one >= from), at].slice(-SERIES_CAP) }
+}
+
+/** Reads a stored series back, keeping only well-formed points in time order. */
+export function readKeptSeries(stored: unknown): Series {
+  const out = emptySeries()
+  if (typeof stored !== 'object' || stored === null) {
+    return out
+  }
+  const raw = stored as Partial<Record<keyof Series, unknown>>
+  const points = (list: unknown): Point[] =>
+    Array.isArray(list)
+      ? list.filter((one): one is [number, number] => Array.isArray(one) && one.length === 2 && Number.isFinite(one[0]) && Number.isFinite(one[1])).slice(-SERIES_CAP)
+      : []
+  out.agents = points(raw.agents)
+  out.tokens = points(raw.tokens)
+  out.compacts = Array.isArray(raw.compacts) ? raw.compacts.filter((one): one is number => Number.isFinite(one)).slice(-SERIES_CAP) : []
+
+  return out
+}
+
+/** One axis: its top value, and since when every visible value has been under half of it. */
+export type AxisState = { max: number; lowSince?: number }
+export type Axes = { agents: AxisState; tokens: AxisState }
+type AxisKind = 'agents' | 'tokens'
+
+/** The nth nice top: agents 4, 6, 8, 12, 16, 24, 32...; tokens 150k, 300k, 600k, 900k, 1.5M, 3M, 6M, 9M, 15M... */
+function niceAt(kind: AxisKind, k: number): number {
+  return kind === 'agents'
+    ? (k % 2 === 0 ? 4 : 6) * 2 ** Math.floor(k / 2)
+    : Math.round([1.5, 3, 6, 9][k % 4]! * 10 ** (5 + Math.floor(k / 4)))
+}
+
+/** The smallest nice axis top that holds `peak`. */
+export function niceMax(kind: AxisKind, peak: number): number {
+  for (let k = 0; k < 200; k += 1) {
+    const value = niceAt(kind, k)
+    if (value >= peak) {
+      return value
+    }
+  }
+
+  return niceAt(kind, 199)
+}
+
+/**
+ * The next state of one axis: it grows when the peak would leave the plot, to the next nice step;
+ * it shrinks, to the step that holds the peak, only after the peak stayed under half the axis for
+ * SHRINK_MS. Otherwise it stays.
+ */
+export function stepAxis(prev: AxisState | undefined, kind: AxisKind, peak: number, now: number): AxisState {
+  const need = niceMax(kind, peak)
+  if (prev === undefined || peak > prev.max) {
+    return { max: need }
+  }
+  if (peak < prev.max / 2) {
+    const low = prev.lowSince ?? now
+
+    return now - low >= SHRINK_MS ? { max: need } : { max: prev.max, lowSince: low }
+  }
+
+  return { max: prev.max }
+}
+
+/** The points on the plot: those in the window, and the one before it moved to the left edge. */
+function windowed(points: readonly Point[], from: number): Point[] {
+  const inside = points.filter(point => point[0] >= from)
+  const before = points.filter(point => point[0] < from).pop()
+
+  return before === undefined ? inside : [[from, before[1]], ...inside]
+}
+
+/** Steps both axes for the series as of `now`. */
+export function stepAxes(prev: Axes | undefined, series: Series, now: number): Axes {
+  const from = Math.floor(now / QUANT_MS) * QUANT_MS - WINDOW_MS
+  const peak = (points: readonly Point[]) => windowed(points, from).reduce((top, point) => Math.max(top, point[1]), 0)
+
+  return { agents: stepAxis(prev?.agents, 'agents', peak(series.agents), now), tokens: stepAxis(prev?.tokens, 'tokens', peak(series.tokens), now) }
+}
+
+/** An axis label: integers for agents; for tokens 15M, 3.75M, 450k, with the unit of the top on zero. */
+function axisLabel(value: number, top: number): string {
+  const trim = (n: number) => String(Math.round(n * 100) / 100)
+  if (value === 0) {
+    return top >= 1_000_000 ? '0M' : top >= 1000 ? '0k' : '0'
+  }
+
+  return value >= 1_000_000 ? `${trim(value / 1_000_000)}M` : value >= 1000 ? `${trim(value / 1000)}k` : trim(value)
+}
+
+/** One line for the terminal and the card's alt text: agents, then tokens. */
+export function heroText(view: View): string {
+  const n = view.agents.length
+  const agents = n === 0 ? 'Agents: none yet.' : `Agents: ${view.live} live, ${n - view.live} of ${n} finished.`
+  const usage = view.usage
+  const burn = usage === undefined ? 'Tokens: none counted yet.' : `Tokens: ${tokens(usage.tokens - (usage.atCompact ?? 0))} since compact, ${tokens(usage.tokens)} total.`
+
+  return `${agents} ${burn}`
 }
 
 /**
@@ -429,39 +564,140 @@ export function agentShare(agents: readonly AgentView[]): number {
   return sum / agents.length
 }
 
-/** Two gauges: the share of todo items done, and the share of agents finished, with a live dot. */
+/**
+ * The top card, at a fixed height: the token total and the agents finished in a line, a legend, and
+ * a two-axis plot of the last 30 minutes. Live agents are a step line on the left axis; tokens since
+ * the last compaction are a line with a light fill on the right axis, broken at each compaction,
+ * which also gets a dashed line. Time snaps to QUANT_MS and axes come from `view.axes` (held across
+ * draws by the pane), so the markup changes only with the data and with each QUANT_MS step.
+ */
 export function heroSvg(view: View): Card {
+  const series = view.series ?? emptySeries()
+  const now = Math.floor(view.now / QUANT_MS) * QUANT_MS
+  const from = now - WINDOW_MS
+  const axes = view.axes ?? stepAxes(undefined, series, view.now)
   const n = view.agents.length
-  const ended = n - view.live
-  const at = [W / 6 + 4, W / 2, (W * 5) / 6 - 4]
-  const todo =
-    view.total === 0
-      ? gauge(at[0]!, 62, undefined, '', '', 'Todo', 'No items')
-      : gauge(at[0]!, 62, view.done / view.total, String(Math.round((view.done / view.total) * 100)), '%', 'Todo', `${view.done} of ${view.total} done`)
-  const agents =
-    n === 0
-      ? gauge(at[1]!, 62, undefined, '', '', 'Agents', 'None yet')
-      : gauge(at[1]!, 62, agentShare(view.agents), String(view.live), ' live', 'Agents', `${ended} of ${plural(n, 'agent')} finished`)
-  // Token burn: a number, not a ring.
   const usage = view.usage
-  const burn =
-    usage === undefined
-      ? stat(at[2]!, 62, '', 'Tokens', 'None counted yet')
-      : stat(
-          at[2]!,
-          62,
-          tokens(usage.tokens),
-          'Tokens',
-          usage.atCompact === undefined ? 'No compaction yet' : `${tokens(usage.tokens - usage.atCompact)} since compact`,
-        )
-  const live =
-    view.live > 0
-      ? `<circle cx="${W - PAD - 4}" cy="${PAD + 4}" r="4" fill="${ACCENT}" class="pulse"/>
-<circle cx="${W - PAD - 4}" cy="${PAD + 4}" r="4" fill="${ACCENT}"/>
-<text x="${W - PAD - 14}" y="${PAD + 8}" text-anchor="end" fill="${SUB}" font-size="12">Live</text>`
-      : ''
+  const pad = W >= 700 ? 64 : 48
+  const x0 = pad
+  const x1 = W - pad
+  const legendLeft = 24
+  const legend1 = 'Live agents (left axis)'
+  const legend2 = 'Tokens since compact (right axis)'
+  const second = legendLeft + 20 + Math.ceil(legend1.length * 6.4) + 24
+  const isStacked = second + 20 + legend2.length * 6.4 > W - 24
+  const top = isStacked ? 78 : 62
+  const bottom = 250
+  const height = bottom - top
+  const f = (v: number) => String(Math.round(v * 10) / 10)
+  const px = (t: number) => x0 + Math.min(1, Math.max(0, (t - from) / WINDOW_MS)) * (x1 - x0)
+  const ya = (v: number) => bottom - Math.min(1, v / axes.agents.max) * height
+  const yt = (v: number) => bottom - Math.min(1, v / axes.tokens.max) * height
+  const parts: string[] = []
 
-  return stage(166, `${todo}${agents}${burn}${live}`, `Todo ${view.done} of ${view.total} done. ${view.live} of ${plural(n, 'agent')} live.${usage === undefined ? '' : ` ${tokens(usage.tokens)} tokens used${usage.atCompact === undefined ? '' : `, ${tokens(usage.tokens - usage.atCompact)} since compact`}.`}`)
+  const total = usage === undefined ? '0' : tokens(usage.tokens)
+  const size = W < 520 ? 12 : 13
+  parts.push(
+    `<text x="24" y="30" font-size="${size}"><tspan fill="${LABEL}" font-weight="600">${esc(total)}</tspan><tspan fill="${SUB}"> tokens total</tspan><tspan fill="${FAINT}">  ·  </tspan><tspan fill="${LABEL}" font-weight="600">${n - view.live} of ${n}</tspan><tspan fill="${SUB}"> ${n === 1 ? 'agent' : 'agents'} finished</tspan></text>`,
+  )
+  if (view.live > 0) {
+    parts.push(`<circle cx="${W - PAD - 4}" cy="${PAD + 4}" r="4" fill="${ACCENT}" class="pulse"/>
+<circle cx="${W - PAD - 4}" cy="${PAD + 4}" r="4" fill="${ACCENT}"/>
+<text x="${W - PAD - 14}" y="${PAD + 8}" text-anchor="end" fill="${SUB}" font-size="12">Live</text>`)
+  }
+  const ly2 = isStacked ? 65 : 47
+  const lx2 = isStacked ? legendLeft : second
+  parts.push(
+    `<line x1="24" y1="47" x2="38" y2="47" stroke="${AGENT_LINE}" class="sa" stroke-width="2.5" stroke-linecap="round"/><text x="44" y="51" fill="${SUB}" font-size="12">${legend1}</text>`,
+    `<line x1="${lx2}" y1="${ly2}" x2="${lx2 + 14}" y2="${ly2}" stroke="${TOKEN_LINE}" class="st" stroke-width="2.5" stroke-linecap="round"/><text x="${lx2 + 20}" y="${ly2 + 4}" fill="${SUB}" font-size="12">${legend2}</text>`,
+  )
+
+  // Grid and both axes: 4 intervals; the left axis labels whole numbers only (a top of 6 labels 0, 3, 6).
+  for (let i = 0; i <= 4; i += 1) {
+    const y = bottom - (i / 4) * height
+    const agentTick = (axes.agents.max * i) / 4
+    parts.push(`<line x1="${x0}" y1="${f(y)}" x2="${x1}" y2="${f(y)}" stroke="${RULE}"/>`)
+    if (Number.isInteger(agentTick)) {
+      parts.push(`<text x="${x0 - 10}" y="${f(y + 4)}" text-anchor="end" fill="${AGENT_LINE}" class="fa" font-size="11.5" font-weight="500">${agentTick}</text>`)
+    }
+    parts.push(`<text x="${x1 + 10}" y="${f(y + 4)}" fill="${TOKEN_LINE}" class="ft" font-size="11.5" font-weight="500">${axisLabel((axes.tokens.max * i) / 4, axes.tokens.max)}</text>`)
+  }
+  parts.push(
+    `<text x="${x0}" y="270" text-anchor="start" fill="${FAINT}" font-size="11.5">30m ago</text>`,
+    `<text x="${f(x0 + (x1 - x0) / 3)}" y="270" text-anchor="middle" fill="${FAINT}" font-size="11.5">20m ago</text>`,
+    `<text x="${f(x0 + ((x1 - x0) * 2) / 3)}" y="270" text-anchor="middle" fill="${FAINT}" font-size="11.5">10m ago</text>`,
+    `<text x="${x1}" y="270" text-anchor="end" fill="${FAINT}" font-size="11.5">Now</text>`,
+  )
+
+  const agentPts = windowed(series.agents, from)
+  const tokenPts = windowed(series.tokens, from)
+  const cs = series.compacts.filter(one => one >= from && one <= now + QUANT_MS).sort((a, b) => a - b)
+  const hasData = agentPts.some(point => point[1] > 0) || tokenPts.some(point => point[1] > 0) || cs.length > 0
+  if (!hasData) {
+    parts.push(`<text x="${f((x0 + x1) / 2)}" y="${f((top + bottom) / 2)}" text-anchor="middle" fill="${FAINT}" font-size="13">No activity yet</text>`)
+  } else {
+    // Compactions: a dashed line each, labeled when there is room from the last label.
+    let labelEnd = -Infinity
+    for (const c of cs) {
+      const x = px(c)
+      parts.push(`<line x1="${f(x)}" y1="${top}" x2="${f(x)}" y2="${bottom}" stroke="${FAINT}" stroke-dasharray="3 4"/>`)
+      if (x - labelEnd > 70) {
+        const isLeft = x + 5 + 60 > x1
+        parts.push(`<text x="${f(isLeft ? x - 5 : x + 5)}" y="${top + 12}" text-anchor="${isLeft ? 'end' : 'start'}" fill="${FAINT}" font-size="11">Compacted</text>`)
+        labelEnd = x
+      }
+    }
+    // Tokens: one segment between compactions, each held flat to the compaction or to now.
+    const segments: Point[][] = []
+    for (const point of tokenPts) {
+      const k = cs.filter(c => c <= point[0]).length
+      ;(segments[k] ??= []).push(point)
+    }
+    if (tokenPts.length > 0) {
+      parts.push(`<defs><linearGradient id="tk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${TOKEN_LINE}" class="pt" stop-opacity=".16"/><stop offset="1" stop-color="${TOKEN_LINE}" class="pt" stop-opacity="0"/></linearGradient></defs>`)
+    }
+    segments.forEach((segment, k) => {
+      if (segment === undefined || segment.length === 0) {
+        return
+      }
+      const end = cs[k] ?? now
+      const last = segment[segment.length - 1]!
+      const pts = [...segment, ...(last[0] < end ? [[end, last[1]] as Point] : [])]
+      const line = pts.map(point => `${f(px(point[0]))},${f(yt(point[1]))}`).join(' ')
+      parts.push(
+        `<polygon points="${f(px(pts[0]![0]))},${bottom} ${line} ${f(px(pts[pts.length - 1]![0]))},${bottom}" fill="url(#tk)"/>`,
+        `<polyline points="${line}" fill="none" stroke="${TOKEN_LINE}" class="st" stroke-width="1.25" stroke-linejoin="round"/>`,
+      )
+    })
+    // Agents: a step line.
+    if (agentPts.length > 0) {
+      const path = agentPts.map((point, i) => (i === 0 ? `M ${f(px(point[0]))} ${f(ya(point[1]))}` : `H ${f(px(point[0]))} V ${f(ya(point[1]))}`)).join(' ')
+      parts.push(`<path d="${path} H ${f(px(now))}" fill="none" stroke="${AGENT_LINE}" class="sa" stroke-width="1.5" stroke-linejoin="round"/>`)
+    }
+    // End dots and their values; the lower label drops under its dot when the two would touch.
+    const ends: { y: number; text: string; color: string; cls: string }[] = []
+    const lastAgent = agentPts[agentPts.length - 1]
+    const lastToken = tokenPts[tokenPts.length - 1]
+    if (lastAgent !== undefined) {
+      ends.push({ y: ya(lastAgent[1]), text: `${lastAgent[1]} live`, color: AGENT_LINE, cls: 'fa' })
+    }
+    if (lastToken !== undefined) {
+      ends.push({ y: yt(lastToken[1]), text: tokens(lastToken[1]), color: TOKEN_LINE, cls: 'ft' })
+    }
+    const below = new Set<number>()
+    if (ends.length === 2 && Math.abs(ends[0]!.y - ends[1]!.y) < 16) {
+      below.add(ends[0]!.y > ends[1]!.y ? 0 : 1)
+    }
+    ends.forEach((end, i) => {
+      const isBelow = below.has(i) || end.y - 9 < top + 8
+      parts.push(
+        `<circle cx="${f(x1)}" cy="${f(end.y)}" r="3.5" fill="${end.color}" class="${end.cls}" stroke="${STAGE_BG}" stroke-width="2"/>`,
+        `<text x="${f(x1 - 10)}" y="${f(isBelow ? end.y + 19 : end.y - 9)}" text-anchor="end" fill="${end.color}" class="${end.cls}" font-size="12" font-weight="600">${esc(end.text)}</text>`,
+      )
+    })
+  }
+
+  return stage(HERO_H, parts.join('\n'), `Last 30 minutes: live agents and tokens since compact. ${heroText(view)}`, HERO_LIGHT_CSS)
 }
 
 // ---------------------------------------------------------------- todo
@@ -635,7 +871,26 @@ export function longItems(file: FileView, limit: number): number {
   }).length
 }
 
-export function fileCards(file: FileView, view: View, limit: number, isTextOpen = false): Card[] {
+/** The height of an item's row in the list view, so a row that left can keep its place. */
+export function listRowPx(item: ItemView, isTextOpen = false): number {
+  const room = INNER - 24 - item.owners.length * 36
+
+  return 34 + (wrap(item.text, room, 13, item.owners.length > 0 ? 500 : 400, isTextOpen ? Number.POSITIVE_INFINITY : MAX_LINES).length - 1) * LINE_H
+}
+
+/** An empty space `height` px high: a transparent card with no text and no buttons, that holds a ticket's place. */
+export function spaceSvg(width: number, height: number): Card {
+  const w = Math.max(1, Math.round(width))
+  const h = Math.max(1, Math.round(height))
+
+  return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="presentation"></svg>`, width: w, height: h, alt: '' }
+}
+
+/**
+ * `gaps` holds empty space before an item of the shown list, by its index (the shown length: after
+ * the last): the list view's way to keep the place of an item that left.
+ */
+export function fileCards(file: FileView, view: View, limit: number, isTextOpen = false, gaps: ReadonlyMap<number, number> = new Map()): Card[] {
   const shown = file.items.slice(0, limit)
   const cards: Card[] = []
   let parts: string[] = []
@@ -664,6 +919,7 @@ export function fileCards(file: FileView, view: View, limit: number, isTextOpen 
   }
   begin(true)
   shown.forEach((item, index) => {
+    y += gaps.get(index) ?? 0
     if (count === ITEMS_PER_CARD) {
       flush()
       first = index
@@ -698,6 +954,7 @@ export function fileCards(file: FileView, view: View, limit: number, isTextOpen 
     y += 34 + extra
     count += 1
   })
+  y += gaps.get(shown.length) ?? 0
   if (count > 0 || cards.length === 0) {
     flush()
   }

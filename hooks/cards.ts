@@ -408,10 +408,10 @@ export const HERO_H = 300
 export const AGENT_AXIS_MIN = 4
 export const TOKEN_AXIS_MIN = 150_000
 /** Trace colors, dark theme as drawn; HERO_LIGHT_CSS swaps them in the light theme. */
-export const AGENT_LINE = '#60A5FA'
-export const AGENT_LINE_LIGHT = '#2563EB'
-export const TOKEN_LINE = '#FB923C'
-export const TOKEN_LINE_LIGHT = '#EA580C'
+export const AGENT_LINE = '#FACC15'
+export const AGENT_LINE_LIGHT = '#CA8A04'
+export const TOKEN_LINE = '#A3E635'
+export const TOKEN_LINE_LIGHT = '#65A30D'
 
 /**
  * Trace colors by class, not by LIGHT attribute: the orange here is DANGER's dark value, which
@@ -581,12 +581,18 @@ export function heroSvg(view: View): Card {
   const pad = W >= 700 ? 64 : 48
   const x0 = pad
   const x1 = W - pad
-  const legendLeft = 24
-  const legend1 = 'Live agents (left axis)'
-  const legend2 = 'Tokens since compact (right axis)'
-  const second = legendLeft + 20 + Math.ceil(legend1.length * 6.4) + 24
-  const isStacked = second + 20 + legend2.length * 6.4 > W - 24
-  const top = isStacked ? 78 : 62
+  const legend1 = 'Live agents'
+  const legend2 = 'Tokens since compact'
+  const size = W < 520 ? 12 : 13
+  // The key sits in the top row after the totals text (about 6.5 px a character at 13 px; widths are estimates).
+  // When it would run into "Live", it moves to a row of its own and the plot starts lower.
+  const totalChars = `${usage === undefined ? '0' : tokens(usage.tokens)} tokens total  ·  ${n - view.live} of ${n} agents finished`.length
+  const keyWidth = 19 + Math.round(legend1.length * 6.4) + 5 + 19 + Math.round(legend2.length * 6.4)
+  const inlineLeft = 24 + Math.round(totalChars * 6.5 * (size / 13)) + 29
+  const isInline = inlineLeft + keyWidth <= W - PAD - 14 - 40
+  const keyLeft = isInline ? inlineLeft : 24
+  const keyY = isInline ? 25.5 : 47
+  const top = isInline ? 56 : 62
   const bottom = 250
   const height = bottom - top
   const f = (v: number) => String(Math.round(v * 10) / 10)
@@ -596,7 +602,6 @@ export function heroSvg(view: View): Card {
   const parts: string[] = []
 
   const total = usage === undefined ? '0' : tokens(usage.tokens)
-  const size = W < 520 ? 12 : 13
   parts.push(
     `<text x="24" y="30" font-size="${size}"><tspan fill="${LABEL}" font-weight="600">${esc(total)}</tspan><tspan fill="${SUB}"> tokens total</tspan><tspan fill="${FAINT}">  ·  </tspan><tspan fill="${LABEL}" font-weight="600">${n - view.live} of ${n}</tspan><tspan fill="${SUB}"> ${n === 1 ? 'agent' : 'agents'} finished</tspan></text>`,
   )
@@ -605,11 +610,11 @@ export function heroSvg(view: View): Card {
 <circle cx="${W - PAD - 4}" cy="${PAD + 4}" r="4" fill="${ACCENT}"/>
 <text x="${W - PAD - 14}" y="${PAD + 8}" text-anchor="end" fill="${SUB}" font-size="12">Live</text>`)
   }
-  const ly2 = isStacked ? 65 : 47
-  const lx2 = isStacked ? legendLeft : second
+  const textX1 = keyLeft + 19
+  const keyX2 = textX1 + Math.round(legend1.length * 6.4) + 5
   parts.push(
-    `<line x1="24" y1="47" x2="38" y2="47" stroke="${AGENT_LINE}" class="sa" stroke-width="2.5" stroke-linecap="round"/><text x="44" y="51" fill="${SUB}" font-size="12">${legend1}</text>`,
-    `<line x1="${lx2}" y1="${ly2}" x2="${lx2 + 14}" y2="${ly2}" stroke="${TOKEN_LINE}" class="st" stroke-width="2.5" stroke-linecap="round"/><text x="${lx2 + 20}" y="${ly2 + 4}" fill="${SUB}" font-size="12">${legend2}</text>`,
+    `<line x1="${keyLeft}" y1="${keyY}" x2="${keyLeft + 14}" y2="${keyY}" stroke="${AGENT_LINE}" class="sa" stroke-width="2" stroke-linecap="round"/><text x="${textX1}" y="${keyY + 4.5}" fill="${SUB}" font-size="12">${legend1}</text>`,
+    `<line x1="${keyX2}" y1="${keyY}" x2="${keyX2 + 14}" y2="${keyY}" stroke="${TOKEN_LINE}" class="st" stroke-width="2" stroke-linecap="round"/><text x="${keyX2 + 19}" y="${keyY + 4.5}" fill="${SUB}" font-size="12">${legend2}</text>`,
   )
 
   // Grid and both axes: 4 intervals; the left axis labels whole numbers only (a top of 6 labels 0, 3, 6).
@@ -618,9 +623,9 @@ export function heroSvg(view: View): Card {
     const agentTick = (axes.agents.max * i) / 4
     parts.push(`<line x1="${x0}" y1="${f(y)}" x2="${x1}" y2="${f(y)}" stroke="${RULE}"/>`)
     if (Number.isInteger(agentTick)) {
-      parts.push(`<text x="${x0 - 10}" y="${f(y + 4)}" text-anchor="end" fill="${AGENT_LINE}" class="fa" font-size="11.5" font-weight="500">${agentTick}</text>`)
+      parts.push(`<text x="${x0 - 10}" y="${f(y + 4)}" text-anchor="end" fill="${LABEL}" font-size="11.5">${agentTick}</text>`)
     }
-    parts.push(`<text x="${x1 + 10}" y="${f(y + 4)}" fill="${TOKEN_LINE}" class="ft" font-size="11.5" font-weight="500">${axisLabel((axes.tokens.max * i) / 4, axes.tokens.max)}</text>`)
+    parts.push(`<text x="${x1 + 10}" y="${f(y + 4)}" fill="${LABEL}" font-size="11.5">${axisLabel((axes.tokens.max * i) / 4, axes.tokens.max)}</text>`)
   }
   parts.push(
     `<text x="${x0}" y="270" text-anchor="start" fill="${FAINT}" font-size="11.5">30m ago</text>`,
@@ -654,7 +659,7 @@ export function heroSvg(view: View): Card {
       ;(segments[k] ??= []).push(point)
     }
     if (tokenPts.length > 0) {
-      parts.push(`<defs><linearGradient id="tk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${TOKEN_LINE}" class="pt" stop-opacity=".16"/><stop offset="1" stop-color="${TOKEN_LINE}" class="pt" stop-opacity="0"/></linearGradient></defs>`)
+      parts.push(`<defs><linearGradient id="tk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${TOKEN_LINE}" class="pt" stop-opacity=".18"/><stop offset="1" stop-color="${TOKEN_LINE}" class="pt" stop-opacity="0"/></linearGradient></defs>`)
     }
     segments.forEach((segment, k) => {
       if (segment === undefined || segment.length === 0) {
@@ -675,11 +680,11 @@ export function heroSvg(view: View): Card {
       parts.push(`<path d="${path} H ${f(px(now))}" fill="none" stroke="${AGENT_LINE}" class="sa" stroke-width="1.5" stroke-linejoin="round"/>`)
     }
     // End dots and their values; the lower label drops under its dot when the two would touch.
-    const ends: { y: number; text: string; color: string; cls: string }[] = []
+    const ends: { y: number; text: string; color: string; cls: string; tail?: string }[] = []
     const lastAgent = agentPts[agentPts.length - 1]
     const lastToken = tokenPts[tokenPts.length - 1]
     if (lastAgent !== undefined) {
-      ends.push({ y: ya(lastAgent[1]), text: `${lastAgent[1]} live`, color: AGENT_LINE, cls: 'fa' })
+      ends.push({ y: ya(lastAgent[1]), text: `${lastAgent[1]}`, tail: ' live', color: AGENT_LINE, cls: 'fa' })
     }
     if (lastToken !== undefined) {
       ends.push({ y: yt(lastToken[1]), text: tokens(lastToken[1]), color: TOKEN_LINE, cls: 'ft' })
@@ -692,7 +697,7 @@ export function heroSvg(view: View): Card {
       const isBelow = below.has(i) || end.y - 9 < top + 8
       parts.push(
         `<circle cx="${f(x1)}" cy="${f(end.y)}" r="3.5" fill="${end.color}" class="${end.cls}" stroke="${STAGE_BG}" stroke-width="2"/>`,
-        `<text x="${f(x1 - 10)}" y="${f(isBelow ? end.y + 19 : end.y - 9)}" text-anchor="end" fill="${end.color}" class="${end.cls}" font-size="12" font-weight="600">${esc(end.text)}</text>`,
+        `<text x="${f(x1 - 10)}" y="${f(isBelow ? end.y + 19 : end.y - 9)}" text-anchor="end" font-size="12"><tspan fill="${end.color}" class="${end.cls}" font-weight="600">${esc(end.text)}</tspan>${end.tail === undefined ? '' : `<tspan fill="${SUB}">${end.tail}</tspan>`}</text>`,
       )
     })
   }

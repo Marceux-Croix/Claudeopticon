@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+
+- The top graph is restyled: live agents in yellow, tokens since compact in lime green, axis numbers in plain text color, and the key moved into the top row next to the totals.
+
 ## 0.7.1
 
 - The top card is now a live graph of the last 30 minutes: live agents in blue on the left axis, and tokens since the last compaction in orange on the right axis. The totals sit in small text at the top left. The axes rescale rarely, and a reload keeps the history. The Todo ring is gone; todo progress stays in the Todo header.

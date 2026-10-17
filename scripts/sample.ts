@@ -1,4 +1,5 @@
 /** Sample data for the README images: a fictional CLI tool with a parser, docs and a release. */
+import { ORCH } from '../hooks/cards.ts'
 import type { AgentView, ItemStatus, ItemView, View } from '../hooks/cards.ts'
 
 export const NOW = Date.UTC(2026, 9, 15, 14, 40, 0)
@@ -26,7 +27,7 @@ const open = [
 
 const items = [
   ...done.map(t => item(t, 'completed')),
-  item(live[0]!, 'in_progress', [0]), item(live[1]!, 'in_progress', [1]), item(live[2]!, 'in_progress'), item(live[3]!, 'in_progress'),
+  item(live[0]!, 'in_progress', [0]), item(live[1]!, 'in_progress', [1]), item(live[2]!, 'in_progress', [ORCH]), item(live[3]!, 'in_progress'),
   ...open.map(t => item(t, 'pending')),
 ]
 
@@ -47,6 +48,12 @@ export const agents: AgentView[] = [
   },
 ]
 
+/** The main conversation, working on a ticket itself: it leads the Agents card, before A1. */
+export const orchestrator: AgentView = {
+  index: ORCH, description: 'Orchestrator', type: 'main conversation', status: 'running', isEnded: false,
+  startedAt: NOW, toolCalls: 57, doing: 'Run the parser tests', links: [live[2]!],
+}
+
 /** A second todo file, so the board header shows one row per file. */
 const docs = [
   item('Write the install guide for Linux', 'completed'), item('Write the plugin guide', 'completed'), item('Add the FAQ page', 'completed'),
@@ -55,10 +62,11 @@ const docs = [
 
 export const view: View = {
   files: [
-    { name: 'release.md', id: 'release.md', done: 24, active: 4, total: 40, owners: [0, 1], items, mtimeMs: NOW - MIN },
+    { name: 'release.md', id: 'release.md', done: 24, active: 4, total: 40, owners: [0, 1, ORCH], items, mtimeMs: NOW - MIN },
     { name: 'docs.md', id: 'docs.md', done: 3, active: 1, total: 6, owners: [], items: docs, mtimeMs: NOW - 5 * MIN },
   ],
   agents,
+  orchestrator,
   done: 27, active: 5, total: 46, completed: 27, live: 2, now: NOW,
   usage: { tokens: 17_384_000, atCompact: 12_100_000, since: 0 },
 }

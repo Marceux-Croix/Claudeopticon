@@ -30,6 +30,8 @@ The mod shows the tickets of every `.claude_todo/` folder in the repo together, 
 
 Strongest first: the ID in the agent's description or prompt (a whole ID: `#T1` does not match `#T12`); a `report_progress` claim; a Haiku match of the task against open items (at most three); a quote of the item's text. Only running agents link.
 
+The main conversation (the orchestrator) claims a ticket when, in this session, an Edit or Write of a todo file by the main conversation moves its box to `[~]`, when a main-conversation `report_progress` names it, or when the Send or status button sends it. A helper agent's edit or report never claims for it. A claim ends when the ticket is done or gone, or when its box goes back to `[ ]` after it was seen in progress. Claims are stored per session (`orchestrator:<session id>`), so a reload keeps them. Its card shows Running between `prompt.submit` and the main `turn.complete`, and its O tag blinks only then. A Bash edit of a todo file does not claim.
+
 ## Categories
 
 Haiku sorts open items into at most five categories, kept in `.claude_todo/categories.json`. On start it sorts unsorted items, 60 per call and up to 300. After that it sorts new items at most every 30 seconds.

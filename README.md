@@ -75,6 +75,8 @@ This card lists what Claude does itself, not its agents. Each line is the short 
 
 Each agent gets a card, labeled A1, A2, and so on, in start order. Each agent has its own color. A card shows what the agent was asked to do, its tickets, its progress ("Step 3 of 7" with a bar), its run time, tool calls and tokens, and what it does now. A timeline above the cards shows one bar per agent.
 
+Claude sometimes works on a ticket itself, with no helper agent. Then an **Orchestrator** card, tagged **O**, shows above the agent cards. It shows the tickets Claude works on, Running while Claude works and Idle between turns, and Claude's last action. A ticket counts as Claude's own when Claude moves it to in progress or names it in a progress report, or when you send it with `⋙`. It stops counting when it leaves In progress. The Orchestrator card has no Stop button and does not count in the top card.
+
 A running agent has a **Stop** button (⊖) left of its status. Stop ends the agent at once. It gets no chance to finish its step or write a summary. Use it when an agent has gone wrong.
 
 An agent that finished its work but was never stopped shows **Idle**, with the time it finished and its last command marked "Last:". It does not count as live, and it keeps its Stop button so you can close it.
@@ -87,7 +89,7 @@ Finished agents are hidden. **Show finished agents** brings them back, grayed ou
 
 ![The ticket board](docs/images/board.svg)
 
-The pane draws one board for all your todo files, with the columns **In progress**, **Open** and **Done**. Above it, one header card has a row for each file: its name, its progress bar, and its own "done of total" count. If two files have the same name, the row also shows the folder in dim text. A ticket shows its number, its group, its status, and the tags of the agents working on it. The tags blink in the agent's color. When an agent starts on a ticket, the ticket moves to In progress by itself.
+The pane draws one board for all your todo files, with the columns **In progress**, **Open** and **Done**. Above it, one header card has a row for each file: its name, its progress bar, and its own "done of total" count. If two files have the same name, the row also shows the folder in dim text. A ticket shows its number, its group, its status, and the tags of the agents working on it. The tags blink in the agent's color while it works, and the **O** tag blinks while Claude works on the ticket itself. When an agent starts on a ticket, the ticket moves to In progress by itself.
 
 Tickets that are not done have buttons on the bottom edge:
 

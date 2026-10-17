@@ -1,7 +1,7 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { AgentRow, AgentRowStatus, Progress, TodoFile, TodoItem, TodoStatus } from '../types'
-import { ACCENT, DANGER, GREEN, clock, tokens, orchestratorSvg, plural, agentColor, agentLabel, agentSvg, stopInsetPx, cardWidth, elapsed, boardHead, fileCards, heroSvg, longItems, ticketSvg, setWidth, timelineSvg } from './cards'
+import { ACCENT, DANGER, GREEN, ORCH, clock, tokens, orchestratorSvg, plural, agentColor, agentLabel, agentSvg, stopInsetPx, cardWidth, elapsed, boardHead, fileCards, heroSvg, longItems, ticketSvg, setWidth, timelineSvg } from './cards'
 import type { AgentView, FileView, ItemStatus, ItemView, Usage, View } from './cards'
 
 const PANE = 'claudeopticon'
@@ -138,6 +138,12 @@ let usage: Usage | undefined
 export type OrchestratorEntry = { id: number; line: string; at: number; isRunning: boolean }
 let orchestrator: { isActive: boolean; history: OrchestratorEntry[] } = { isActive: false, history: [] }
 let callCount = 0
+/**
+ * The tickets the orchestrator handles itself, by item key (qualifiedKey): the value is whether a
+ * scan has seen the ticket in progress since the claim. A claim ends when the ticket is done, gone,
+ * or back to open after it was seen in progress. A ticket an agent works on may be in here too.
+ */
+const orchTickets = new Map<string, boolean>()
 /** Which page of the history the card shows: 0 the newest. */
 let orchestratorPage = 0
 /** Categories the person hid, by name; their items leave the list and the board (search still finds them). */
@@ -164,6 +170,20 @@ async function agentsKey($: EngineInterface): Promise<string> {
   return `agents:${await $.session.id()}`
 }
 
+/** The orchestrator's tickets are kept beside the agent rows, per session, so a reload keeps them. */
+async function orchKey($: EngineInterface): Promise<string> {
+  return `orchestrator:${await $.session.id()}`
+}
+
+/** Reads the stored ticket claims back, keeping only well-formed pairs. */
+export function readKeptTickets(stored: unknown): [string, boolean][] {
+  if (!Array.isArray(stored)) {
+    return []
+  }
+
+  return stored.filter((pair): pair is [string, boolean] => Array.isArray(pair) && typeof pair[0] === 'string' && typeof pair[1] === 'boolean')
+}
+
 /** Reads a stored list back into rows, keeping only entries with the fields every row has. */
 export function readKeptAgents(stored: unknown): AgentRow[] {
   if (!Array.isArray(stored)) {
@@ -186,6 +206,11 @@ async function loadAgents($: EngineInterface): Promise<void> {
   }
   isAgentsLoaded = true
   const kept = readKeptAgents(await $.store.get(await agentsKey($)).catch(() => undefined))
+  for (const [key, seen] of readKeptTickets(await $.store.get(await orchKey($)).catch(() => undefined))) {
+    if (!orchTickets.has(key)) {
+      orchTickets.set(key, seen)
+    }
+  }
   const seen = new Set(agentRows.map(row => row.id))
   agentRows = [...kept.filter(row => !seen.has(row.id)), ...agentRows]
   for (const row of kept) {
@@ -197,10 +222,17 @@ async function loadAgents($: EngineInterface): Promise<void> {
   savedAgents = ''
 }
 
+let savedTickets = ''
+
 /** Stores the rows when they changed since the last store, after the kept rows are loaded. */
 function saveAgents($: EngineInterface): void {
   if (!isAgentsLoaded) {
     return
+  }
+  const tickets = JSON.stringify([...orchTickets])
+  if (tickets !== savedTickets) {
+    savedTickets = tickets
+    void orchKey($).then(key => $.store.set(key, [...orchTickets])).catch(() => undefined)
   }
   const rows = agentRows.slice(-KEPT_AGENTS)
   const text = JSON.stringify(rows)
@@ -1269,6 +1301,9 @@ async function scan($: EngineInterface, isFull = false): Promise<void> {
     todoFiles = kept
     redraw($)
   }
+  if (pruneTickets()) {
+    redraw($)
+  }
   const sign = `${hasDupTickets}|${emptyFiles.map(one => one.path).join('|')}`
   emptyFiles = empties
   await refreshDupTickets($)
@@ -1684,6 +1719,16 @@ export function labelNote(text: string, rows: readonly AgentRow[]): string | und
 
 // ---------------------------------------------------------------- links
 
+/** For each claim, the one item that best matches it, if any matches (see claimScore). */
+function bestMatches<T extends { item: TodoItem }>(open: readonly T[], claims: readonly string[]): T[] {
+  return claims.flatMap(claim => {
+    const scored = open.map(link => ({ link, score: claimScore(claim, link.item) })).filter(one => one.score > 0)
+    const best = scored.sort((x, y) => y.score - x.score)[0]
+
+    return best === undefined ? [] : [best.link]
+  })
+}
+
 /** `file` is the file's pane ID (its folder and name), `index` the item's place in it. */
 export type Link = { file: string; index: number; item: TodoItem }
 
@@ -1704,12 +1749,7 @@ export function linkAgents(list: readonly TodoFile[], rows: readonly AgentRow[])
       continue
     }
     const byId = open.filter(link => link.item.id !== undefined && new RegExp(`#${link.item.id.toLowerCase()}(?![0-9a-z])`).test(row.brief))
-    const byClaim = [...(row.claims ?? []), ...(row.autoClaims ?? [])].flatMap(claim => {
-      const scored = open.map(link => ({ link, score: claimScore(claim, link.item) })).filter(one => one.score > 0)
-      const best = scored.sort((x, y) => y.score - x.score)[0]
-
-      return best === undefined ? [] : [best.link]
-    })
+    const byClaim = bestMatches(open, [...(row.claims ?? []), ...(row.autoClaims ?? [])])
     const claimed = [...byId, ...byClaim].filter((link, i, all) => all.findIndex(one => one.file === link.file && one.index === link.index) === i)
     const byText = claimed.length > 0 ? [] : open.filter(link => {
       const text = normalize(link.item.text)
@@ -1742,8 +1782,11 @@ function clip(text: string, width: number): string {
 
 // ---------------------------------------------------------------- view
 
+/** The orchestrator as the view needs it: its ticket keys, whether a turn runs, and its call summary. */
+export type OrchestratorState = { keys: ReadonlySet<string>; isRunning: boolean; doing?: string; toolCalls: number }
+
 /** What the pane draws, worked out once for the cards and the terminal alike. */
-export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], now: number): View {
+export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], now: number, orch?: OrchestratorState): View {
   const links = linkAgents(list, rows)
   const itemOwners = new Map<string, number[]>()
   const fileOwners = new Map<string, number[]>()
@@ -1754,6 +1797,20 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
       fileOwners.set(link.file, [...new Set([...(fileOwners.get(link.file) ?? []), i])])
     }
   })
+  // The orchestrator owns last in an item's list, so an agent's color still leads a shared ticket.
+  const orchLinks: string[] = []
+  if (orch !== undefined && orch.keys.size > 0) {
+    for (const file of list.filter(one => one.isArchived !== true)) {
+      file.items.forEach((item, index) => {
+        if (item.status !== 'completed' && orch.keys.has(qualifiedKey(file, item))) {
+          const key = `${fileId(file)}:${index}`
+          itemOwners.set(key, [...(itemOwners.get(key) ?? []), ORCH])
+          fileOwners.set(fileId(file), [...new Set([...(fileOwners.get(fileId(file)) ?? []), ORCH])])
+          orchLinks.push(item.text)
+        }
+      })
+    }
+  }
 
   // One FileView per file: the ticket board shares its columns across files, and the header card
   // has one row per file. Each item keeps its source (folder, file, path) for the writes and the
@@ -1838,6 +1895,22 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     ...all,
     live: rows.filter(row => !isEnded(row.status) && row.idleSince === undefined).length,
     now,
+    ...(orch === undefined || orchLinks.length === 0
+      ? {}
+      : {
+          orchestrator: {
+            index: ORCH,
+            description: 'Orchestrator',
+            type: 'main conversation',
+            status: orch.isRunning ? 'running' : 'idle',
+            isEnded: false,
+            isIdle: !orch.isRunning,
+            startedAt: now,
+            toolCalls: orch.toolCalls,
+            ...(orch.doing === undefined ? {} : { doing: orch.doing }),
+            links: orchLinks,
+          } satisfies AgentView,
+        }),
   }
 }
 
@@ -2191,6 +2264,71 @@ export function callSummary(tool: string, input: Record<string, unknown>): strin
   return typeof description === 'string' && description.trim() !== '' ? description.trim().split('\n')[0]! : describeCall(tool, input)
 }
 
+// ---------------------------------------------------------------- orchestrator tickets
+
+/** The live tickets of the todo files: item key to status. With `path`, only the file at that path (else all, when none matches). */
+function ticketStatuses(path?: string): Map<string, ItemStatus> {
+  const files = todoFiles.filter(file => file.isArchived !== true)
+  const same = path === undefined ? [] : files.filter(file => path === `${file.folder}/${file.name}` || path.endsWith(`/${filePath(file)}`))
+  const statuses = new Map<string, ItemStatus>()
+  for (const file of same.length > 0 ? same : files) {
+    for (const item of file.items) {
+      const key = qualifiedKey(file, item)
+      // One key in two files: in progress wins over open over done.
+      const rank = (status?: ItemStatus) => (status === 'in_progress' ? 2 : status === 'pending' ? 1 : 0)
+      if (rank(item.status) >= rank(statuses.get(key))) {
+        statuses.set(key, item.status)
+      }
+    }
+  }
+
+  return statuses
+}
+
+/** Marks tickets as the orchestrator's own; a new claim is stored and drawn at once. */
+function claimTickets($: EngineInterface, keys: readonly string[]): void {
+  const statuses = ticketStatuses()
+  const fresh = keys.filter(key => !orchTickets.has(key))
+  for (const key of fresh) {
+    orchTickets.set(key, statuses.get(key) === 'in_progress')
+  }
+  if (fresh.length > 0) {
+    redraw($)
+  }
+}
+
+/**
+ * Ends the claims on tickets that are done or gone, and on tickets back to open after they were
+ * seen in progress. A ticket sent to Claude is open until Claude starts it, so an open ticket never
+ * seen in progress stays claimed. Skipped while no todo file is known, as before the first scan.
+ */
+function pruneTickets(): boolean {
+  if (todoFiles.length === 0) {
+    return false
+  }
+  const statuses = ticketStatuses()
+  let isChanged = false
+  for (const [key, seen] of orchTickets) {
+    const status = statuses.get(key)
+    if (status === undefined || status === 'completed' || (status === 'pending' && seen)) {
+      orchTickets.delete(key)
+      isChanged = true
+    } else if (status === 'in_progress' && !seen) {
+      orchTickets.set(key, true)
+      isChanged = true
+    }
+  }
+
+  return isChanged
+}
+
+/** The orchestrator as the view draws it: Running between the prompt and the end of a main-conversation turn. */
+function orchestratorState(): OrchestratorState {
+  const last = orchestrator.history[orchestrator.history.length - 1]
+
+  return { keys: new Set(orchTickets.keys()), isRunning: orchestrator.isActive, toolCalls: orchestrator.history.length, ...(last === undefined ? {} : { doing: last.line }) }
+}
+
 const ORCHESTRATOR_KEPT = 1000
 const ORCHESTRATOR_PAGE = 5
 
@@ -2452,6 +2590,12 @@ export const register: Register = (on, options) => {
       )
       redraw($)
     }
+    if (id === undefined && claims !== undefined) {
+      // The main conversation names tickets: they are its own. A helper's claim never is.
+      await scan($).catch(() => undefined)
+      const open = [...todoFiles.filter(file => file.isArchived !== true).flatMap(file => file.items.map(item => ({ key: qualifiedKey(file, item), item })))].filter(one => one.item.status !== 'completed')
+      claimTickets($, bestMatches(open, claims).map(one => one.key))
+    }
     let reply = 'Noted.'
     if (id !== undefined) {
       const time = await $.clock.now()
@@ -2490,15 +2634,20 @@ export const register: Register = (on, options) => {
       orchestrator = { isActive: true, history: [...orchestrator.history, entry].slice(-ORCHESTRATOR_KEPT) }
       redraw($)
     }
+    const path = (e as { file_path?: unknown }).file_path
+    // What the main conversation's edit of a todo file starts: the tickets it sets in progress.
+    const before = id === undefined && typeof path === 'string' && path.includes(DIR) ? ticketStatuses(path) : undefined
     const ran = await next(e).finally(() => {
       if (entry !== undefined) {
         entry.isRunning = false
         redraw($)
       }
     })
-    const path = (e as { file_path?: unknown }).file_path
     if (typeof path === 'string' && path.includes(DIR)) {
       await scan($).catch(() => undefined)
+      if (before !== undefined) {
+        claimTickets($, [...ticketStatuses(path)].filter(([key, status]) => status === 'in_progress' && before.get(key) !== 'in_progress').map(([key]) => key))
+      }
     }
     // Moves made by hand reach the main conversation with its next tool result, mid-turn.
     const queued = id === undefined ? queuedNotes() : []
@@ -2610,7 +2759,10 @@ export const register: Register = (on, options) => {
     const Input = 'Input' in table ? table.Input : undefined
     const rows = agentRows
     const time = Math.max(clockMs, ...rows.map(row => row.endedAt ?? row.startedAt))
-    const view = { ...buildView(todoFiles, rows, time), ...(usage === undefined ? {} : { usage }) }
+    if (pruneTickets()) {
+      saveAgents($)
+    }
+    const view = { ...buildView(todoFiles, rows, time, orchestratorState()), ...(usage === undefined ? {} : { usage }) }
 
     const Svg = e.surface !== 'terminal' && 'Svg' in table ? table.Svg : undefined
     if (Svg !== undefined) {
@@ -2683,7 +2835,7 @@ export const register: Register = (on, options) => {
           {section(
             'agents',
             'Agents',
-            view.agents.length === 0 ? 'None in this session yet' : `${active.length} live, ${idle.length > 0 ? `${idle.length} idle, ` : ''}${finished.length} finished`,
+            view.agents.length === 0 ? (view.orchestrator === undefined ? 'None in this session yet' : 'No helper agents yet') : `${active.length} live, ${idle.length > 0 ? `${idle.length} idle, ` : ''}${finished.length} finished`,
             finished.length === 0 ? undefined : isFinishedShown ? 'Hide finished agents' : `Show finished agents (${finished.length})`,
             () => {
               isFinishedShown = !isFinishedShown
@@ -2691,6 +2843,8 @@ export const register: Register = (on, options) => {
             },
           )}
           {view.agents.length > 0 && card('timeline', timelineSvg(view, shown))}
+          {/* The orchestrator leads, before A1; no Stop button, no timeline bar. */}
+          {view.orchestrator !== undefined && card('agent-orchestrator-card', agentSvg(view.orchestrator, view))}
           {shown.map(agent => (
             // A live agent's Stop button sits left of its status badge, in the room the card keeps free.
             <Box key={`agent-${agent.index}`} flexDirection="column" position="relative">
@@ -2830,6 +2984,8 @@ export const register: Register = (on, options) => {
                 if (action === SEND_ACTION) {
                   sentTickets.add(sentKey)
                 }
+                // The prompt goes to the main conversation: the ticket is the orchestrator's.
+                claimTickets($, [item.key])
                 void $.prompt.submit({ text: action.prompt(item.path ?? `${DIR}/${item.file ?? file.name}`, item.text), asUser: true }).catch(() => undefined)
                 $.ui.toast(`${action.toast}: ${ticketSummary(item.text, 60)}`)
                 redraw($)
@@ -2963,6 +3119,26 @@ export const register: Register = (on, options) => {
               redraw($)
             }}
           />
+        )}
+        {view.orchestrator !== undefined && (
+          <Box key="a-orchestrator" flexDirection="column" marginTop={1}>
+            <Box>
+              {chip(ORCH)}
+              <Text bold>{` ${view.orchestrator.description}`}</Text>
+            </Box>
+            {view.orchestrator.links.map(link => (
+              <Box key={`link-${link}`}>
+                <Text dimColor>{'  Working on '}</Text>
+                <Text color={agentColor(ORCH)}>{clip(link, columns - 16)}</Text>
+              </Box>
+            ))}
+            <Text dimColor>
+              {`  ${view.orchestrator.type} · `}
+              <Text color={view.orchestrator.isIdle ? undefined : ACCENT}>{view.orchestrator.isIdle ? 'idle' : 'running'}</Text>
+              {` · ${view.orchestrator.toolCalls} tool call${view.orchestrator.toolCalls === 1 ? '' : 's'}`}
+            </Text>
+            {view.orchestrator.doing !== undefined && <Text dimColor>{`  ${view.orchestrator.isIdle ? 'Last: ' : ''}${clip(view.orchestrator.doing, columns - 12)}`}</Text>}
+          </Box>
         )}
         {ledger(view).shown.map(agent => {
           const failed = agent.status === 'failed' || agent.status === 'killed'

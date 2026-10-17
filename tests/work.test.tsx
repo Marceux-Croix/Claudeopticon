@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { boardHead, clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
-import { psPath, applyRefRenames, removeDuplicateTickets, removedNote, foldParts, itemLines, renumberLines, appendSections, applyRenames, nonBlankLines, renameNote, notifiedEnd, RULES, callSummary, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
+import { ORCH, boardHead, clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
+import { psPath, applyRefRenames, removeDuplicateTickets, removedNote, foldParts, itemLines, renumberLines, appendSections, applyRenames, nonBlankLines, renameNote, notifiedEnd, RULES, callSummary, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, readKeptTickets, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
 import type { AgentRow, TodoFile } from '../types'
 import type { FileView } from '../hooks/cards'
 
@@ -1976,4 +1976,193 @@ test('a central file that cannot be read stops Consolidate and writes nothing', 
   expect(writes).toEqual([])
   expect(files['/repo/mods/x/.claude_todo/TODO.md']).toBe('- [ ] two')
   expect(toasts.join('\n')).toContain('Could not consolidate')
+})
+
+// ---------------------------------------------------------------- the orchestrator owns tickets
+
+const ORCH_FILE = '- [ ] #T1 Ship the parser\n- [ ] #T2 Review the copy\n- [~] #T3 Check the invoice'
+
+/** A pane over one todo file the test can edit; `edit` is what the main conversation or a helper does to it. */
+function orchSetup($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1], store = new Map<string, unknown>()) {
+  const state = { file: ORCH_FILE, mtime: 1 }
+  mock.clock(on)
+  on('store.get', (_$, e) => ({ value: store.get(e.key) }) as never)
+  on('store.set', (_$, e) => {
+    store.set(e.key, e.value)
+
+    return { value: undefined } as never
+  })
+  on('session.id', () => ({ value: 'sess-1' }) as never)
+  on('fs.exists', (_$, e) => ({ value: e.path.endsWith('.claude_todo') }))
+  on('fs.list', () => ({ value: [{ name: 'OPEN.md', kind: 'file', size: 1, mtimeMs: state.mtime, isLink: false }] }))
+  on('fs.read', () => ({ value: state.file }))
+  on('agent.list', () => ({ value: [{ id: 'a1', description: 'Helper', type: 'general-purpose', status: 'running' }] }))
+  on('prompt.submit', (_$, e) => ({ text: e.text }))
+  on('turn.complete', () => ({ text: '' }) as never)
+  on('tool.call', { tool: 'Edit' }, () => ({ result: {} }) as never)
+  const edit = (next: string, agentId?: string) => {
+    state.file = next
+    state.mtime += 1
+
+    return $.tool.call({ tool: 'Edit', file_path: '/repo/.claude_todo/OPEN.md', ...(agentId === undefined ? {} : { agentId }) } as never)
+  }
+
+  return { state, store, edit }
+}
+
+/** Opens the pane's session as a start would: the scan, then the first agent list, which also loads the kept data. */
+async function begin($: Parameters<Parameters<typeof test>[1]>[0]): Promise<void> {
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't0', agentId: 'a1' } as never).catch(() => undefined)
+}
+
+const orchCard = (drawn: string) => drawn.includes('O, Orchestrator')
+
+test('the view gives the orchestrator an owner slot after the agents, no timeline row and no share of the agent count', () => {
+  const list: TodoFile[] = [{ name: 'A.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo('- [ ] #T1 Ship the parser\n- [~] #T3 Check the invoice') }]
+  const rows = [row({ id: 'a', brief: '#t3' })]
+  const running = buildView(list, rows, 0, { keys: new Set(['#t1', '#t3']), isRunning: true, toolCalls: 4, doing: 'Run the tests' })
+  expect(running.files[0]?.items.map(item => item.owners)).toEqual([[ORCH], [0, ORCH]])
+  expect(running.orchestrator).toMatchObject({ index: ORCH, status: 'running', isIdle: false, doing: 'Run the tests', links: ['#T1 Ship the parser', '#T3 Check the invoice'] })
+  expect(running.agents.length).toBe(1)
+  expect(running.live).toBe(1)
+  expect(buildView(list, rows, 0, { keys: new Set(['#t1']), isRunning: false, toolCalls: 0 }).orchestrator).toMatchObject({ status: 'idle', isIdle: true })
+  expect(buildView(list, rows, 0, { keys: new Set(['#nothing']), isRunning: true, toolCalls: 0 }).orchestrator).toBeUndefined()
+  expect(buildView(list, rows, 0).orchestrator).toBeUndefined()
+})
+
+test('an orchestrator ticket tag is O in its own color and blinks only while the orchestrator runs', () => {
+  const list: TodoFile[] = [{ name: 'A.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo('- [~] #T3 Check the invoice') }]
+  const make = (isRunning: boolean) => buildView(list, [], 0, { keys: new Set(['#t3']), isRunning, toolCalls: 1 })
+  expect(AGENT_COLORS).not.toContain('#1fa7b8')
+  for (const [isRunning, blinks] of [[true, true], [false, false]] as const) {
+    const view = make(isRunning)
+    const item = view.files[0]!.items[0]!
+    const ticket = ticketSvg(item, view, 400, { id: '#T3', isSent: false }).source
+    const listed = fileCards(view.files[0]!, view, 12)[0]!.source
+    for (const source of [ticket, listed]) {
+      expect(source).toContain('#1fa7b8')
+      expect(source).toContain('>O<')
+      expect(source.includes('@keyframes k0')).toBe(blinks)
+    }
+    const card = agentSvg(view.orchestrator!, view).source
+    expect(card).toContain(isRunning ? '>Running<' : '>Idle<')
+    expect(card.includes('@keyframes k0')).toBe(blinks)
+    expect(card).toContain('>O<')
+    expect(card).toContain('#T3 Check the invoice')
+  }
+})
+
+test('a ticket the main conversation sets in progress by an edit is the orchestrator\'s; a helper\'s edit is not', async ($, on) => {
+  const { edit } = orchSetup($, on)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const drawn = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(orchCard(await drawn())).toBe(false)
+  await edit('- [~] #T1 Ship the parser\n- [ ] #T2 Review the copy\n- [~] #T3 Check the invoice', 'a1')
+  expect(orchCard(await drawn())).toBe(false)
+  await edit('- [~] #T1 Ship the parser\n- [~] #T2 Review the copy\n- [~] #T3 Check the invoice')
+  const after = await drawn()
+  expect(orchCard(after)).toBe(true)
+  const card = (await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard) ?? ''
+  expect(card).toContain('#T2 Review the copy')
+  expect(card).not.toContain('#T1 Ship the parser')
+  expect(card).not.toContain('#T3 Check the invoice')
+  // The orchestrator leads the Agents card, before A1, and is not one of the agents counted on top.
+  expect(after.indexOf('O, Orchestrator')).toBeLessThan(after.indexOf('A1, Helper'))
+  expect(after).toContain('0 of 1 agent')
+})
+
+test('a main-conversation report_progress that names a ticket makes it the orchestrator\'s; a helper\'s does not', async ($, on) => {
+  orchSetup($, on)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const drawn = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  await $.tool.call({ tool: 'mcp__claudeopticon__report_progress', done: 0, total: 2, items: ['#T2'], agentId: 'a1' } as never)
+  expect(orchCard(await drawn())).toBe(false)
+  await $.tool.call({ tool: 'mcp__claudeopticon__report_progress', done: 0, total: 2, items: ['#T2'] } as never)
+  const after = await drawn()
+  expect(orchCard(after)).toBe(true)
+  expect(after).toContain('#T2 Review the copy')
+})
+
+test('Send to Claude makes the ticket the orchestrator\'s, held in progress while its box is still open', async ($, on) => {
+  orchSetup($, on)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const drawn = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(orchCard(await drawn())).toBe(false)
+  await ui.press({ key: 'ticket-OPEN.md-#t1' })
+  const card = (await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard) ?? ''
+  expect(card).toContain('#T1 Ship the parser')
+  expect(card).not.toContain('#T2 Review the copy')
+  // The status button on a ticket already in progress claims it too.
+  await ui.press({ key: 'ticket-OPEN.md-#t3' })
+  expect((await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard)).toContain('#T3 Check the invoice')
+})
+
+test('the orchestrator card says Running during a turn and Idle after it, and the ticket blinks only while it runs', async ($, on) => {
+  const { edit } = orchSetup($, on)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const card = async () => (await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard) ?? ''
+  const ticket = async () => (await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(text => text.includes('Ship the parser') && text.includes('>O<')) ?? ''
+  await $.prompt.submit({ text: 'Do T1', asUser: true } as never)
+  await edit('- [~] #T1 Ship the parser\n- [ ] #T2 Review the copy\n- [~] #T3 Check the invoice')
+  expect(await card()).toContain('O, Orchestrator: Running')
+  expect(await card()).toContain('@keyframes k0')
+  expect(await ticket()).toContain('@keyframes k0')
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1' } as never).catch(() => undefined)
+  expect(await card()).toContain('O, Orchestrator: Idle')
+  expect(await card()).not.toContain('@keyframes k0')
+  expect(await ticket()).toContain('#1fa7b8')
+  expect(await ticket()).not.toContain('@keyframes k0')
+  await $.prompt.submit({ text: 'More', asUser: true } as never)
+  expect(await ticket()).toContain('@keyframes k0')
+})
+
+test('the orchestrator keeps a ticket until it is no longer in progress, and drops the card with the last one', async ($, on) => {
+  const { edit } = orchSetup($, on)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const drawn = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  await edit('- [~] #T1 Ship the parser\n- [ ] #T2 Review the copy\n- [~] #T3 Check the invoice')
+  await edit('- [~] #T1 Ship the parser\n- [~] #T2 Review the copy\n- [~] #T3 Check the invoice')
+  expect(orchCard(await drawn())).toBe(true)
+  await edit('- [~] #T1 Ship the parser\n- [x] #T2 Review the copy\n- [~] #T3 Check the invoice')
+  expect(orchCard(await drawn())).toBe(true)
+  await edit('- [~] #T1 Ship the parser\n- [x] #T2 Review the copy\n- [x] #T3 Check the invoice')
+  expect(orchCard(await drawn())).toBe(true)
+  await edit('- [ ] #T1 Ship the parser\n- [x] #T2 Review the copy\n- [x] #T3 Check the invoice')
+  expect(orchCard(await drawn())).toBe(false)
+})
+
+test('the orchestrator tickets are kept by session, and read back with only well-formed pairs', async ($, on) => {
+  const store = new Map<string, unknown>()
+  const { edit } = orchSetup($, on, store)
+  await begin($)
+  await edit('- [ ] #T1 Ship the parser\n- [ ] #T2 Review the copy\n- [~] #T3 Check the invoice'.replace('[ ] #T1', '[~] #T1'))
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', agentId: 'a1' } as never).catch(() => undefined)
+  expect(readKeptTickets(store.get('orchestrator:sess-1'))).toEqual([['#t1', true]])
+  expect(readKeptTickets([['x', true], ['y'], 3, ['z', 'no']])).toEqual([['x', true]])
+})
+
+test('a stored claim comes back after a reload, and a claim on a ticket that is gone is dropped', async ($, on) => {
+  const store = new Map<string, unknown>([['orchestrator:sess-1', [['#t2', false], ['#gone', true]]]])
+  orchSetup($, on, store)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const shown = (await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard) ?? ''
+  expect(shown).toContain('#T2 Review the copy')
+  expect(shown).toContain('O, Orchestrator: Idle')
+  expect(readKeptTickets(store.get('orchestrator:sess-1'))).toEqual([['#t2', false]])
+})
+
+test('the text view lists the orchestrator before the agents', async ($, on) => {
+  orchSetup($, on, new Map<string, unknown>([['orchestrator:sess-1', [['#t2', false]]]]))
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'terminal', ...PANE })
+  const drawn = JSON.stringify(await ui.drawn())
+  expect(drawn).toContain('main conversation')
+  expect(drawn.indexOf('main conversation')).toBeLessThan(drawn.indexOf('Helper'))
 })

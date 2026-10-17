@@ -71,6 +71,11 @@ export type View = {
   /** Every todo file, those with open items first; each carries all its items: linked, in progress, open, done. */
   files: FileView[]
   agents: AgentView[]
+  /**
+   * The main conversation, when it owns a ticket: drawn as an agent card before A1 (index ORCH),
+   * and not one of `agents`, so no count or timeline holds it. Running during a turn, else idle.
+   */
+  orchestrator?: AgentView
   /** Counts over the files at the top of `.claude_todo/`; the archive is not in them. */
   done: number
   active: number
@@ -125,8 +130,11 @@ export function setWidth(px: number): void {
   INNER = W - PAD * 2
 }
 
+/** The owner index of the orchestrator (the main conversation) in `owners`: no agent has it. */
+export const ORCH = -1
+
 export function agentLabel(index: number): string {
-  return `A${index + 1}`
+  return index === ORCH ? 'O' : `A${index + 1}`
 }
 
 /**
@@ -137,8 +145,29 @@ export function agentLabel(index: number): string {
  */
 export const AGENT_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#9085e9']
 
+/** The orchestrator's color: a teal, apart from the six agent colors and from the violet progress. */
+export const ORCH_COLOR = '#1fa7b8'
+
 export function agentColor(index: number): string {
-  return AGENT_COLORS[index] ?? STAGE_GRAY_FALLBACK
+  return index === ORCH ? ORCH_COLOR : (AGENT_COLORS[index] ?? STAGE_GRAY_FALLBACK)
+}
+
+/** Whether an owner's tag blinks: an agent's always, the orchestrator's only while it runs a turn. */
+function isBlinking(owner: number, view: View): boolean {
+  return owner !== ORCH || view.orchestrator?.status === 'running'
+}
+
+/**
+ * The status dot of a ticket: in the first color that blinks, cycling through every blinking
+ * owner; steady in the first owner's color when none blinks (only an idle orchestrator).
+ */
+function ownerDot(cx: number, cy: number, r: number, owners: readonly number[], view: View, blinks: Blinks): string {
+  const live = owners.filter(owner => isBlinking(owner, view)).map(agentColor)
+  if (live.length === 0) {
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${agentColor(owners[0] ?? 0)}"/>`
+  }
+
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${live[0]}" class="${blinks.cls(live)}"/>`
 }
 
 const STAGE_GRAY_FALLBACK = '#9AA0B4'
@@ -283,7 +312,7 @@ export function orchestratorSvg(entries: readonly { line: string; at: number; is
 }
 
 /** An actor disk: 12 px radius, letter 500; the state dot at its lower right (STG-DRAW-7, CMP-AV-4). */
-function actor(cx: number, cy: number, index: number, state: 'working' | 'failed' | 'none', isMatch: boolean, blinks: Blinks): string {
+function actor(cx: number, cy: number, index: number, state: 'working' | 'steady' | 'failed' | 'none', isMatch: boolean, blinks: Blinks): string {
   const color = agentColor(index)
   const ring = isMatch ? `<circle cx="${cx}" cy="${cy}" r="14.5" fill="none" stroke="${color}" stroke-width="1.5"/>` : ''
   const dot =
@@ -291,7 +320,9 @@ function actor(cx: number, cy: number, index: number, state: 'working' | 'failed
       ? ''
       : state === 'failed'
         ? `<circle cx="${cx + 8.5}" cy="${cy + 8.5}" r="4.5" fill="${STAGE_DANGER}" stroke="${STAGE_BG}" stroke-width="2"/>`
-        : `<circle cx="${cx + 8.5}" cy="${cy + 8.5}" r="4.5" fill="${color}" stroke="${STAGE_BG}" stroke-width="2" class="${blinks.cls([color])}"/>`
+        : state === 'steady'
+          ? `<circle cx="${cx + 8.5}" cy="${cy + 8.5}" r="4.5" fill="${color}" stroke="${STAGE_BG}" stroke-width="2"/>`
+          : `<circle cx="${cx + 8.5}" cy="${cy + 8.5}" r="4.5" fill="${color}" stroke="${STAGE_BG}" stroke-width="2" class="${blinks.cls([color])}"/>`
 
   return `${ring}<circle cx="${cx}" cy="${cy}" r="12" fill="${ACTOR}" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
 <text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${LABEL}" font-size="${index >= 9 ? 9.5 : 11}" font-weight="500">${agentLabel(index)}</text>${dot}`
@@ -408,14 +439,12 @@ export function heroSvg(view: View): Card {
 
 // ---------------------------------------------------------------- todo
 
-function itemMark(x: number, y: number, status: ItemStatus, owners: readonly number[], blinks: Blinks): string {
+function itemMark(x: number, y: number, status: ItemStatus, owners: readonly number[], view: View, blinks: Blinks): string {
   if (status === 'completed') {
     return `<path d="M ${x - 4} ${y} l 2.8 2.8 l 5.2 -5.6" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`
   }
   if (owners.length > 0) {
-    const colors = owners.map(agentColor)
-
-    return `<circle cx="${x}" cy="${y}" r="5" fill="${colors[0]}" class="${blinks.cls(colors)}"/>`
+    return ownerDot(x, y, 5, owners, view, blinks)
   }
   if (status === 'in_progress') {
     return `<circle cx="${x}" cy="${y}" r="4" fill="${STAGE_GRAY}"/>`
@@ -492,8 +521,7 @@ export function ticketSvg(item: ItemView, view: View, width: number, info: { id?
   if (item.status === 'completed') {
     parts.push(`<path d="M ${x} ${top - 1} l 2.8 2.8 l 5.2 -5.6" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`)
   } else if (owner !== undefined) {
-    const colors = item.owners.map(agentColor)
-    parts.push(`<circle cx="${x + 4}" cy="${top - 3}" r="4.5" fill="${colors[0]}" class="${blinks.cls(colors)}"/>`)
+    parts.push(ownerDot(x + 4, top - 3, 4.5, item.owners, view, blinks))
   } else if (item.status === 'in_progress') {
     parts.push(`<circle cx="${x + 4}" cy="${top - 3}" r="4" fill="${STAGE_GRAY}"/>`)
   } else {
@@ -537,7 +565,7 @@ export function ticketSvg(item: ItemView, view: View, width: number, info: { id?
 <text x="${ax + cw / 2}" y="${y + 13}" text-anchor="middle" fill="#FFFFFF" font-size="10.5" font-weight="700">${label}</text>`)
       ax += cw + 6
     }
-    const working = view.agents[owner ?? 0]
+    const working = owner === ORCH ? view.orchestrator : view.agents[owner ?? 0]
     if (working !== undefined) {
       parts.push(`<text x="${ax + 2}" y="${y + 13}" fill="${SUB}" font-size="11">${esc(fit(working.description, w - ax - pad - 2, 11))}</text>`)
     }
@@ -629,15 +657,16 @@ export function fileCards(file: FileView, view: View, limit: number, isTextOpen 
     if (isMatch) {
       parts.push(`<rect x="${PAD - 8}" y="${y - 17}" width="${INNER + 16}" height="${32 + extra}" rx="8" fill="${SUGGESTED}"/>`)
     }
-    parts.push(itemMark(PAD + 6, y - 1, item.status, item.owners, blinks))
+    parts.push(itemMark(PAD + 6, y - 1, item.status, item.owners, view, blinks))
     const ink = isMatch || item.status === 'in_progress' ? LABEL : item.status === 'completed' ? FAINT : LABEL
     const strike = item.status === 'completed' ? ' text-decoration="line-through"' : ''
     const tspans = lines.map((line, k) => `<tspan x="${PAD + 22}" dy="${k === 0 ? 0 : LINE_H}">${esc(line)}</tspan>`).join('')
     parts.push(`<text x="${PAD + 22}" y="${y + 3}" fill="${ink}" font-size="13" font-weight="${weight}"${strike}>${tspans}</text>`)
     item.owners.forEach((owner, k) => {
-      const agent = view.agents[owner]
+      const agent = owner === ORCH ? view.orchestrator : view.agents[owner]
       const failed = agent?.status === 'failed' || agent?.status === 'killed'
-      parts.push(actor(W - PAD - 6 - k * 32, y - 1, owner, failed ? 'failed' : agent?.isEnded === false ? 'working' : 'none', true, blinks))
+      const state = failed ? 'failed' : agent?.isEnded === false ? (isBlinking(owner, view) ? 'working' : 'steady') : 'none'
+      parts.push(actor(W - PAD - 6 - k * 32, y - 1, owner, state, true, blinks))
     })
     y += 34 + extra
     count += 1
@@ -774,7 +803,9 @@ export function stopInsetPx(agent: AgentView): number {
 export function agentSvg(agent: AgentView, view: View): Card {
   const parts: string[] = []
   // A live agent's title ends short of its Stop button, left of the badge.
-  const stop = agent.isEnded ? 0 : STOP_PX
+  const isOrch = agent.index === ORCH
+  // The orchestrator has no Stop button: it is the main conversation, not a task to kill.
+  const stop = agent.isEnded || isOrch ? 0 : STOP_PX
   const failed = agent.status === 'failed' || agent.status === 'killed'
   const { label, kind } = agentBadge(agent)
   const bw = badgeWidth(label)
@@ -789,14 +820,16 @@ export function agentSvg(agent: AgentView, view: View): Card {
   if (hasLink && !agent.isEnded) {
     parts.push(`<rect x="1" y="1" width="${W - 2}" height="${h - 2}" rx="11" fill="none" stroke="${color}" stroke-opacity=".55"/>`)
   }
-  parts.push(actor(PAD + 12, 26 + HEAD_DROP_PX, agent.index, failed ? 'failed' : agent.isEnded ? 'none' : 'working', hasLink && !agent.isEnded, blinks))
+  // An idle orchestrator keeps a steady dot and steady ticket dots; an idle agent still blinks.
+  const isCalm = isOrch && agent.isIdle === true
+  parts.push(actor(PAD + 12, 26 + HEAD_DROP_PX, agent.index, failed ? 'failed' : agent.isEnded ? 'none' : isCalm ? 'steady' : 'working', hasLink && !agent.isEnded, blinks))
   let ty = 31 + HEAD_DROP_PX
   const tx = PAD + 36
   parts.push(`<text x="${tx}" y="${ty}" fill="${agent.isEnded ? SUB : LABEL}" font-size="14" font-weight="500">${esc(fit(agent.description, INNER - 44 - bw - stop, 14, 500))}</text>`)
   parts.push(badge(W - PAD, ty, label, kind))
   ty += 20
   for (const link of shownLinks) {
-    parts.push(`<circle cx="${tx + 4}" cy="${ty - 4}" r="4" fill="${color}" class="${blinks.cls([color])}"/>
+    parts.push(`<circle cx="${tx + 4}" cy="${ty - 4}" r="4" fill="${color}"${isCalm ? '' : ` class="${blinks.cls([color])}"`}/>
 <text x="${tx + 14}" y="${ty}" fill="${SUB}" font-size="12">Working on <tspan fill="${color}" font-weight="500">${esc(fit(link, INNER - 130, 12, 500))}</tspan></text>`)
     ty += 20
   }
@@ -815,8 +848,11 @@ export function agentSvg(agent: AgentView, view: View): Card {
   const ran = elapsed((agent.endedAt ?? agent.idleSince ?? view.now) - agent.startedAt)
   const isIdle = agent.isIdle === true && agent.idleSince !== undefined
   const when = agent.endedAt !== undefined ? [`ran ${ran}`, `ended ${elapsed(view.now - agent.endedAt)} ago`] : isIdle ? [`ran ${ran}`] : [ran]
-  // An idle agent's note leads, so a narrow card never cuts it off.
-  const meta = [isIdle ? `Finished ${clock(agent.idleSince!)}, not stopped` : undefined, agent.type, agent.model, ...when, plural(agent.toolCalls, 'tool call'), agent.tokens ? `${tokens(agent.tokens)} tokens` : undefined]
+  // An idle agent's note leads, so a narrow card never cuts it off. The orchestrator has no run
+  // time: the main conversation has been there since the session began.
+  const meta = (isOrch
+    ? [agent.type, plural(agent.toolCalls, 'tool call')]
+    : [isIdle ? `Finished ${clock(agent.idleSince!)}, not stopped` : undefined, agent.type, agent.model, ...when, plural(agent.toolCalls, 'tool call'), agent.tokens ? `${tokens(agent.tokens)} tokens` : undefined])
     .filter((part): part is string => part !== undefined && part !== '')
     .join('\u2002·\u2002')
   parts.push(`<text x="${tx}" y="${ty}" fill="${SUB}" font-size="12">${esc(fit(meta, INNER - 40, 12))}</text>`)

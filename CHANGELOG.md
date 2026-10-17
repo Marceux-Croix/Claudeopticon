@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+- When Claude works on a ticket itself, with no helper agent, the ticket shows an **O** tag that blinks while Claude works, and an Orchestrator card shows in the Agents card. A ticket counts as Claude's own when Claude moves it to in progress, names it in a progress report, or you send it with the Send button.
+
 ## 0.6.0
 
 - The Background tasks card is gone. Claude Code now has its own task tracker, which does this job better. The Haiku request that named each task is gone with it.

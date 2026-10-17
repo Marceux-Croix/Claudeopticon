@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { agentSvg, boardHead, orchestratorSvg, heroSvg, setWidth, ticketSvg, timelineSvg, type Card } from '../hooks/cards.ts'
-import { agents, entries, openTickets, progressTickets, view } from './sample.ts'
+import { agents, entries, orchestrator, openTickets, progressTickets, view } from './sample.ts'
 
 const WIDTH = 720
 const GAP = 12
@@ -166,6 +166,7 @@ function pane(): string {
   y += 30 + GAP + 6
   head('Agents', '2 live, 1 finished', 'Show finished agents (1)')
   add(timelineSvg(view, agents.slice(0, 2)))
+  add(agentSvg(orchestrator, view))
   add(withStop(agentSvg(agents[0]!, view), 'Running'))
   add(withStop(agentSvg(agents[1]!, view), 'Running'))
   head('Todo', `${view.done} of ${view.total} done, ${view.active} in progress`, `Show completed (${view.completed})`)
@@ -208,7 +209,7 @@ setWidth(WIDTH)
 const files: Record<string, string> = {
   'top.svg': heroSvg(view).source,
   'orchestrator.svg': orchestratorSvg(entries).source,
-  'agents.svg': stack([timelineSvg(view, agents), withStop(agentSvg(agents[0]!, view), 'Running'), withStop(agentSvg(agents[1]!, view), 'Running')]),
+  'agents.svg': stack([timelineSvg(view, agents), agentSvg(orchestrator, view), withStop(agentSvg(agents[0]!, view), 'Running'), withStop(agentSvg(agents[1]!, view), 'Running')]),
   'board.svg': board(),
   'pane.svg': pane(),
 }

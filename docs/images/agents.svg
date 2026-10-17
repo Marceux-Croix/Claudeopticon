@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="720" height="426" viewBox="0 0 720 426">
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="543" viewBox="0 0 720 543">
 <svg x="0" y="0" xmlns="http://www.w3.org/2000/svg" width="720" height="136" viewBox="0 0 720 136" role="img" aria-label="Timeline of 3 agents">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
@@ -41,7 +41,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="50" y="82" width="387.00000000000006" height="4" rx="2" fill="rgba(255,255,255,.22)"/>
 <path d="M 442.00000000000006 84 l 2.4 2.4 l 4.6 -5" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="704" y="88" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">9m 00s</text></g></svg>
-<svg x="0" y="148" xmlns="http://www.w3.org/2000/svg" width="720" height="133" viewBox="0 0 720 133" role="img" aria-label="A1, Write the v2 config migration: Running">
+<svg x="0" y="148" xmlns="http://www.w3.org/2000/svg" width="720" height="105" viewBox="0 0 720 105" role="img" aria-label="O, Orchestrator: Running">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -52,17 +52,42 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 @keyframes pulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
 @media (prefers-reduced-motion:reduce){.blink,.pulse{animation:none}.pulse{opacity:0}}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
-.c2k0{animation:c2k0 1.2s steps(1,end) infinite}@keyframes c2k0{0.00%{fill:#3987e5;opacity:1}50.00%{fill:#3987e5;opacity:.25}}
+.c2k0{animation:c2k0 1.2s steps(1,end) infinite}@keyframes c2k0{0.00%{fill:#1fa7b8;opacity:1}50.00%{fill:#1fa7b8;opacity:.25}}
 @media (prefers-reduced-motion:reduce){.c2k0{animation:none}}
+</style>
+<rect width="720" height="105" rx="12" fill="#07080F"/>
+<rect x="1" y="1" width="718" height="103" rx="11" fill="none" stroke="#1fa7b8" stroke-opacity=".55"/>
+<circle cx="28" cy="31" r="14.5" fill="none" stroke="#1fa7b8" stroke-width="1.5"/><circle cx="28" cy="31" r="12" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
+<text x="28" y="35" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">O</text><circle cx="36.5" cy="39.5" r="4.5" fill="#1fa7b8" stroke="#07080F" stroke-width="2" class="c2k0"/>
+<text x="52" y="36" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Orchestrator</text>
+<rect x="647" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
+<text x="675.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>
+<circle cx="56" cy="52" r="4" fill="#1fa7b8" class="c2k0"/>
+<text x="66" y="56" fill="rgba(255,255,255,.62)" font-size="12">Working on <tspan fill="#1fa7b8" font-weight="500">Fix the parser crash on empty input</tspan></text>
+<text x="52" y="76" fill="rgba(255,255,255,.62)" font-size="12">main conversation · 57 tool calls</text>
+<text x="52" y="96" fill="rgba(255,255,255,.62)" font-size="12" class="mono">Run the parser tests</text></svg>
+<svg x="0" y="265" xmlns="http://www.w3.org/2000/svg" width="720" height="133" viewBox="0 0 720 133" role="img" aria-label="A1, Write the v2 config migration: Running">
+<defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
+<style>
+text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
+.blink{animation:blink 1.2s steps(1,end) infinite}
+@keyframes blink{50%{opacity:.25}}
+.pulse{animation:pulse 1.2s cubic-bezier(0,0,.2,1) infinite;transform-box:fill-box;transform-origin:center}
+@keyframes pulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
+@media (prefers-reduced-motion:reduce){.blink,.pulse{animation:none}.pulse{opacity:0}}
+@media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
+.c3k0{animation:c3k0 1.2s steps(1,end) infinite}@keyframes c3k0{0.00%{fill:#3987e5;opacity:1}50.00%{fill:#3987e5;opacity:.25}}
+@media (prefers-reduced-motion:reduce){.c3k0{animation:none}}
 </style>
 <rect width="720" height="133" rx="12" fill="#07080F"/>
 <rect x="1" y="1" width="718" height="131" rx="11" fill="none" stroke="#3987e5" stroke-opacity=".55"/>
 <circle cx="28" cy="31" r="14.5" fill="none" stroke="#3987e5" stroke-width="1.5"/><circle cx="28" cy="31" r="12" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="28" y="35" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A1</text><circle cx="36.5" cy="39.5" r="4.5" fill="#3987e5" stroke="#07080F" stroke-width="2" class="c2k0"/>
+<text x="28" y="35" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A1</text><circle cx="36.5" cy="39.5" r="4.5" fill="#3987e5" stroke="#07080F" stroke-width="2" class="c3k0"/>
 <text x="52" y="36" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Write the v2 config migration</text>
 <rect x="647" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
 <text x="675.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>
-<circle cx="56" cy="52" r="4" fill="#3987e5" class="c2k0"/>
+<circle cx="56" cy="52" r="4" fill="#3987e5" class="c3k0"/>
 <text x="66" y="56" fill="rgba(255,255,255,.62)" font-size="12">Working on <tspan fill="#3987e5" font-weight="500">Write the migration for the v2 config format</tspan></text>
 <text x="52" y="76" fill="rgba(255,255,255,.88)" font-size="12" font-weight="500">Step 3 of 7: Write the migration</text>
 <text x="704" y="76" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">29%</text>
@@ -73,7 +98,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <text x="52" y="124" fill="rgba(255,255,255,.62)" font-size="12" class="mono">Edit src/config/migrate.ts</text><rect x="609" y="21" width="30" height="22" rx="6" fill="rgba(255,255,255,.1)"/>
 <circle cx="624" cy="32" r="7.5" fill="rgba(255,255,255,.88)"/>
 <rect x="619.5" y="30.75" width="9" height="2.5" fill="#07080F"/></svg>
-<svg x="0" y="293" xmlns="http://www.w3.org/2000/svg" width="720" height="133" viewBox="0 0 720 133" role="img" aria-label="A2, Draft the plugin API docs: Running">
+<svg x="0" y="410" xmlns="http://www.w3.org/2000/svg" width="720" height="133" viewBox="0 0 720 133" role="img" aria-label="A2, Draft the plugin API docs: Running">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -84,17 +109,17 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 @keyframes pulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
 @media (prefers-reduced-motion:reduce){.blink,.pulse{animation:none}.pulse{opacity:0}}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
-.c3k0{animation:c3k0 1.2s steps(1,end) infinite}@keyframes c3k0{0.00%{fill:#d95926;opacity:1}50.00%{fill:#d95926;opacity:.25}}
-@media (prefers-reduced-motion:reduce){.c3k0{animation:none}}
+.c4k0{animation:c4k0 1.2s steps(1,end) infinite}@keyframes c4k0{0.00%{fill:#d95926;opacity:1}50.00%{fill:#d95926;opacity:.25}}
+@media (prefers-reduced-motion:reduce){.c4k0{animation:none}}
 </style>
 <rect width="720" height="133" rx="12" fill="#07080F"/>
 <rect x="1" y="1" width="718" height="131" rx="11" fill="none" stroke="#d95926" stroke-opacity=".55"/>
 <circle cx="28" cy="31" r="14.5" fill="none" stroke="#d95926" stroke-width="1.5"/><circle cx="28" cy="31" r="12" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="28" y="35" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="36.5" cy="39.5" r="4.5" fill="#d95926" stroke="#07080F" stroke-width="2" class="c3k0"/>
+<text x="28" y="35" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="36.5" cy="39.5" r="4.5" fill="#d95926" stroke="#07080F" stroke-width="2" class="c4k0"/>
 <text x="52" y="36" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Draft the plugin API docs</text>
 <rect x="647" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
 <text x="675.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>
-<circle cx="56" cy="52" r="4" fill="#d95926" class="c3k0"/>
+<circle cx="56" cy="52" r="4" fill="#d95926" class="c4k0"/>
 <text x="66" y="56" fill="rgba(255,255,255,.62)" font-size="12">Working on <tspan fill="#d95926" font-weight="500">Document the plugin API</tspan></text>
 <text x="52" y="76" fill="rgba(255,255,255,.88)" font-size="12" font-weight="500">Step 2 of 4: Outline the hooks</text>
 <text x="704" y="76" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">25%</text>

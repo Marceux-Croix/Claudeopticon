@@ -76,12 +76,12 @@ export type View = {
    * and not one of `agents`, so no count or timeline holds it. Running during a turn, else idle.
    */
   orchestrator?: AgentView
-  /** Counts over the files at the top of `.claude_todo/`; the archive is not in them. */
+  /** Counts over the files at the top of `.claude_todo/` plus the done tickets of every archive file, so moving a ticket to the archive leaves them as they were. */
   done: number
   active: number
   total: number
-  /** Done items in the completed ledger: checked items at the top level and every done item in the archive. */
-  completed: number
+  /** Done tickets in the archive files: the number on the Show completed link. */
+  archived: number
   live: number
   now: number
   /** The session's token burn, when the mod has counted any. */
@@ -133,8 +133,27 @@ export function setWidth(px: number): void {
 /** The owner index of the orchestrator (the main conversation) in `owners`: no agent has it. */
 export const ORCH = -1
 
+/**
+ * The number of agents before the first kept row: rows past the kept window are dropped from the store,
+ * so after a reload the first row is not A1. Labels and colors count from this base, and never shift.
+ */
+let labelBase = 0
+export function setLabelBase(base: number): void {
+  labelBase = Math.max(0, Math.floor(base))
+}
+
 export function agentLabel(index: number): string {
-  return index === ORCH ? 'O' : `A${index + 1}`
+  return index === ORCH ? 'O' : `A${labelBase + index + 1}`
+}
+
+/**
+ * The font size that fits a label in its 28 px circle, with at most 17 px of text, so a few pixels stay clear on each side. Widths are
+ * Instrument Sans at weight 500, the widest of the fallback fonts: `A` is 0.461 em, a digit 0.664 em.
+ */
+export function labelFontSize(label: string): number {
+  const em = 0.461 + 0.664 * Math.max(1, label.length - 1)
+
+  return Math.min(11, Math.floor((17 / em) * 10) / 10)
 }
 
 /**
@@ -149,7 +168,7 @@ export const AGENT_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d5518
 export const ORCH_COLOR = '#1fa7b8'
 
 export function agentColor(index: number): string {
-  return index === ORCH ? ORCH_COLOR : (AGENT_COLORS[index] ?? STAGE_GRAY_FALLBACK)
+  return index === ORCH ? ORCH_COLOR : (AGENT_COLORS[labelBase + index] ?? STAGE_GRAY_FALLBACK)
 }
 
 /** Whether an owner's tag blinks: an agent's always, the orchestrator's only while it runs a turn. */
@@ -292,40 +311,48 @@ export function clock(ms: number): string {
   return `${two(at.getHours())}:${two(at.getMinutes())}:${two(at.getSeconds())}`
 }
 
+/** The height of one Orchestrator entry: its summary line, and a dim detail line when it has one. */
+const ENTRY_PX = 22
+const DETAIL_PX = 16
+
 /**
  * The Orchestrator card: one line per tool call summary, newest first, each with its start time in
- * small text on the right; a call still running has a live dot, a finished one a quiet one.
+ * small text on the right; a call still running has a live dot, a finished one a quiet one. An
+ * entry with a `detail` (the command, path or pattern of the call) has it on a dim mono line below.
  */
-export function orchestratorSvg(entries: readonly { line: string; at: number; isRunning: boolean }[]): Card {
-  const h = 22 + entries.length * 22
-  const parts = entries.map((entry, k) => {
-    const y = 30 + k * 22
+export function orchestratorSvg(entries: readonly { line: string; at: number; isRunning: boolean; detail?: string }[]): Card {
+  let y = 8
+  const parts = entries.map(entry => {
+    y += ENTRY_PX
     const dot = entry.isRunning
       ? `<circle cx="${PAD + 5}" cy="${y - 4}" r="4" fill="${ACCENT}"/><circle cx="${PAD + 5}" cy="${y - 4}" r="4" fill="${ACCENT}" class="pulse"/>`
       : `<circle cx="${PAD + 5}" cy="${y - 4}" r="3" fill="${FAINT}"/>`
+    const detail = entry.detail === undefined || entry.detail === '' ? '' : `\n<text x="${PAD + 18}" y="${y + 14}" fill="${FAINT}" font-size="11" class="mono">${esc(fit(entry.detail, INNER - 18, 11, 400, true))}</text>`
+    const drawn = `${dot}<text x="${PAD + 18}" y="${y}" fill="${entry.isRunning ? LABEL : SUB}" font-size="13">${esc(fit(entry.line, INNER - 18 - 64, 13))}</text>
+<text x="${W - PAD}" y="${y}" text-anchor="end" fill="${FAINT}" font-size="10.5" class="mono">${clock(entry.at)}</text>${detail}`
+    y += detail === '' ? 0 : DETAIL_PX
 
-    return `${dot}<text x="${PAD + 18}" y="${y}" fill="${entry.isRunning ? LABEL : SUB}" font-size="13">${esc(fit(entry.line, INNER - 18 - 64, 13))}</text>
-<text x="${W - PAD}" y="${y}" text-anchor="end" fill="${FAINT}" font-size="10.5" class="mono">${clock(entry.at)}</text>`
+    return drawn
   })
 
-  return stage(h, parts.join('\n'), `Orchestrator: ${entries.map(entry => `${clock(entry.at)} ${entry.line}`).join('; ')}`)
+  return stage(y + 14, parts.join('\n'), `Orchestrator: ${entries.map(entry => `${clock(entry.at)} ${entry.line}`).join('; ')}`)
 }
 
 /** An actor disk: 12 px radius, letter 500; the state dot at its lower right (STG-DRAW-7, CMP-AV-4). */
 function actor(cx: number, cy: number, index: number, state: 'working' | 'steady' | 'failed' | 'none', isMatch: boolean, blinks: Blinks): string {
   const color = agentColor(index)
-  const ring = isMatch ? `<circle cx="${cx}" cy="${cy}" r="14.5" fill="none" stroke="${color}" stroke-width="1.5"/>` : ''
+  const ring = isMatch ? `<circle cx="${cx}" cy="${cy}" r="16.5" fill="none" stroke="${color}" stroke-width="1.5"/>` : ''
   const dot =
     state === 'none'
       ? ''
       : state === 'failed'
-        ? `<circle cx="${cx + 8.5}" cy="${cy + 8.5}" r="4.5" fill="${STAGE_DANGER}" stroke="${STAGE_BG}" stroke-width="2"/>`
+        ? `<circle cx="${cx + 10.8}" cy="${cy + 10.8}" r="4.5" fill="${STAGE_DANGER}" stroke="${STAGE_BG}" stroke-width="2"/>`
         : state === 'steady'
-          ? `<circle cx="${cx + 8.5}" cy="${cy + 8.5}" r="4.5" fill="${color}" stroke="${STAGE_BG}" stroke-width="2"/>`
-          : `<circle cx="${cx + 8.5}" cy="${cy + 8.5}" r="4.5" fill="${color}" stroke="${STAGE_BG}" stroke-width="2" class="${blinks.cls([color])}"/>`
+          ? `<circle cx="${cx + 10.8}" cy="${cy + 10.8}" r="4.5" fill="${color}" stroke="${STAGE_BG}" stroke-width="2"/>`
+          : `<circle cx="${cx + 10.8}" cy="${cy + 10.8}" r="4.5" fill="${color}" stroke="${STAGE_BG}" stroke-width="2" class="${blinks.cls([color])}"/>`
 
-  return `${ring}<circle cx="${cx}" cy="${cy}" r="12" fill="${ACTOR}" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${LABEL}" font-size="${index >= 9 ? 9.5 : 11}" font-weight="500">${agentLabel(index)}</text>${dot}`
+  return `${ring}<circle cx="${cx}" cy="${cy}" r="14" fill="${ACTOR}" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
+<text x="${cx}" y="${(cy + labelFontSize(agentLabel(index)) * 0.35).toFixed(1)}" text-anchor="middle" fill="${LABEL}" font-size="${labelFontSize(agentLabel(index))}" font-weight="500">${agentLabel(index)}</text>${dot}`
 }
 
 /** A 4 px progress strip: white 22% track, `--progress` fill (STG-DRAW-5); the working share in white 38%. */
@@ -602,7 +629,7 @@ export function cardWidth(): number {
 /** How many of the first `limit` items of a file run past 8 lines, for the Show full text button. */
 export function longItems(file: FileView, limit: number): number {
   return file.items.slice(0, limit).filter(item => {
-    const room = INNER - 24 - item.owners.length * 32
+    const room = INNER - 24 - item.owners.length * 36
 
     return wrap(item.text, room, 13, item.owners.length > 0 ? 500 : 400, Number.POSITIVE_INFINITY).length > MAX_LINES
   }).length
@@ -651,7 +678,7 @@ export function fileCards(file: FileView, view: View, limit: number, isTextOpen 
     }
     const isMatch = item.owners.length > 0
     const weight = isMatch ? 500 : 400
-    const room = INNER - 24 - item.owners.length * 32
+    const room = INNER - 24 - item.owners.length * 36
     const lines = wrap(item.text, room, 13, weight, isTextOpen ? Number.POSITIVE_INFINITY : MAX_LINES)
     const extra = (lines.length - 1) * LINE_H
     if (isMatch) {
@@ -666,7 +693,7 @@ export function fileCards(file: FileView, view: View, limit: number, isTextOpen 
       const agent = owner === ORCH ? view.orchestrator : view.agents[owner]
       const failed = agent?.status === 'failed' || agent?.status === 'killed'
       const state = failed ? 'failed' : agent?.isEnded === false ? (isBlinking(owner, view) ? 'working' : 'steady') : 'none'
-      parts.push(actor(W - PAD - 6 - k * 32, y - 1, owner, state, true, blinks))
+      parts.push(actor(W - PAD - 8 - k * 36, y - 1, owner, state, true, blinks))
     })
     y += 34 + extra
     count += 1
@@ -851,7 +878,7 @@ export function agentSvg(agent: AgentView, view: View): Card {
   // An idle agent's note leads, so a narrow card never cuts it off. The orchestrator has no run
   // time: the main conversation has been there since the session began.
   const meta = (isOrch
-    ? [agent.type, plural(agent.toolCalls, 'tool call')]
+    ? ['Orchestrator', agent.type, plural(agent.toolCalls, 'tool call')]
     : [isIdle ? `Finished ${clock(agent.idleSince!)}, not stopped` : undefined, agent.type, agent.model, ...when, plural(agent.toolCalls, 'tool call'), agent.tokens ? `${tokens(agent.tokens)} tokens` : undefined])
     .filter((part): part is string => part !== undefined && part !== '')
     .join('\u2002·\u2002')
@@ -866,5 +893,8 @@ export function agentSvg(agent: AgentView, view: View): Card {
   // A finished agent stays in the ledger, grayed out (STG-DRAW-6: a quiet item draws at reduced opacity).
   const body = agent.isEnded ? `<g opacity=".55">${parts.join('\n')}</g>` : parts.join('\n')
 
-  return stage(h, body, `${agentLabel(agent.index)}, ${agent.description}: ${label}`, blinks.css())
+  // The orchestrator's title is a headline, so its alt text keeps the name that identifies the card.
+  const alt = isOrch ? `${agentLabel(agent.index)}, Orchestrator: ${label}, ${agent.description}` : `${agentLabel(agent.index)}, ${agent.description}: ${label}`
+
+  return stage(h, body, alt, blinks.css())
 }

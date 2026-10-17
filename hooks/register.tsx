@@ -1,7 +1,7 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { AgentRow, AgentRowStatus, Progress, TodoFile, TodoItem, TodoStatus } from '../types'
-import { ACCENT, DANGER, GREEN, ORCH, clock, tokens, orchestratorSvg, plural, agentColor, agentLabel, agentSvg, stopInsetPx, cardWidth, elapsed, boardHead, fileCards, heroSvg, longItems, ticketSvg, setWidth, timelineSvg } from './cards'
+import { ACCENT, DANGER, GREEN, ORCH, clock, tokens, orchestratorSvg, plural, agentColor, agentLabel, setLabelBase, agentSvg, stopInsetPx, cardWidth, elapsed, boardHead, fileCards, heroSvg, longItems, ticketSvg, setWidth, timelineSvg } from './cards'
 import type { AgentView, FileView, ItemStatus, ItemView, Usage, View } from './cards'
 
 const PANE = 'claudeopticon'
@@ -135,7 +135,7 @@ let usage: Usage | undefined
  * each of its tool calls (the call's own `description`, as the transcript shows it), with its start
  * time, newest last, the last 1000 kept. Agent calls stay out: they are the agents' work.
  */
-export type OrchestratorEntry = { id: number; line: string; at: number; isRunning: boolean }
+export type OrchestratorEntry = { id: number; line: string; at: number; isRunning: boolean; detail?: string }
 let orchestrator: { isActive: boolean; history: OrchestratorEntry[] } = { isActive: false, history: [] }
 let callCount = 0
 /**
@@ -144,6 +144,8 @@ let callCount = 0
  * or back to open after it was seen in progress. A ticket an agent works on may be in here too.
  */
 const orchTickets = new Map<string, boolean>()
+/** The headline Claude gave the assignment it works on itself (report_progress `title`); per session, cleared with the last ticket. */
+let orchTitle: string | undefined
 /** Which page of the history the card shows: 0 the newest. */
 let orchestratorPage = 0
 /** Categories the person hid, by name; their items leave the list and the board (search still finds them). */
@@ -151,7 +153,17 @@ const hiddenCategories = new Set<string>()
 /** Tickets already sent to Claude this session, by file and item key. */
 const sentTickets = new Set<string>()
 let isFinishedShown = false
-let isCompletedShown = false
+/**
+ * Tickets the mod moved to the archive this session, newest first, as board tickets: the Done
+ * column lists them. Kept in the store per session, so a reload keeps them.
+ */
+let archivedNow: ItemView[] = []
+let savedArchived = ''
+/** True while the Recategorize request runs: a press is ignored. */
+let isRecategorizing = false
+/** The line beside the Recategorize button, shown until `until` (clock ms); the tick clears it. */
+let recatNote: { text: string; until: number } | undefined
+const NOTE_MS = 4000
 let sortBy: 'file' | 'category' = 'file'
 let query = ''
 function redraw($: EngineInterface): void {
@@ -163,6 +175,7 @@ function redraw($: EngineInterface): void {
 
 /** The agent rows kept in the store per session, so a plugin reload keeps each agent's data. */
 const KEPT_AGENTS = 200
+const KEPT_ARCHIVED = 200
 let isAgentsLoaded = false
 let savedAgents = ''
 
@@ -170,9 +183,67 @@ async function agentsKey($: EngineInterface): Promise<string> {
   return `agents:${await $.session.id()}`
 }
 
+/** The store key of the label base: how many agents came before the first kept row. */
+async function baseKey($: EngineInterface): Promise<string> {
+  return `agents-base:${await $.session.id()}`
+}
+
+/** The number of agents before `agentRows[0]`, so A201 stays A201 after a reload drops older rows. */
+let agentBase = 0
+let savedBase = -1
+
+async function archivedKey($: EngineInterface): Promise<string> {
+  return `archived:${await $.session.id()}`
+}
+
+/** Reads the stored archived tickets back, keeping only entries with the fields the board needs. */
+export function readKeptArchived(stored: unknown): ItemView[] {
+  if (!Array.isArray(stored)) {
+    return []
+  }
+
+  return stored.filter((one): one is ItemView =>
+    typeof one === 'object' && one !== null && typeof one.text === 'string' && typeof one.key === 'string' && one.status === 'completed' && Array.isArray(one.owners))
+}
+
+/**
+ * The IDs (lowercase) the mod named to Claude in a "Next free ticket IDs" line and that no file holds
+ * yet: kept per session in the store. They count as taken, so the mod never gives one to a line, and
+ * the next prompt names fresh ones. Numbering reserves the IDs it gives before it writes them. An ID leaves the set once a file holds it.
+ */
+const reservedIds = new Set<string>()
+
+async function reservedKey($: EngineInterface): Promise<string> {
+  return `reserved:${await $.session.id()}`
+}
+
+/** Reads the stored reserved IDs back, keeping only strings. */
+export function readKeptIds(stored: unknown): string[] {
+  return Array.isArray(stored) ? stored.filter((one): one is string => typeof one === 'string') : []
+}
+
+/** Drops the reserved IDs that a file on the board holds now. */
+function pruneReserved(): void {
+  for (const id of projectIds()) {
+    reservedIds.delete(id)
+  }
+}
+
 /** The orchestrator's tickets are kept beside the agent rows, per session, so a reload keeps them. */
 async function orchKey($: EngineInterface): Promise<string> {
   return `orchestrator:${await $.session.id()}`
+}
+
+async function orchTitleKey($: EngineInterface): Promise<string> {
+  return `orchestrator-title:${await $.session.id()}`
+}
+
+/** A headline from the main conversation: a few words, one line, at most TITLE_MAX characters. */
+export const TITLE_MAX = 80
+export function readTitle(input: unknown): string | undefined {
+  const text = typeof input === 'string' ? (input.trim().split('\n')[0] ?? '').trim().slice(0, TITLE_MAX) : ''
+
+  return text === '' ? undefined : text
 }
 
 /** Reads the stored ticket claims back, keeping only well-formed pairs. */
@@ -206,11 +277,23 @@ async function loadAgents($: EngineInterface): Promise<void> {
   }
   isAgentsLoaded = true
   const kept = readKeptAgents(await $.store.get(await agentsKey($)).catch(() => undefined))
+  const base = await $.store.get(await baseKey($)).catch(() => undefined)
+  if (kept.length > 0 && typeof base === 'number' && Number.isFinite(base) && base > 0) {
+    agentBase = Math.floor(base)
+    setLabelBase(agentBase)
+  }
   for (const [key, seen] of readKeptTickets(await $.store.get(await orchKey($)).catch(() => undefined))) {
     if (!orchTickets.has(key)) {
       orchTickets.set(key, seen)
     }
   }
+  orchTitle ??= readTitle(await $.store.get(await orchTitleKey($)).catch(() => undefined))
+  savedTitle = undefined
+  for (const id of readKeptIds(await $.store.get(await reservedKey($)).catch(() => undefined))) {
+    reservedIds.add(id)
+  }
+  const keptArchived = readKeptArchived(await $.store.get(await archivedKey($)).catch(() => undefined))
+  archivedNow = [...archivedNow, ...keptArchived.filter(one => !archivedNow.some(now => now.key === one.key && now.path === one.path))].slice(0, KEPT_ARCHIVED)
   const seen = new Set(agentRows.map(row => row.id))
   agentRows = [...kept.filter(row => !seen.has(row.id)), ...agentRows]
   for (const row of kept) {
@@ -223,6 +306,8 @@ async function loadAgents($: EngineInterface): Promise<void> {
 }
 
 let savedTickets = ''
+let savedTitle: string | undefined | null = null
+let savedReserved = ''
 
 /** Stores the rows when they changed since the last store, after the kept rows are loaded. */
 function saveAgents($: EngineInterface): void {
@@ -234,7 +319,26 @@ function saveAgents($: EngineInterface): void {
     savedTickets = tickets
     void orchKey($).then(key => $.store.set(key, [...orchTickets])).catch(() => undefined)
   }
+  if (orchTitle !== savedTitle) {
+    savedTitle = orchTitle
+    void orchTitleKey($).then(key => $.store.set(key, orchTitle ?? '')).catch(() => undefined)
+  }
+  const reserved = JSON.stringify([...reservedIds])
+  if (reserved !== savedReserved) {
+    savedReserved = reserved
+    void reservedKey($).then(key => $.store.set(key, [...reservedIds])).catch(() => undefined)
+  }
+  const archived = JSON.stringify(archivedNow)
+  if (archived !== savedArchived) {
+    savedArchived = archived
+    void archivedKey($).then(key => $.store.set(key, archivedNow)).catch(() => undefined)
+  }
   const rows = agentRows.slice(-KEPT_AGENTS)
+  const base = agentBase + agentRows.length - rows.length
+  if (base !== savedBase) {
+    savedBase = base
+    void baseKey($).then(key => $.store.set(key, base)).catch(() => undefined)
+  }
   const text = JSON.stringify(rows)
   if (text === savedAgents) {
     return
@@ -248,7 +352,104 @@ const ENDED: readonly AgentRowStatus[] = ['completed', 'failed', 'killed', 'ende
 // ---------------------------------------------------------------- todo
 
 const CHECKBOX = /^\s*[-*+] \[([ xX~>])\]\s+(.*)$/
-const ITEM_ID = /#([A-Za-z]+\d+)\b/
+/** A code fence line: up to 3 spaces, then 3+ backticks or 3+ tildes, then the rest. */
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/
+
+/** An open code fence: its character and the length of its opening run. */
+interface Fence {
+  char: string
+  len: number
+}
+
+/** The fence a line opens, if any: a backtick fence's info string may not hold a backtick (CommonMark). */
+function fenceOpens(line: string): Fence | undefined {
+  const m = FENCE.exec(line)
+  if (m === null || (m[1]![0] === '`' && m[2]!.includes('`'))) {
+    return undefined
+  }
+
+  return { char: m[1]![0]!, len: m[1]!.length }
+}
+
+/** True when the line closes `open`: the same character, at least as long, and nothing else but spaces. */
+function fenceCloses(line: string, open: Fence): boolean {
+  const m = FENCE.exec(line)
+
+  return m !== null && m[1]![0] === open.char && m[1]!.length >= open.len && m[2]!.trim() === ''
+}
+
+/** The fence state after one line: opens, closes or keeps. */
+const fenceStep = (line: string, open: Fence | undefined): Fence | undefined => (open === undefined ? fenceOpens(line) : fenceCloses(line, open) ? undefined : open)
+
+/** True when the text ends inside an open code fence. */
+function endsInFence(lines: readonly string[]): boolean {
+  return lines.reduce<Fence | undefined>((open, line) => fenceStep(bare(line), open), undefined) !== undefined
+}
+
+/** The line without a trailing carriage return: a CRLF file matches like an LF one. */
+const bare = (line: string): string => line.replace(/\r$/, '')
+
+/** Per line: true for a code fence line and for every line inside a fence. Such lines are never items or headings. */
+function fenceMask(lines: readonly string[]): boolean[] {
+  let open: Fence | undefined
+
+  return lines.map(line => {
+    const was = open
+    open = fenceStep(line, open)
+
+    return was !== undefined || open !== undefined
+  })
+}
+/**
+ * An item ID without its `#`: `T` and a digit, then digits and letters (`T12`, `T002A`), or the
+ * older forms of any other letters and digits (`PROJ7`). Case-insensitive; `#TODO` is no ID.
+ */
+const ID_SRC = '(?:[Tt]\\d[0-9A-Za-z]*|[A-Za-z]+\\d+)'
+const ITEM_ID = new RegExp(`#(${ID_SRC})\\b`)
+
+/** The longest `T` suffix read as a number: longer ones would pass 2^53 in base 36. */
+const SUFFIX_MAX = 10
+
+/**
+ * The base-36 value of a `T` ID (any case, no `#`); undefined for any other ID. The IDs the mod
+ * creates are `T` and 4 base-36 characters (0-9, A-Z), the first a digit. An ID's value is its
+ * suffix as a base-36 number (`25` is 77, `0026` is 78), so old and new IDs share one number line
+ * and no value is handed out twice.
+ */
+export function ticketValue(id: string): number | undefined {
+  const m = /^[Tt](\d[0-9A-Za-z]*)$/.exec(id)
+
+  return m === null || m[1]!.length > SUFFIX_MAX ? undefined : parseInt(m[1]!, 36)
+}
+
+/**
+ * The next `count` free ticket IDs (as `T0026`, no `#`): one past the highest value among `ids`,
+ * the 4 characters padded with zeros and uppercase. A value whose form starts with a letter is
+ * skipped. After `9ZZZ` there is no room in 4 characters, so the IDs go on at 5 (`T10000`), and so
+ * on for 6; every ID still starts with a digit.
+ */
+export function nextTicketIds(ids: Iterable<string>, count: number): string[] {
+  let next = 1
+  for (const id of ids) {
+    const value = ticketValue(id)
+    if (value !== undefined) {
+      next = Math.max(next, value + 1)
+    }
+  }
+  const out: string[] = []
+  while (out.length < count) {
+    const suffix = next.toString(36).toUpperCase().padStart(4, '0')
+    if (/^[A-Z]/.test(suffix)) {
+      // Jump to the first value one character longer, whose form is `1` and zeros.
+      next = 36 ** suffix.length
+      continue
+    }
+    out.push(`T${suffix}`)
+    next += 1
+  }
+
+  return out
+}
 
 /** An item's text as the pane shows it: Markdown bold and strike markers taken out, spaces trimmed. */
 export function plainText(markdown: string): string {
@@ -258,8 +459,10 @@ export function plainText(markdown: string): string {
 /** Reads the checkbox items of one todo file, in the format the RULES block gives Claude. */
 export function parseTodo(markdown: string): TodoItem[] {
   const items: TodoItem[] = []
-  for (const line of markdown.split('\n')) {
-    const match = CHECKBOX.exec(line)
+  const lines = markdown.split('\n').map(bare)
+  const isFenced = fenceMask(lines)
+  for (const [at, line] of lines.entries()) {
+    const match = isFenced[at] === true ? null : CHECKBOX.exec(line)
     if (match === null) {
       continue
     }
@@ -541,6 +744,8 @@ function ensureFolders($: EngineInterface): Promise<TodoFolder[]> {
 let centralBlocked = false
 /** The renumbered IDs Claude has not been told of yet. */
 let pendingRenames: string[] = []
+/** The tickets the mod numbered by itself that Claude has not been told of yet. */
+let pendingNumbered: string[] = []
 /** The duplicate tickets removed that Claude has not been told of yet. */
 let pendingRemoved: string[] = []
 /** The empty `.md` files of the known folders, found by the last scan: the Delete empty todos button's work. */
@@ -583,7 +788,7 @@ export function nonBlankLines(markdown: string): string[] {
 
 /** The line with every `#ID` in the map replaced by its new one (one pass, so a new ID is never renamed again). */
 export function applyRenames(line: string, renames: Readonly<Record<string, string>>): string {
-  return line.replace(/#([A-Za-z]+\d+)\b/g, (whole, id: string) => {
+  return line.replace(new RegExp(`#(${ID_SRC})\\b`, 'g'), (whole, id: string) => {
     const fresh = renames[id.toLowerCase()]
 
     return fresh === undefined ? whole : `#${fresh}`
@@ -592,14 +797,14 @@ export function applyRenames(line: string, renames: Readonly<Record<string, stri
 
 /** Like `applyRenames`, but a ticket line keeps its own leading ID: only its references change. */
 export function applyRefRenames(line: string, renames: Readonly<Record<string, string>>): string {
-  const m = /^(\s*[-*+] \[[ xX~>]\]\s+#[A-Za-z]+\d+)(.*)$/.exec(line)
+  const m = new RegExp(`^(\\s*[-*+] \\[[ xX~>]\\]\\s+#${ID_SRC})(.*)$`).exec(line)
 
   return m === null ? applyRenames(line, renames) : `${m[1]}${applyRenames(m[2]!, renames)}`
 }
 
 /**
  * The lines of one source file with every item ID that `used` has already replaced by the next free
- * ID of its letters (`#T3` when `#T1` and `#T2` are taken), and the references to it in the other
+ * ID (`` when `#T1` and `#T2` are taken; `#PROJ3` for other letters), and the references to it in the other
  * lines of the file rewritten the same way. `used` (lowercase IDs) gains each ID the file ends up with.
  * `renames` maps old (lowercase) to new; `pairs` lists them as written, for the toast. A new ID also
  * skips every ID in `reserved` (lowercase): the IDs of the other files still to come.
@@ -613,9 +818,14 @@ export function renumberLines(lines: readonly string[], used: Set<string>, reser
 
     return id === undefined ? [] : [id.toLowerCase()]
   })
+  // Other letters than `T` keep the older rule: the next number after the highest one of those letters.
   const nextFree = (letters: string) => {
+    const all = [...used, ...own, ...reserved]
+    if (letters.toLowerCase() === 't') {
+      return nextTicketIds(all, 1)[0]!
+    }
     let top = 0
-    for (const id of [...used, ...own, ...reserved]) {
+    for (const id of all) {
       const m = /^([a-z]+)(\d+)$/.exec(id)
       if (m !== null && m[1] === letters.toLowerCase()) {
         top = Math.max(top, Number(m[2]))
@@ -664,6 +874,29 @@ export function removedNote(lines: readonly string[]): string | undefined {
         'The Claudeopticon pane (the claudeopticon mod) removed duplicate tickets from the central todo file, and rewrote references to them. Use the kept IDs from now on:',
         ...lines,
       ].join('\n')
+}
+
+/** How many free IDs the prompt line names. */
+const NEXT_IDS_SHOWN = 3
+
+/** The line that gives Claude the next free ticket IDs, project-wide. */
+export function nextIdsLine(ids: Iterable<string>): string {
+  return `Next free ticket IDs: ${nextTicketIds(ids, NEXT_IDS_SHOWN).map(id => `#${id}`).join(', ')}`
+}
+
+/** The one-time note for Claude after the mod gave IDs to tickets that had none. */
+export function numberedNote(lines: readonly string[]): string | undefined {
+  return lines.length === 0
+    ? undefined
+    : [
+        'The Claudeopticon pane (the claudeopticon mod) gave an ID to these todo tickets that had none, and wrote it into the todo file. Use these IDs from now on:',
+        ...lines,
+      ].join('\n')
+}
+
+/** Every item ID of every todo and archive file on the board, lowercase: all folders, the project-wide number line. */
+function projectIds(): string[] {
+  return todoFiles.flatMap(file => file.items.flatMap(item => (item.id === undefined ? [] : [item.id.toLowerCase()])))
 }
 
 /** The one-time note for Claude after IDs were renumbered. */
@@ -739,6 +972,30 @@ async function writeFile($: EngineInterface, path: string, text: string): Promis
 let isWorking = false
 
 /**
+ * The one writer lock of the todo files: a promise chain, so a user action waits its turn, and a
+ * count of the jobs queued or running, so a scan writer sees the lock held at once (no gap between
+ * two chained jobs). Two writers never overlap, which keeps one from writing over the other's change.
+ */
+let writeChain: Promise<unknown> = Promise.resolve()
+let writeJobs = 0
+
+/** Runs `job` once every earlier writer is done. A failed job does not break the chain. */
+function withWriteLock<T>(job: () => Promise<T>): Promise<T> {
+  writeJobs += 1
+  const run = writeChain.then(job)
+  writeChain = run.then(() => undefined, () => undefined).finally(() => {
+    writeJobs -= 1
+  })
+
+  return run
+}
+
+/** For a scan writer: runs `job` if no writer holds the lock, else skips this scan (undefined). */
+async function tryWriteLock<T>(job: () => Promise<T>): Promise<T | undefined> {
+  return writeJobs > 0 ? undefined : withWriteLock(job)
+}
+
+/**
  * The one file the central todo is merged into: `TODO.md` when the central folder has it; else the
  * only top-level `.md` todo file (one with checkbox items) when there is exactly one; else `TODO.md`,
  * to be created.
@@ -767,7 +1024,7 @@ const destOf = (name: string, target: string): string => (name.startsWith('archi
  * kept letter for letter (bullet, box, spacing, text), and that ID. Undefined for any other line.
  */
 export function foldParts(line: string): { key: string; id: string } | undefined {
-  const m = /^(\s*[-*+] \[[ xX~>]\]\s+)#([A-Za-z]+\d+)(?=\s|$)(.*)$/.exec(line.trimEnd())
+  const m = new RegExp(`^(\\s*[-*+] \\[[ xX~>]\\]\\s+)#(${ID_SRC})(?=\\s|$)(.*)$`).exec(line.trimEnd())
 
   return m === null ? undefined : { key: `${m[1]}#${m[3]}`, id: m[2]! }
 }
@@ -779,6 +1036,17 @@ async function isPlainFile($: EngineInterface, path: string): Promise<boolean> {
   const real = await realOf($, path)
 
   return stat !== undefined && stat.kind === 'file' && real !== undefined && normPath(real) === normPath(path)
+}
+
+/** True when anything stands at the path's name in its folder, a dangling symlink included; a folder that will not list counts as yes. */
+async function hasEntry($: EngineInterface, path: string): Promise<boolean> {
+  const dir = path.slice(0, path.lastIndexOf('/'))
+  if (!(await $.fs.exists(dir).catch(() => true))) {
+    return false
+  }
+  const entries = await $.fs.list(dir).catch(() => undefined)
+
+  return entries === undefined || entries.some(entry => entry.name === path.slice(dir.length + 1))
 }
 
 /**
@@ -815,8 +1083,12 @@ async function isTrustedDir($: EngineInterface, path: string): Promise<boolean> 
  * folder would be the global one.
  */
 async function consolidate($: EngineInterface): Promise<void> {
+  await withWriteLock(() => consolidateLocked($))
+}
+
+async function consolidateLocked($: EngineInterface): Promise<void> {
   const central = centralFolder()
-  if (isWorking || central === undefined || !canConsolidate()) {
+  if (isWorking || isArchiving || isNumbering || central === undefined || !canConsolidate()) {
     return
   }
   isWorking = true
@@ -899,11 +1171,16 @@ async function consolidate($: EngineInterface): Promise<void> {
     const told: string[] = []
     const out = new Map<Job, string[]>()
     // Every ID of every moved file: a new ID never takes one a later file keeps, so one clash renames one line.
-    const reserved = new Set(jobs.flatMap(job => job.lines.flatMap(line => {
-      const id = CHECKBOX.test(line) ? ITEM_ID.exec(line)?.[1] : undefined
+    // The IDs of every folder and archive on the board are reserved too: a new value is free project-wide.
+    const reserved = new Set([
+      ...projectIds(),
+      ...reservedIds,
+      ...jobs.flatMap(job => job.lines.flatMap(line => {
+        const id = CHECKBOX.test(line) ? ITEM_ID.exec(line)?.[1] : undefined
 
-      return id === undefined ? [] : [id.toLowerCase()]
-    })))
+        return id === undefined ? [] : [id.toLowerCase()]
+      })),
+    ])
     for (const job of jobs) {
       const fresh = renumberLines(job.lines, used, reserved)
       out.set(job, fresh.lines)
@@ -976,8 +1253,463 @@ async function consolidate($: EngineInterface): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------- archiving closed tickets
+
+/** A closed ticket is moved once it has been closed this long: a mis-click on Mark done can still be undone. */
+const ARCHIVE_AFTER_MS = 5000
+const HEADING = /^#{1,6}\s/
+
+/** A closed ticket in a todo file's text: its lines, where they sit (`from` to `to`, end excluded), and the heading above it. */
+export type ClosedBlock = { heading?: string; lines: string[]; from: number; to: number }
+
+/** True for a line that is, or looks like, a checkbox that is not done: a line that looks like one but fails the match counts open. */
+function isOpenLine(line: string): boolean {
+  const box = CHECKBOX.exec(line)?.[1]
+  if (box !== undefined) {
+    return box.toLowerCase() !== 'x'
+  }
+
+  return /^\s*[-*+] \[[^\]]*\]/.test(line)
+}
+
+/**
+ * The tickets of a todo file that can leave it: a top-level `- [x]` line plus the indented lines
+ * under it, when every checkbox in that block is `[x]`. The block runs past blank lines while the
+ * next non-blank line is indented. An open or in-progress subtask keeps the whole block, and so does
+ * a code fence line in it. Prose, headings and tables are never part of a block. The heading is the
+ * last heading line above the block (any level), outside code fences. A trailing carriage return
+ * is ignored, so a CRLF file reads as an LF one; `lines` are without it.
+ */
+export function closedBlocks(markdown: string): ClosedBlock[] {
+  const lines = markdown.split('\n').map(bare)
+  const blocks: ClosedBlock[] = []
+  let heading: string | undefined
+  let open: Fence | undefined
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]!
+    const isFenced = open !== undefined
+    if (isFenced || fenceOpens(line) !== undefined) {
+      open = fenceStep(line, open)
+    } else if (HEADING.test(line)) {
+      heading = line.trimEnd()
+    } else if (/^[-*+] \[[xX]\]\s+/.test(line)) {
+      // The block ends at its last indented line; blank lines after it are not taken.
+      let end = i + 1
+      for (let at = i + 1; at < lines.length && (lines[at]!.trim() === '' || /^[ \t]+\S/.test(lines[at]!)); at += 1) {
+        end = lines[at]!.trim() === '' ? end : at + 1
+      }
+      const block = lines.slice(i, end)
+      // A fence line in a block is not skipped: the walk goes on line by line so the fence state stays true.
+      if (block.some(one => fenceOpens(one) !== undefined || FENCE.test(one))) {
+        i += 1
+
+        continue
+      }
+      if (!block.some(isOpenLine)) {
+        blocks.push({ ...(heading === undefined ? {} : { heading }), lines: block, from: i, to: end })
+      }
+      i = end
+
+      continue
+    }
+    i += 1
+  }
+
+  return blocks
+}
+
+/** The text without the lines of the given blocks; everything else stays as it was. */
+export function removeBlocks(markdown: string, blocks: readonly ClosedBlock[]): string {
+  return markdown.split('\n').filter((_, i) => !blocks.some(block => i >= block.from && i < block.to)).join('\n')
+}
+
+/**
+ * True when `block` stands in `lines` as one whole block: its lines in order (trailing spaces
+ * ignored), from a non-indented first line, and the next non-blank line after it is not indented.
+ */
+function hasBlock(lines: readonly string[], block: readonly string[]): boolean {
+  const flat = lines.map(line => bare(line).trimEnd())
+  const want = block.map(line => bare(line).trimEnd())
+
+  return flat.some((_, at) => {
+    if (!want.every((line, k) => flat[at + k] === line)) {
+      return false
+    }
+    const after = flat.slice(at + want.length).find(line => line.trim() !== '')
+
+    return after === undefined || !/^[ \t]/.test(after)
+  })
+}
+
+/**
+ * The archive file's text with the blocks added. A block goes at the end of the section under its
+ * own heading when the archive has that heading (the last one, outside code fences), else the
+ * heading is added at the end of the file; a block with no heading goes at the end. A block is
+ * skipped only when it stands whole in the archive AND is one of `wrote`, the blocks this mod wrote
+ * last for the file: a retry never adds a block twice, and a new block that equals an old archived
+ * one is added. Lines end with the archive's own line ending (CRLF if it has one), else `eol`.
+ */
+export function addToArchive(existing: string, blocks: readonly ClosedBlock[], wrote: readonly (readonly string[])[] = [], eol = '\n'): string {
+  const lines = existing.trim() === '' ? [] : existing.replace(/(\r?\n)+$/, '').split('\n').map(bare)
+  const end = existing.includes('\r\n') ? '\r\n' : existing.trim() === '' ? eol : '\n'
+  const base = [...lines]
+  const wroteSet = new Set(wrote.map(one => one.join('\n')))
+  const headings = [...new Set(blocks.map(block => block.heading))]
+  for (const heading of headings) {
+    const fresh = blocks.filter(block => block.heading === heading && !(hasBlock(base, block.lines) && wroteSet.has(block.lines.join('\n')))).flatMap(block => block.lines)
+    if (fresh.length === 0) {
+      continue
+    }
+    const isFenced = fenceMask(lines)
+    const at = heading === undefined ? -1 : lines.map((line, k) => (!isFenced[k] && line.trimEnd() === heading ? k : -1)).reduce((last, k) => Math.max(last, k), -1)
+    if (heading === undefined) {
+      lines.push(...fresh)
+    } else if (at < 0) {
+      lines.push(...(lines.length > 0 ? [''] : []), heading, '', ...fresh)
+    } else {
+      let stop = lines.findIndex((line, k) => k > at && !isFenced[k] && HEADING.test(line))
+      stop = stop < 0 ? lines.length : stop
+      while (stop - 1 > at && lines[stop - 1]!.trim() === '') {
+        stop -= 1
+      }
+      const isNext = stop < lines.length
+      lines.splice(stop, 0, ...(stop === at + 1 ? [''] : []), ...fresh, ...(isNext && lines[stop]!.trim() !== '' ? [''] : []))
+    }
+  }
+
+  return `${lines.join(end)}${end}`
+}
+
+/**
+ * The name of the archive file the Show completed link opens, for a folder: a `TODO.md` (any case)
+ * among its todo or archive files; else its only live file; else its only archive file; else `TODO.md`.
+ */
+export function archiveName(files: readonly { name: string; folder: string; isArchived?: boolean }[], folder: string): string {
+  const mine = files.filter(file => file.folder === folder)
+  const live = mine.filter(file => file.isArchived !== true).map(file => file.name)
+  const old = mine.filter(file => file.isArchived === true).map(file => file.name.slice('archive/'.length))
+
+  return [...live, ...old].find(name => name.toLowerCase() === 'todo.md') ?? (live.length === 1 ? live[0] : old.length === 1 ? old[0] : undefined) ?? 'TODO.md'
+}
+
+/** The archive file the Show completed link opens; undefined until a scan has made sure it exists. */
+let archiveLink: string | undefined
+
+/**
+ * Works out the archive file of the central folder (else the primary one) and creates it, empty,
+ * when it is missing and the folder is safe to write, so the link always opens something.
+ */
+async function refreshArchiveLink($: EngineInterface): Promise<void> {
+  const folders = todoFolders ?? []
+  const central = centralFolder()
+  const folder = folders.find(one => one.path === central) ?? folders.find(one => !one.isOther)
+  let link: string | undefined
+  if (folder !== undefined) {
+    const dir = `${folder.path}/archive`
+    const path = `${dir}/${archiveName(todoFiles, folder.path)}`
+    if (await $.fs.exists(path).catch(() => false)) {
+      link = path
+    } else if ((await isTrustedDir($, folder.path)) && (!(await $.fs.exists(dir).catch(() => false)) || normPath((await realOf($, dir)) ?? '') === normPath(dir)) && !(await hasEntry($, path))) {
+      await writeFile($, path, '').catch(() => undefined)
+      link = (await $.fs.exists(path).catch(() => false)) ? path : undefined
+    }
+  }
+  if (link !== archiveLink) {
+    archiveLink = link
+    redraw($)
+  }
+}
+
+/** The first time a closed block was seen closed, by file and text: the debounce. */
+const closedAt = new Map<string, number>()
+let isArchiving = false
+
+/**
+ * Moves the closed tickets of every trusted top-level todo file to `archive/<same name>`, under the
+ * heading each had. For each file: read it; read the archive; write the archive; read it back and
+ * check every moved line is there; read the file again and write it without those lines only if it
+ * is unchanged since the first read. Otherwise nothing more happens this scan: the next one tries
+ * again, and the archive's own check keeps a block from being added twice. Never through a symlink,
+ * never into the global folder, never from a file that did not read.
+ */
+async function archiveDone($: EngineInterface): Promise<void> {
+  if (isArchiving || isWorking) {
+    return
+  }
+  isArchiving = true
+  try {
+    // A held lock skips this scan; the next one tries again.
+    const isMoved = (await tryWriteLock(() => archivePass($))) === true
+    if (isMoved) {
+      await scan($, true)
+    }
+  } finally {
+    isArchiving = false
+  }
+}
+
+/** One archive pass over the todo files, under the writer lock; true when a file was rewritten. */
+async function archivePass($: EngineInterface): Promise<boolean> {
+  const time = await $.clock.now()
+  const seen = new Set<string>()
+  let isMoved = false
+  for (const file of todoFiles) {
+    if (file.isArchived === true || file.name.includes('/') || !file.items.some(item => item.status === 'completed')) {
+      continue
+    }
+    const path = `${file.folder}/${file.name}`
+    if (!(await isTrustedDir($, file.folder)) || !(await isPlainFile($, path))) {
+      continue
+    }
+    const text = await $.fs.read(path).catch(() => undefined)
+    if (typeof text !== 'string') {
+      continue
+    }
+    const ready = closedBlocks(text).filter(block => {
+      const sign = `${path}\0${block.lines.join('\n')}`
+      seen.add(sign)
+      closedAt.set(sign, closedAt.get(sign) ?? time)
+
+      return time - closedAt.get(sign)! >= ARCHIVE_AFTER_MS
+    })
+    // One file that fails leaves itself as it is; the others go on.
+    if (ready.length > 0 && (await moveBlocks($, file, path, text, ready).catch(() => false))) {
+      isMoved = true
+    }
+  }
+  for (const sign of [...closedAt.keys()]) {
+    if (!seen.has(sign)) {
+      closedAt.delete(sign)
+    }
+  }
+
+  return isMoved
+}
+
+/** The blocks this mod wrote last to each archive file (by path), as lines: a retry skips only these. Cleared once the source is cut. */
+const lastWrote = new Map<string, string[][]>()
+
+/** Puts the archive back to `before` when it still holds exactly `next`, the text the step wrote; a changed archive is left. */
+async function rollBack($: EngineInterface, target: string, before: string, next: string): Promise<void> {
+  if ((await isPlainFile($, target)) && (await readStrict($, target).catch(() => undefined)) === next) {
+    await $.fs.write(target, before).catch(() => undefined)
+    lastWrote.delete(target)
+  }
+}
+
+/** The archive files already named in an "unclosed code block" toast: one toast each, per session. */
+const unclosedToasted = new Set<string>()
+
+/** One file's move; true when the file was rewritten without the blocks. */
+async function moveBlocks($: EngineInterface, file: TodoFile, path: string, text: string, ready: readonly ClosedBlock[]): Promise<boolean> {
+  const dir = `${file.folder}/archive`
+  const target = `${dir}/${file.name}`
+  const isThere = await $.fs.exists(target)
+  // Never written through a symlink: archive/ and an existing archive file must be their own real paths.
+  // A missing archive file with anything at its name (a dangling symlink) is left alone.
+  if (((await $.fs.exists(dir)) && normPath((await realOf($, dir)) ?? '') !== normPath(dir)) || (isThere ? !(await isPlainFile($, target)) : await hasEntry($, target))) {
+    return false
+  }
+  const before = isThere ? await readStrict($, target) : ''
+  // Text added after an open code fence would sit inside it, and read as code: the move waits for a fix.
+  if (endsInFence(before.split('\n'))) {
+    if (!unclosedToasted.has(target)) {
+      unclosedToasted.add(target)
+      $.ui.toast(`Not archived: ${target} has an unclosed code block`)
+    }
+
+    return false
+  }
+  const next = addToArchive(before, ready, lastWrote.get(target) ?? [], text.includes('\r\n') ? '\r\n' : '\n')
+  let isWritten = false
+  if (next !== before) {
+    // The checks first, then the read and compare as the last call before the write.
+    const now = await $.fs.exists(target)
+    if (now !== isThere || (now ? !(await isPlainFile($, target)) : await hasEntry($, target)) || (now ? await readStrict($, target) : '') !== before) {
+      return false
+    }
+    lastWrote.set(target, ready.map(block => block.lines))
+    await writeFile($, target, next)
+    isWritten = true
+  }
+  // Confirmed from the disk before the source is touched.
+  const after = (await readStrict($, target)).split('\n')
+  if (!ready.every(block => hasBlock(after, block.lines))) {
+    return false
+  }
+  if (!(await isPlainFile($, path)) || (await readStrict($, path).catch(() => undefined)) !== text) {
+    // The source changed: the archive goes back, so the blocks are not in two places.
+    if (isWritten) {
+      await rollBack($, target, before, next)
+    }
+
+    return false
+  }
+  await $.fs.write(path, removeBlocks(text, ready))
+  lastWrote.delete(target)
+  const moved = ready.flatMap(block => {
+    const item = parseTodo(block.lines[0]!)[0]
+
+    return item === undefined
+      ? []
+      : [{ text: item.text, status: 'completed' as const, owners: [], key: qualifiedKey(file, item), localKey: itemKey(item), folder: file.folder, file: `archive/${file.name}`, path: filePath({ ...file, name: `archive/${file.name}` }) } satisfies ItemView]
+  })
+  archivedNow = [...moved, ...archivedNow].slice(0, KEPT_ARCHIVED)
+
+  return true
+}
+
+/** The first time a line was seen without an ID, by file and text: the debounce. */
+const unnumberedAt = new Map<string, number>()
+const NUMBER_AFTER_MS = 5000
+let isNumbering = false
+
+/** The ID a checkbox line carries (no `#`), read as the parser reads it; undefined for a line with none. */
+function lineId(line: string): string | undefined {
+  const m = CHECKBOX.exec(line)
+
+  return m === null ? undefined : ITEM_ID.exec(plainText(m[2] ?? ''))?.[1]
+}
+
+/** The item's leading ID (no `#`): the one right after the box, at the start of its text. */
+const leadingId = (text: string): string | undefined => new RegExp(`^#(${ID_SRC})\\b`).exec(text)?.[1]
+
+/**
+ * The item's own ID for a checkbox line's text. A leading ID is its own. Else the first ID anywhere,
+ * unless another ticket owns that ID as its leading ID (`owned`, lowercase): then the line only
+ * refers to that ticket and has no ID of its own.
+ */
+function ownId(text: string, owned: ReadonlySet<string>): string | undefined {
+  const lead = leadingId(text)
+  const first = ITEM_ID.exec(text)?.[1]
+
+  return lead ?? (first !== undefined && owned.has(first.toLowerCase()) ? undefined : first)
+}
+
+/** True for a checkbox line that has text and no ID of its own. */
+const isUnnumbered = (line: string, owned: ReadonlySet<string>): boolean => {
+  const m = CHECKBOX.exec(line)
+
+  return m !== null && (m[2] ?? '').trim() !== '' && ownId(plainText(m[2] ?? ''), owned) === undefined
+}
+
+/**
+ * The text with `ids` inserted, in order, right after the box of each line in `at` (line indexes):
+ * `- [ ] Fix x` becomes `- [ ] Fix x`.
+ */
+export function insertIds(text: string, at: readonly number[], ids: readonly string[]): string {
+  const lines = text.split('\n')
+  at.forEach((index, i) => {
+    lines[index] = lines[index]!.replace(/^(\s*[-*+] \[[ xX~>]\]\s+)/, `$1#${ids[i]!} `)
+  })
+
+  return lines.join('\n')
+}
+
+/**
+ * Gives every unnumbered checkbox line of every trusted top-level todo file the next free ticket ID
+ * (free project-wide: every folder, live and archive), after the line was seen without one for
+ * NUMBER_AFTER_MS, so Claude's own edit is done first. The safe write is the archive move's: read,
+ * compute, read again right before the write, write only if the text is unchanged, never through a
+ * symlink or into the global folder, never from a file that did not read. A file that fails is left
+ * for the next scan. True when any file was written. Claude is told once, with the next prompt.
+ */
+async function numberTickets($: EngineInterface): Promise<boolean> {
+  if (isNumbering || isWorking) {
+    return false
+  }
+  isNumbering = true
+  try {
+    // A held lock skips this scan; the next one tries again.
+    return (await tryWriteLock(() => numberPass($))) ?? false
+  } finally {
+    isNumbering = false
+  }
+}
+
+/** One numbering pass, under the writer lock. */
+async function numberPass($: EngineInterface): Promise<boolean> {
+  const time = await $.clock.now()
+  const seen = new Set<string>()
+  // The leading IDs of every ticket on the board: a line that only names one of them refers to it.
+  const owned = new Set(todoFiles.flatMap(file => file.items.flatMap(item => leadingId(item.text) ?? [])).map(id => id.toLowerCase()))
+  const told: string[] = []
+  for (const file of todoFiles) {
+    if (file.isArchived === true || file.name.includes('/') || file.items.every(item => item.id !== undefined && (leadingId(item.text) !== undefined || !owned.has(item.id.toLowerCase())))) {
+      continue
+    }
+    const path = `${file.folder}/${file.name}`
+    if (!(await isTrustedDir($, file.folder)) || !(await isPlainFile($, path))) {
+      continue
+    }
+    const text = await $.fs.read(path).catch(() => undefined)
+    if (typeof text !== 'string') {
+      continue
+    }
+    // A carriage return never reaches a match, and a line in a code fence is never a ticket.
+    const lines = text.split('\n').map(bare)
+    const isFenced = fenceMask(lines)
+    lines.forEach((line, index) => {
+      const m = isFenced[index] === true ? null : CHECKBOX.exec(line)
+      const id = m === null ? undefined : leadingId(plainText(m[2] ?? ''))
+      if (id !== undefined) {
+        owned.add(id.toLowerCase())
+      }
+    })
+    const at: number[] = []
+    lines.forEach((line, index) => {
+      if (isFenced[index] === true || !isUnnumbered(line, owned)) {
+        return
+      }
+      const sign = `${path}\0${line}`
+      seen.add(sign)
+      unnumberedAt.set(sign, unnumberedAt.get(sign) ?? time)
+      if (time - unnumberedAt.get(sign)! >= NUMBER_AFTER_MS) {
+        at.push(index)
+      }
+    })
+    if (at.length === 0) {
+      continue
+    }
+    // The IDs are chosen now, from the board, the IDs reserved at this moment (a prompt may have named
+    // some while this pass awaited) and the file's own text, which may be newer than the board. They are
+    // reserved in the same step, with no await between: a prompt after this never names them, and
+    // they stay reserved until a scan finds them in a file.
+    pruneReserved()
+    const ids = nextTicketIds([...projectIds(), ...reservedIds, ...lines.flatMap(line => lineId(line)?.toLowerCase() ?? [])], at.length)
+    ids.forEach(id => reservedIds.add(id.toLowerCase()))
+    const next = insertIds(text, at, ids)
+    // The checks first, then the read and compare as the last call before the write.
+    if (!(await isPlainFile($, path)) || (await readStrict($, path).catch(() => undefined)) !== text) {
+      ids.forEach(id => reservedIds.delete(id.toLowerCase()))
+      continue
+    }
+    await $.fs.write(path, next)
+    const place = file.rel === undefined ? file.name : `${file.rel}/${file.name}`
+    at.forEach((index, i) => told.push(`- ${place}: #${ids[i]!} is "${ticketSummary(plainText(CHECKBOX.exec(lines[index]!)?.[2] ?? ''), 60)}"`))
+  }
+  for (const sign of [...unnumberedAt.keys()]) {
+    if (!seen.has(sign)) {
+      unnumberedAt.delete(sign)
+    }
+  }
+  pendingNumbered = [...pendingNumbered, ...told]
+
+  return told.length > 0
+}
+
 /** The answer of `uname -s`, asked once. Empty when it cannot be asked. */
 let unameCache: string | undefined
+
+/** `uname -s`, asked once and kept in `unameCache`; empty when it cannot be asked. */
+async function platformName($: EngineInterface): Promise<string> {
+  if (unameCache === undefined) {
+    unameCache = ((await $.process.run(['uname', '-s']).catch(() => undefined))?.stdout ?? '').trim()
+  }
+
+  return unameCache
+}
 
 /** The command lines that send a file to the OS trash, in the order they are tried. */
 async function trashCommands($: EngineInterface, path: string): Promise<string[][]> {
@@ -996,10 +1728,7 @@ async function trashCommands($: EngineInterface, path: string): Promise<string[]
 
     return [['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script]]
   }
-  if (unameCache === undefined) {
-    unameCache = ((await $.process.run(['uname', '-s']).catch(() => undefined))?.stdout ?? '').trim()
-  }
-  if (unameCache === 'Darwin') {
+  if ((await platformName($)) === 'Darwin') {
     // The macOS `trash` CLI takes no `--`; the path is absolute, so it cannot look like a flag.
     const quoted = path.replace(/[\\"]/g, char => `\\${char}`)
 
@@ -1007,6 +1736,33 @@ async function trashCommands($: EngineInterface, path: string): Promise<string[]
   }
 
   return [['gio', 'trash', '--', path], ['trash-put', '--', path], ['kioclient5', 'move', path, 'trash:/']]
+}
+
+/**
+ * The command line that opens an absolute file path in the OS default app. No shell, and the path
+ * is absolute, so it cannot look like a flag.
+ */
+export function openCommand(path: string, platform: string): string[] {
+  if (isWinPath(path)) {
+    return ['explorer.exe', path.replace(/\//g, '\\')]
+  }
+
+  return platform === 'Darwin' ? ['open', path] : ['xdg-open', path]
+}
+
+/** Opens the archive file in the OS default app; a toast says so when that fails. */
+async function openArchive($: EngineInterface): Promise<void> {
+  const path = archiveLink
+  if (path === undefined) {
+    return
+  }
+  const argv = openCommand(path, isWinPath(path) ? '' : await platformName($))
+  const result = await $.process.run(argv).catch(() => undefined)
+  // explorer.exe exits 1 even when it opened the file; any other command must exit 0.
+  const isOk = result !== undefined && (result.exitCode === 0 || (argv[0] === 'explorer.exe' && result.exitCode === 1))
+  if (!isOk) {
+    $.ui.toast(`Could not open ${path}`)
+  }
 }
 
 /**
@@ -1033,8 +1789,12 @@ async function trashFile($: EngineInterface, path: string): Promise<boolean> {
  * on an emptied `archive/` and folder, which fails on a non-empty directory: the intended guard.
  */
 async function deleteEmpty($: EngineInterface): Promise<void> {
+  await withWriteLock(() => deleteEmptyLocked($))
+}
+
+async function deleteEmptyLocked($: EngineInterface): Promise<void> {
   const central = centralFolder()
-  if (isWorking || central === undefined || !canDeleteEmpty()) {
+  if (isWorking || isArchiving || isNumbering || central === undefined || !canDeleteEmpty()) {
     return
   }
   isWorking = true
@@ -1149,8 +1909,12 @@ export function removeDuplicateTickets(markdown: string): { text: string; remove
  * read again right before it is written, and left alone if it changed.
  */
 async function deleteDupTickets($: EngineInterface): Promise<void> {
+  await withWriteLock(() => deleteDupTicketsLocked($))
+}
+
+async function deleteDupTicketsLocked($: EngineInterface): Promise<void> {
   const central = centralFolder()
-  if (isWorking || central === undefined || !canDeleteDupTickets()) {
+  if (isWorking || isArchiving || isNumbering || central === undefined || !canDeleteDupTickets()) {
     return
   }
   isWorking = true
@@ -1305,11 +2069,20 @@ async function scan($: EngineInterface, isFull = false): Promise<void> {
     redraw($)
   }
   const sign = `${hasDupTickets}|${emptyFiles.map(one => one.path).join('|')}`
-  emptyFiles = empties
+  await refreshArchiveLink($).catch(() => undefined)
+  // The archive file the Show completed link opens may be empty: Delete empty todos leaves it be.
+  emptyFiles = empties.filter(one => one.path !== archiveLink)
   await refreshDupTickets($)
   if (sign !== `${hasDupTickets}|${emptyFiles.map(one => one.path).join('|')}`) {
     redraw($)
   }
+  // Numbering first, and a scan again after a write, so the archive move never works from stale text.
+  if (await numberTickets($).catch(() => false)) {
+    await scan($, true)
+
+    return
+  }
+  await archiveDone($).catch(() => undefined)
   void sortItems($).catch(() => undefined)
 }
 
@@ -1453,6 +2226,97 @@ async function sortItems($: EngineInterface): Promise<void> {
   }
 }
 
+/** The open items of the live files, once each by key: [key, text]. */
+function openItems(): [string, string][] {
+  const open = todoFiles
+    .filter(file => file.isArchived !== true)
+    .flatMap(file => file.items.map(item => ({ item, key: qualifiedKey(file, item) })))
+    .filter(one => one.item.status !== 'completed')
+
+  return [...new Map(open.map(one => [one.key, one.item.text])).entries()]
+}
+
+/**
+ * Whether a fresh sort differs enough from the current categories to be worth applying. Over the
+ * given open tickets: true when the number of groups differs, or when at least a quarter of the
+ * tickets land in a new group that does not map to their old one. Each new group maps to the old
+ * group it shares the most tickets with (an unsorted ticket counts as an old group of its own), so
+ * a rename alone moves nothing.
+ */
+export function isSubstantialChange(old: CategoryBook, next: CategoryBook, keys: readonly string[]): boolean {
+  const oldOf = (key: string) => (old.categories.includes(old.items[key] ?? '') ? old.items[key]! : UNSORTED)
+  const newOf = (key: string) => next.items[key] ?? UNSORTED
+  const groups = (of: (key: string) => string) => new Set(keys.map(of).filter(name => name !== UNSORTED))
+  if (groups(oldOf).size !== groups(newOf).size) {
+    return true
+  }
+  const mapped = new Map<string, string>()
+  for (const name of new Set(keys.map(newOf))) {
+    const shared = new Map<string, number>()
+    for (const key of keys.filter(one => newOf(one) === name)) {
+      shared.set(oldOf(key), (shared.get(oldOf(key)) ?? 0) + 1)
+    }
+    mapped.set(name, [...shared.entries()].sort((a, b) => b[1] - a[1])[0]![0])
+  }
+  const moved = keys.filter(key => mapped.get(newOf(key)) !== oldOf(key)).length
+
+  return keys.length > 0 && moved * 4 >= keys.length
+}
+
+/**
+ * The Recategorize button: asks the model to sort every open ticket from scratch (the sort prompt,
+ * batch after batch, ignoring the current assignments), then keeps the result only when it is a
+ * real change. Otherwise the current categories stay, and a note says so. A model failure leaves
+ * everything as it was.
+ */
+async function recategorize($: EngineInterface): Promise<void> {
+  const open = openItems()
+  if (isRecategorizing || isSorting || open.length === 0) {
+    return
+  }
+  isRecategorizing = true
+  isSorting = true
+  recatNote = undefined
+  redraw($)
+  let text: string | undefined = 'Could not recategorize'
+  try {
+    if (bookDir === undefined) {
+      throw new Error('no book folder')
+    }
+    let fresh: CategoryBook = { categories: [], items: {} }
+    for (let from = 0; from < open.length; from += SORT_BATCH) {
+      const batch = open.slice(from, from + SORT_BATCH)
+      const reply = await $.model.complete({ model: SORT_MODEL, prompt: sortPrompt(fresh.categories, batch.map(([, one]) => one)), maxTokens: 4000 })
+      const next = reply.isAnswered ? applySortReply(fresh, batch.map(([key]) => key), reply.text) : undefined
+      if (next === undefined) {
+        throw new Error('unreadable reply')
+      }
+      fresh = next
+    }
+    const keys = open.map(([key]) => key).filter(key => fresh.items[key] !== undefined)
+    if (keys.length === 0) {
+      throw new Error('nothing sorted')
+    }
+    // Groups the model named but gave no ticket are dropped, so they do not count as groups.
+    const used = new Set(keys.map(key => fresh.items[key]))
+    fresh = { categories: fresh.categories.filter(name => used.has(name)), items: fresh.items }
+    if (isSubstantialChange(book, fresh, keys)) {
+      book = fresh
+      await $.fs.write(`${bookDir}/categories.json`, `${JSON.stringify(book, null, 2)}\n`)
+      text = undefined
+    } else {
+      text = 'The current categories are correct'
+    }
+  } catch {
+    // The failure note stays.
+  } finally {
+    isRecategorizing = false
+    isSorting = false
+    recatNote = text === undefined ? undefined : { text, until: (await $.clock.now()) + NOTE_MS }
+    redraw($)
+  }
+}
+
 // ---------------------------------------------------------------- agent to item matching
 
 const MATCH_ITEMS = 80
@@ -1589,7 +2453,9 @@ async function stopAgent($: EngineInterface, index: number): Promise<void> {
     if (stopped.deny !== undefined || stopped.isError === true) {
       throw new Error(stopped.deny ?? stopped.text ?? 'TaskStop failed')
     }
+    const old = agentRows
     agentRows = agentRows.map(one => (one.id === row.id ? { ...one, status: 'killed', endedAt: one.endedAt ?? clockMs } : one))
+    noteEnds(old, agentRows)
     $.ui.toast(`Stopped ${agentLabel(index)}: ${ticketSummary(row.description, 60)}`)
   } catch (error) {
     $.ui.toast(`Could not stop ${agentLabel(index)}: ${error instanceof Error ? error.message : String(error)}`)
@@ -1675,7 +2541,9 @@ async function refreshAgents($: EngineInterface, isForced = false): Promise<void
       pendingTokens.delete(id)
     }
   }
-  agentRows = [...known.values()]
+  const next = [...known.values()]
+  noteEnds(rows, next)
+  agentRows = next
   lastClock = time
   clockMs = time
   redraw($)
@@ -1692,24 +2560,24 @@ function matchNewAgents($: EngineInterface, rows: readonly AgentRow[]): void {
 
 // ---------------------------------------------------------------- labels
 
-const LABEL = /\b[Aa](\d{1,3})\b/g
+const LABEL = /\b[Aa](\d{1,6})\b/g
 
 /**
  * The note that tells the model which agent each pane label in the text names, or undefined when
  * the text names none. A label is the agent's place in this session's start order: A1 the first.
  */
-export function labelNote(text: string, rows: readonly AgentRow[]): string | undefined {
+export function labelNote(text: string, rows: readonly AgentRow[], base = agentBase): string | undefined {
   const seen = new Set<number>()
   const lines: string[] = []
   for (const match of text.matchAll(LABEL)) {
-    const index = Number(match[1]) - 1
+    const index = Number(match[1]) - 1 - base
     const row = rows[index]
     if (row === undefined || seen.has(index)) {
       continue
     }
     seen.add(index)
     const address = row.name === undefined ? `agent ID ${row.id}` : `name "${row.name}", agent ID ${row.id}`
-    lines.push(`- A${index + 1}: "${row.description}" (${row.type}, ${row.status}; ${address})`)
+    lines.push(`- A${base + index + 1}: "${row.description}" (${row.type}, ${row.status}; ${address})`)
   }
 
   return lines.length === 0
@@ -1783,7 +2651,17 @@ function clip(text: string, width: number): string {
 // ---------------------------------------------------------------- view
 
 /** The orchestrator as the view needs it: its ticket keys, whether a turn runs, and its call summary. */
-export type OrchestratorState = { keys: ReadonlySet<string>; isRunning: boolean; doing?: string; toolCalls: number }
+export type OrchestratorState = { keys: ReadonlySet<string>; isRunning: boolean; doing?: string; toolCalls: number; title?: string }
+
+/** The orchestrator card's title: Claude's headline, else the first ticket it owns, and how many more. */
+export function orchestratorTitle(title: string | undefined, tickets: readonly string[]): string {
+  const first = tickets[0]
+  if (title !== undefined && title !== '') {
+    return title
+  }
+
+  return first === undefined ? 'Orchestrator' : tickets.length > 1 ? `${first} and ${tickets.length - 1} more` : first
+}
 
 /** What the pane draws, worked out once for the cards and the terminal alike. */
 export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], now: number, orch?: OrchestratorState): View {
@@ -1821,8 +2699,12 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
   for (const file of sources) {
     nameCount.set(file.name, (nameCount.get(file.name) ?? 0) + 1)
   }
+  // A file's counts include the done tickets of its archive file, so archiving leaves its bar as it was.
+  const archiveDone = (file: TodoFile) => count(list.find(one => one.isArchived === true && one.folder === file.folder && one.name === `archive/${file.name}`)?.items ?? []).done
   const files: FileView[] = sources.map(file => {
-    const { done, active, total } = count(file.items)
+    const own = count(file.items)
+    const inArchive = file.isArchived === true ? 0 : archiveDone(file)
+    const [done, active, total] = [own.done + inArchive, own.active, own.total + inArchive]
     const indexed = file.items.map((item, index) => ({ file, item, owners: itemOwners.get(`${fileId(file)}:${index}`) ?? [] }))
     const linked = indexed.filter(one => one.owners.length > 0)
     const rest = [
@@ -1868,13 +2750,14 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
   })
 
   const current = files.filter(file => file.isArchived !== true)
-  const archived = files.filter(file => file.isArchived === true)
-  const all = count(list.filter(file => file.isArchived !== true).flatMap(file => file.items))
-  const completed = all.done + count(list.filter(file => file.isArchived === true).flatMap(file => file.items)).done
+  const archivedFiles = files.filter(file => file.isArchived === true)
+  const live = count(list.filter(file => file.isArchived !== true).flatMap(file => file.items))
+  const archived = count(list.filter(file => file.isArchived === true).flatMap(file => file.items)).done
+  const all = { done: live.done + archived, active: live.active, total: live.total + archived }
 
   return {
-    files: [...current.filter(file => file.done < file.total), ...current.filter(file => file.done === file.total), ...archived],
-    completed,
+    files: [...current.filter(file => file.done < file.total), ...current.filter(file => file.done === file.total), ...archivedFiles],
+    archived,
     agents: rows.map((row, i) => ({
       index: i,
       description: row.description,
@@ -1900,7 +2783,7 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
       : {
           orchestrator: {
             index: ORCH,
-            description: 'Orchestrator',
+            description: orchestratorTitle(orch.title, orchLinks),
             type: 'main conversation',
             status: orch.isRunning ? 'running' : 'idle',
             isEnded: false,
@@ -1915,11 +2798,10 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
 }
 
 /**
- * The todo files as the pane lists them. Open work always shows: each file with open items, its
- * open items only. With the completed ledger shown, every item shows, done ones last, then the
- * complete files, then the archive.
+ * The todo files as the pane lists them: each file with open items, its open items only. With
+ * `showCompleted`, every item shows, done ones last, then the complete files, then the archive.
  */
-export function todoLedger(view: View, showCompleted = isCompletedShown): FileView[] {
+export function todoLedger(view: View, showCompleted = false): FileView[] {
   if (showCompleted) {
     return view.files
   }
@@ -1932,14 +2814,15 @@ export function todoLedger(view: View, showCompleted = isCompletedShown): FileVi
 /**
  * What the todo area draws. The list view draws one card set per file. The ticket view draws one
  * board: a single FileView holding every file's items, files in their order (the tiebreak within
- * a column), with `rows` the files for the board's header. No files, no board.
+ * a column), with `rows` the files for the board's header. `extra` tickets (moved to the archive
+ * this session) lead the items, so the Done column lists them first. No files, no board.
  */
-export function boardTargets(entries: readonly { file: FileView; prefix: string }[], isTickets: boolean): { file: FileView; prefix: string; rows: FileView[] }[] {
+export function boardTargets(entries: readonly { file: FileView; prefix: string }[], isTickets: boolean, extra: readonly ItemView[] = []): { file: FileView; prefix: string; rows: FileView[] }[] {
   if (!isTickets) {
     return entries.map(one => ({ ...one, rows: [one.file] }))
   }
   const first = entries[0]
-  if (first === undefined) {
+  if (first === undefined && extra.length === 0) {
     return []
   }
   const files = entries.map(one => one.file)
@@ -1950,11 +2833,11 @@ export function boardTargets(entries: readonly { file: FileView; prefix: string 
     active: files.reduce((sum, one) => sum + one.active, 0),
     total: files.reduce((sum, one) => sum + one.total, 0),
     owners: [...new Set(files.flatMap(one => one.owners))],
-    items: files.flatMap(one => one.items.map(item => (item.file === undefined ? { ...item, file: one.name } : item))),
-    mtimeMs: Math.max(...files.map(one => one.mtimeMs)),
+    items: [...extra, ...files.flatMap(one => one.items.map(item => (item.file === undefined ? { ...item, file: one.name } : item)))],
+    mtimeMs: Math.max(0, ...files.map(one => one.mtimeMs)),
   }
 
-  return [{ file, prefix: first.prefix, rows: files }]
+  return [{ file, prefix: first?.prefix ?? 'file', rows: files }]
 }
 
 /**
@@ -2027,6 +2910,10 @@ export type TicketColumn = { name: string; items: ItemView[] }
 export function ticketColumns(given: readonly ItemView[], current: CategoryBook, showDone: boolean): TicketColumn[] {
   const items = given.map(item => (item.status === 'pending' && item.owners.length > 0 ? { ...item, status: 'in_progress' as const, isHeld: true as const } : item))
   const rank = (item: ItemView) => {
+    // The Done column keeps the order given: tickets archived this session, newest first, then the rest.
+    if (item.status === 'completed') {
+      return 0
+    }
     const category = current.items[item.key]
     const at = category === undefined ? current.categories.length : current.categories.indexOf(category)
 
@@ -2174,12 +3061,20 @@ async function moveTicket($: EngineInterface, input: Record<string, unknown>): P
   if (answer !== yes) {
     return `Not moved: the user kept "${ticketSummary(item.text, 80)}" ${STATUS_WORDS[item.status]}${answer === undefined || answer === 'Keep it where it is' ? '' : ` and said: ${answer}`}. Do not move it again unless the user asks.`
   }
-  const text = await $.fs.read(`${folder}/${file}`).catch(() => undefined)
-  const next = typeof text === 'string' ? setBox(text, itemKey(item), to) : undefined
-  if (next === undefined) {
+  // The file is read again under the writer lock and only this one box changes in the fresh text.
+  const isWritten = await withWriteLock(async () => {
+    const text = await $.fs.read(`${folder}/${file}`).catch(() => undefined)
+    const next = typeof text === 'string' ? setBox(text, itemKey(item), to) : undefined
+    if (next === undefined) {
+      return false
+    }
+    await $.fs.write(`${folder}/${file}`, next)
+
+    return true
+  })
+  if (!isWritten) {
     return `Not moved: the line for "${ticketSummary(item.text, 80)}" was not found in ${path}.`
   }
-  await $.fs.write(`${folder}/${file}`, next)
   userMoves.delete(key)
   await scan($).catch(() => undefined)
 
@@ -2197,9 +3092,54 @@ export function movesNote(moves: readonly string[]): string | undefined {
       ].join('\n')
 }
 
-/** The notes waiting for Claude: the moves made by hand, and the IDs a consolidation renumbered. */
+/** The notes waiting for Claude: the moves made by hand, the IDs a consolidation renumbered, and the agents that ended with tickets left open. */
 function queuedNotes(): string[] {
-  return [movesNote(pendingMoves), renameNote(pendingRenames), removedNote(pendingRemoved)].filter((note): note is string => note !== undefined)
+  return [movesNote(pendingMoves), renameNote(pendingRenames), removedNote(pendingRemoved), numberedNote(pendingNumbered), ...pendingEnded].filter((note): note is string => note !== undefined)
+}
+
+/** The most tickets a close-the-work nudge names. */
+const NUDGE_TICKETS = 5
+/** How long a ticket named in the next-prompt nudge stays unnamed: 30 minutes. */
+const NUDGE_REPEAT_MS = 30 * 60 * 1000
+
+/** Notes about ended agents, waiting for Claude. Cleared with the other pending notes. */
+let pendingEnded: string[] = []
+/** The agents already nudged, so each is named once. */
+const nudgedAgents = new Set<string>()
+/** When each in-progress ticket of the orchestrator was last named in a prompt, by item key (per session, in memory). */
+const namedAt = new Map<string, number>()
+
+/** A ticket as the nudges name it: its real ID when it has one, then its text cut short. */
+function nudgeName(item: TodoItem): string {
+  // The item's text usually holds its ID already, as written in the file.
+  const hasId = item.id === undefined || item.text.toLowerCase().includes(`#${item.id.toLowerCase()}`)
+
+  return `${hasId ? '' : `#${item.id!.toUpperCase()} `}${ticketSummary(item.text, 60)}`
+}
+
+/** The names of at most NUDGE_TICKETS tickets, joined for a note. */
+function nudgeList(items: readonly TodoItem[]): string {
+  return items.slice(0, NUDGE_TICKETS).map(nudgeName).join(', ')
+}
+
+/**
+ * Queues one note for each agent that went from live to ended between `before` and `after`, when
+ * tickets it worked on are still open or in progress. The links are read as for a live agent, since
+ * an ended agent links to nothing. The mod never changes a box itself: Claude closes the work done.
+ */
+function noteEnds(before: readonly AgentRow[], after: readonly AgentRow[]): void {
+  const live = new Set(before.filter(row => !isEnded(row.status)).map(row => row.id))
+  after.forEach((row, index) => {
+    if (!live.has(row.id) || !isEnded(row.status) || nudgedAgents.has(row.id)) {
+      return
+    }
+    nudgedAgents.add(row.id)
+    const found = linkAgents(todoFiles, [{ ...row, status: 'running' }]).get(row.id) ?? []
+    if (found.length > 0) {
+      const how = row.status === 'completed' ? 'finished' : `ended (${row.status})`
+      pendingEnded = [...pendingEnded, `${agentLabel(index)} ${how}. Its tickets are still open or in progress: ${nudgeList(found.map(link => link.item))}. Close each one whose work is done.`]
+    }
+  })
 }
 
 /** Writes a manual move into the item's todo file, rereads the folder, and queues the note for Claude. */
@@ -2209,14 +3149,22 @@ async function markTicket($: EngineInterface, item: ItemView, status: ItemStatus
   }
   // Only the file the item came from is written: its folder and its name. The pane shows neither.
   const path = `${item.folder}/${item.file}`
-  const text = await $.fs.read(path)
-  const next = setBox(typeof text === 'string' ? text : '', item.localKey ?? item.key, status)
-  if (next === undefined) {
+  // Read again under the writer lock: the one box changes in the fresh text, never in a stale copy.
+  const isWritten = await withWriteLock(async () => {
+    const text = await $.fs.read(path)
+    const next = setBox(typeof text === 'string' ? text : '', item.localKey ?? item.key, status)
+    if (next === undefined) {
+      return false
+    }
+    await $.fs.write(path, next)
+
+    return true
+  })
+  if (!isWritten) {
     $.ui.toast(`Not found in ${item.file}: ${ticketSummary(item.text, 60)}`)
 
     return
   }
-  await $.fs.write(path, next)
   userMoves.set(`${path}:${item.localKey ?? item.key}`, status)
   pendingMoves = [...pendingMoves, `- "${ticketSummary(item.text, 160)}" in ${item.path ?? path}: ${STATUS_WORDS[item.isHeld === true ? 'pending' : item.status]} -> ${STATUS_WORDS[status]}`]
   $.ui.toast(`${toast}: ${ticketSummary(item.text, 60)}`)
@@ -2262,6 +3210,52 @@ export function callSummary(tool: string, input: Record<string, unknown>): strin
   const description = input.description
 
   return typeof description === 'string' && description.trim() !== '' ? description.trim().split('\n')[0]! : describeCall(tool, input)
+}
+
+/** A Bash command with an obvious secret in it: its detail line is hidden. */
+const SECRET = /--password|token=|authorization:|api[_-]?key|secret/i
+/** The longest detail kept per history entry; the card cuts it again to fit its line. */
+export const DETAIL_MAX = 300
+
+/**
+ * The native detail of a tool call, from its input: the command, path, pattern or URL it ran with.
+ * Undefined when the tool has none (MCP tools), or the detail only repeats the summary `line`. A
+ * path inside `root` shows relative to it. A Bash command that looks like it holds a secret shows
+ * as "(hidden)".
+ */
+export function callDetail(tool: string, input: Record<string, unknown>, line: string, root?: string): string | undefined {
+  const text = (key: string): string | undefined => {
+    const value = input[key]
+
+    return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
+  }
+  const rel = (path: string | undefined): string | undefined => (path === undefined ? undefined : (relIn(path, root) ?? path))
+  let detail: string | undefined
+  if (tool === 'Bash') {
+    const command = text('command')
+    detail = command === undefined ? undefined : SECRET.test(command) ? '(hidden)' : command.split('\n')[0]!.trim()
+  } else if (tool === 'Read' || tool === 'Edit' || tool === 'Write') {
+    detail = rel(text('file_path'))
+  } else if (tool === 'NotebookEdit') {
+    detail = rel(text('file_path') ?? text('notebook_path'))
+  } else if (tool === 'Grep') {
+    const pattern = text('pattern')
+    const path = rel(text('path'))
+    detail = pattern === undefined ? undefined : path === undefined ? pattern : `${pattern}  ${path}`
+  } else if (tool === 'Glob') {
+    detail = text('pattern')
+  } else if (tool === 'WebFetch') {
+    detail = text('url')
+  } else if (tool === 'WebSearch') {
+    detail = text('query')
+  } else if (tool === 'Agent' || tool === 'Task') {
+    detail = [text('subagent_type'), text('model')].filter(part => part !== undefined).join(', ')
+  } else if (tool === 'Skill') {
+    detail = text('skill')
+  }
+  detail = detail?.slice(0, DETAIL_MAX)
+
+  return detail === undefined || detail === '' || detail === line ? undefined : detail
 }
 
 // ---------------------------------------------------------------- orchestrator tickets
@@ -2318,15 +3312,52 @@ function pruneTickets(): boolean {
       isChanged = true
     }
   }
+  // A headline belongs to the tickets: with none left, it goes.
+  if (orchTickets.size === 0 && orchTitle !== undefined) {
+    orchTitle = undefined
+    isChanged = true
+  }
 
   return isChanged
+}
+
+/**
+ * One line naming the orchestrator's tickets that are still in progress at the start of a prompt,
+ * at most NUDGE_TICKETS, none named in the last NUDGE_REPEAT_MS. Undefined when there is none.
+ */
+async function stillOpenLine($: EngineInterface): Promise<string | undefined> {
+  const time = await $.clock.now()
+  const due: { key: string; item: TodoItem }[] = []
+  for (const file of todoFiles.filter(one => one.isArchived !== true)) {
+    for (const item of file.items) {
+      const key = qualifiedKey(file, item)
+      const last = namedAt.get(key)
+      if (orchTickets.has(key) && item.status === 'in_progress' && (last === undefined || time - last >= NUDGE_REPEAT_MS) && !due.some(one => one.key === key)) {
+        due.push({ key, item })
+      }
+    }
+  }
+  const named = due.slice(0, NUDGE_TICKETS)
+  for (const one of named) {
+    namedAt.set(one.key, time)
+  }
+
+  return named.length === 0 ? undefined : `Still in progress from earlier: ${nudgeList(named.map(one => one.item))}. Close any whose work is done.`
 }
 
 /** The orchestrator as the view draws it: Running between the prompt and the end of a main-conversation turn. */
 function orchestratorState(): OrchestratorState {
   const last = orchestrator.history[orchestrator.history.length - 1]
 
-  return { keys: new Set(orchTickets.keys()), isRunning: orchestrator.isActive, toolCalls: orchestrator.history.length, ...(last === undefined ? {} : { doing: last.line }) }
+  return { keys: new Set(orchTickets.keys()), isRunning: orchestrator.isActive, toolCalls: orchestrator.history.length, ...(last === undefined ? {} : { doing: last.line }), ...(orchTitle === undefined ? {} : { title: orchTitle }) }
+}
+
+/** A history entry for a main-conversation call: its summary, time and native detail. */
+async function orchestratorEntry($: EngineInterface, input: Record<string, unknown> & { tool: string }): Promise<OrchestratorEntry> {
+  const line = callSummary(input.tool, input)
+  const detail = callDetail(input.tool, input, line, repoRoot)
+
+  return { id: (callCount += 1), line, at: await $.clock.now(), isRunning: true, ...(detail === undefined ? {} : { detail }) }
 }
 
 const ORCHESTRATOR_KEPT = 1000
@@ -2419,6 +3450,10 @@ function start($: EngineInterface): void {
   ticker = $.clock.every(TICK_MS, () => {
     ticks += 1
     void (async () => {
+      if (recatNote !== undefined && (await $.clock.now()) >= recatNote.until) {
+        recatNote = undefined
+        redraw($)
+      }
       if (ticks % RESYNC_EVERY === 0) {
         await resync($)
 
@@ -2450,11 +3485,11 @@ function todoCount(): number {
 /** The dim text after the Todo heading: the counts, then the number of files they come from. */
 function todoDetail(view: View): string {
   const files = todoCount()
-  const counts = view.total === 0 && view.completed === 0 ? 'No checkbox items in .claude_todo/' : `${view.done} of ${view.total} done, ${view.active} in progress`
+  const counts = view.total === 0 ? 'No checkbox items in .claude_todo/' : `${view.done} of ${view.total} done, ${view.active} in progress`
   return files === 0 ? counts : `${counts}. Pulling todo from ${files} ${files === 1 ? 'file' : 'files'}`
 }
 
-/** The heading's buttons for many folders: Consolidate todos with more than one folder, Delete duplicate todos while a duplicate is recorded. */
+/** The heading's buttons for many folders: Consolidate todos with more than one folder, Delete empty todos and Delete duplicate tickets while they have work. */
 function todoActions($: EngineInterface): { key: string; label: string; onPress: () => void }[] {
   return [
     ...(canDeleteDupTickets() ? [{ key: 'todo-delete-dup-tickets', label: 'Delete duplicate tickets', onPress: () => void deleteDupTickets($).catch(() => undefined) }] : []),
@@ -2474,8 +3509,10 @@ export const RULES = [
   '',
   "- Todo items go in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's). Create the folder when the repo has none. Each repo keeps its own items, and only its own. Other `.claude_todo/` folders in the repo also show on the board: keep each item in the folder it is in.",
   '- Write each item as one Markdown checkbox line in a `.md` file at the top level of `.claude_todo/`: `- [ ]` open, `- [~]` in progress, `- [x]` done. Prose, tables and headings may surround the items; only checkbox lines count. Update the box the moment the status changes.',
-  '- Give each item a short ID, unique in the project, in its line: `#T<n>` (`- [ ] #T12 Fix the parser`). When you dispatch an agent for an item, put its ID in the Agent call\'s description and mark the item `[~]`: the pane links the agent to the item by that ID.',
-  '- Never delete a done item, and never fold done items into a summary line: check it off (`- [x]`) and leave it in place, as the ledger of completed work. When every item in a file is done, move the whole file to `.claude_todo/archive/`.',
+  '- Give each item an ID, unique in the project, in its line: `#T` and 4 digits and capital letters, the first a digit (`- [ ] #T002B Fix the parser`). Use the next free IDs the mod gives you with each prompt. Old short IDs (`#T12`) stay valid. An item with no ID gets one from the mod. When you dispatch an agent for an item, put its ID in the Agent call\'s description and mark the item `[~]`: the pane links the agent to the item by that ID.',
+  '- When a ticket is done, check it off (`- [x]`). Never delete a done item, and never fold done items into a summary line. The mod then moves each done ticket (with its indented lines) to `.claude_todo/archive/<same file>` by itself, a few seconds later. That is expected: never move it back, and never treat it as lost.',
+  '- When the work of an item is done, check it off (`- [x]`) in the same turn, before your final reply. Never leave finished work open or in progress. When an agent you started for an item finishes, check its result and close the item if the work is done.',
+  '- When you work on tickets yourself (not through an agent), call `mcp__claudeopticon__report_progress` with `title` (a headline for the assignment) and `items`; call it again when the assignment changes.',
   '- All work is ticketed. Before you start any work, find its item or add one, and mark it `[~]`. Never do work that has no item.',
   '- The user can move items by hand on the Claudeopticon pane board. You are told of each move with your next tool result or prompt. Follow it: stop work on an item moved to open or done. Never change the box of an item the user moved by hand yourself. If you think a move is wrong, call `mcp__claudeopticon__move_ticket`, which asks the user and writes the box only on a yes. If the item is in more than one file, it refuses and lists them: call it again with `folder` set to the item\'s folder path.',
 ].join('\n')
@@ -2511,6 +3548,7 @@ export const register: Register = (on, options) => {
               items: { type: 'string' },
               description: "The .claude_todo items your task covers: each quoted from its line, or its #T ID",
             },
+            title: { type: 'string', description: 'A short headline for the whole assignment you work on yourself (main conversation only), a few words' },
           },
           required: ['done', 'total'],
         },
@@ -2584,6 +3622,7 @@ export const register: Register = (on, options) => {
     const input = e as unknown as Record<string, unknown>
     const progress = readProgress(input)
     const claims = readClaims(input)
+    const title = id === undefined ? readTitle(input.title) : undefined
     if (id !== undefined && (progress !== undefined || claims !== undefined)) {
       agentRows = agentRows.map(row =>
         row.id !== id ? row : { ...row, ...(progress === undefined ? {} : { progress }), ...(claims === undefined ? {} : { claims }) },
@@ -2595,6 +3634,12 @@ export const register: Register = (on, options) => {
       await scan($).catch(() => undefined)
       const open = [...todoFiles.filter(file => file.isArchived !== true).flatMap(file => file.items.map(item => ({ key: qualifiedKey(file, item), item })))].filter(one => one.item.status !== 'completed')
       claimTickets($, bestMatches(open, claims).map(one => one.key))
+    }
+    // Only the main conversation titles its own assignment; a helper's title is ignored. It is
+    // kept only while the orchestrator owns a ticket.
+    if (title !== undefined && orchTickets.size > 0 && title !== orchTitle) {
+      orchTitle = title
+      redraw($)
     }
     let reply = 'Noted.'
     if (id !== undefined) {
@@ -2626,10 +3671,7 @@ export const register: Register = (on, options) => {
       pendingTools.set(id, { calls: (pendingTools.get(id)?.calls ?? 0) + 1, doing })
       wake(id)
     }
-    const entry: OrchestratorEntry | undefined =
-      id === undefined && e.tool !== 'Agent'
-        ? { id: (callCount += 1), line: callSummary(e.tool, e as unknown as Record<string, unknown>), at: await $.clock.now(), isRunning: true }
-        : undefined
+    const entry: OrchestratorEntry | undefined = id === undefined && e.tool !== 'Agent' ? await orchestratorEntry($, e as unknown as Record<string, unknown> & { tool: string }) : undefined
     if (entry !== undefined) {
       orchestrator = { isActive: true, history: [...orchestrator.history, entry].slice(-ORCHESTRATOR_KEPT) }
       redraw($)
@@ -2656,7 +3698,9 @@ export const register: Register = (on, options) => {
     }
     pendingMoves = []
     pendingRenames = []
+    pendingNumbered = []
     pendingRemoved = []
+    pendingEnded = []
 
     return { ...ran, context: [...(ran.context ?? []), ...queued] }
   })
@@ -2668,7 +3712,9 @@ export const register: Register = (on, options) => {
         // A background agent's notification carries its task ID, which is its agent ID: its row
         // takes the status it reports, also over an `ended` row.
         if (agentRows.some(row => row.id === ended.id && (row.status === 'ended' || !isEnded(row.status)))) {
+          const old = agentRows
           agentRows = agentRows.map(row => (row.id === ended.id ? { ...row, status: ended.status, endedAt: row.endedAt ?? clockMs } : row))
+          noteEnds(old, agentRows)
           redraw($)
         }
       }
@@ -2677,13 +3723,26 @@ export const register: Register = (on, options) => {
     const moves = queuedNotes()
     pendingMoves = []
     pendingRenames = []
+    pendingNumbered = []
     pendingRemoved = []
+    pendingEnded = []
     const isLabeled = LABEL.test(e.text)
     LABEL.lastIndex = 0
     if (isLabeled) {
       await refreshAgents($).catch(() => undefined)
     }
-    const notes = [...moves, isLabeled ? labelNote(e.text, agentRows) : undefined].filter(note => note !== undefined)
+    // The next free IDs, recomputed each prompt; not for a notification the mod's host sends by itself.
+    let idLine: string | undefined
+    if (options.rules !== false && e.origin?.kind !== 'task-notification' && (todoFolders ?? []).length > 0) {
+      pruneReserved()
+      const known = [...projectIds(), ...reservedIds]
+      idLine = nextIdsLine(known)
+      // The IDs named now are reserved: the mod gives them to no line, and the next prompt names fresh ones.
+      for (const id of nextTicketIds(known, NEXT_IDS_SHOWN)) {
+        reservedIds.add(id.toLowerCase())
+      }
+    }
+    const notes = [...moves, isLabeled ? labelNote(e.text, agentRows) : undefined, idLine, options.rules !== false && e.origin?.kind !== 'task-notification' ? await stillOpenLine($) : undefined].filter(note => note !== undefined)
     orchestrator = { ...orchestrator, isActive: true }
     redraw($)
 
@@ -2771,7 +3830,7 @@ export const register: Register = (on, options) => {
       const card = (key: string, drawn: { source: string; width: number; alt: string }) => (
         <Svg key={key} source={drawn.source} alt={drawn.alt} width={drawn.width} />
       )
-      const section = (key: string, title: string, detail: string, buttonLabel: string | undefined, toggle: () => void, extra: { key: string; label: string; onPress: () => void }[] = []) => (
+      const section = (key: string, title: string, detail: string, buttonLabel: string | undefined, toggle: () => void, extra: { key: string; label: string; onPress: () => void }[] = [], showDone?: { label: string; onPress: () => void }) => (
         <Box key={key} flexDirection="row" justifyContent="space-between" alignItems="center" marginTop={1}>
           <Box flexDirection="row" gap={2}>
             <Text bold>{title}</Text>
@@ -2780,6 +3839,7 @@ export const register: Register = (on, options) => {
           <Box flexDirection="row" gap={1}>
             {extra.filter(one => one.key !== 'todo-consolidate').map(one => <Button key={one.key} label={one.label} onPress={one.onPress} />)}
             {buttonLabel !== undefined && <Button key={`${key}-toggle`} label={buttonLabel} onPress={toggle} />}
+            {showDone !== undefined && <Button key="todo-show-completed" label={showDone.label} onPress={showDone.onPress} />}
             {extra.filter(one => one.key === 'todo-consolidate').map(one => <Button key={one.key} label={one.label} onPress={one.onPress} />)}
           </Box>
         </Box>
@@ -2860,12 +3920,10 @@ export const register: Register = (on, options) => {
             'todo',
             'Todo',
             todoDetail(view),
-            view.completed === 0 ? undefined : isCompletedShown ? 'Hide completed' : `Show completed (${view.completed})`,
-            () => {
-              isCompletedShown = !isCompletedShown
-              redraw($)
-            },
+            undefined,
+            () => undefined,
             todoActions($),
+            archiveLink === undefined ? undefined : { label: `Show completed (${view.archived})`, onPress: () => void openArchive($).catch(() => undefined) },
           )}
           {(
             <Box key="todo-controls" flexDirection="row" gap={1} alignItems="center">
@@ -2893,6 +3951,16 @@ export const register: Register = (on, options) => {
                   redraw($)
                 }}
               />
+              {openItems().length > 0 && (
+                <Button
+                  key="todo-recategorize"
+                  label="Recategorize"
+                  onPress={() => {
+                    void recategorize($).catch(() => undefined)
+                  }}
+                />
+              )}
+              {(isRecategorizing || recatNote !== undefined) && <Text dimColor>{isRecategorizing ? 'Recategorizing...' : recatNote!.text}</Text>}
               {query.trim() === '' && !isTicketView && (
                 <Button
                   key="todo-sort"
@@ -2944,14 +4012,16 @@ export const register: Register = (on, options) => {
               ? searchTodo(view.files, query).map(file => ({ file, prefix: 'search' }))
               : sortBy === 'category' && !isTicketView
                 ? categoryGroups(withoutHidden(todoLedger(view), book, hiddenCategories), book).map(file => ({ file, prefix: 'category' }))
-                : withoutHidden(todoLedger(view), book, hiddenCategories).map(file => ({ file, prefix: 'file' })),
+                // The board keeps the live files whole, done tickets too: its Done column lists them.
+                : withoutHidden(isTicketView ? view.files.filter(file => file.isArchived !== true) : todoLedger(view), book, hiddenCategories).map(file => ({ file, prefix: 'file' })),
             isTicketView,
+            query.trim() === '' ? archivedNow.filter(one => !hiddenCategories.has(book.items[one.key] ?? UNSORTED)) : [],
           ).flatMap(({ file, prefix, rows }) => {
             const id = `${prefix}:${file.id}`
             const isExpanded = expandedFiles.has(id)
             const limit = isExpanded ? file.items.length : ITEMS_SHOWN
             const isTextOpen = openText.has(id)
-            const showDone = isCompletedShown || query.trim() !== ''
+            const showDone = query.trim() !== '' || file.items.some(item => item.status === 'completed')
             const sections = (file.groups ?? [{ name: '', from: 0, count: file.items.length }]).map(group => ({
               name: group.name,
               columns: ticketColumns(file.items.slice(group.from, group.from + group.count), book, showDone),
@@ -2965,7 +4035,7 @@ export const register: Register = (on, options) => {
               const sentKey = `${item.file ?? file.name}:${item.key}`
               const isSent = sentTickets.has(sentKey)
               const category = book.items[item.key]
-              const id = /#[A-Za-z]+\d+\b/.exec(item.text)?.[0]
+              const id = new RegExp(`#${ID_SRC}\\b`).exec(item.text)?.[0]
               // The buttons, left to right: the manual moves, which only mark the box, then Claude's
               // action in the corner: an open ticket sends itself, one in progress (or sent) asks for status.
               const actions: TicketAction[] =
@@ -3026,7 +4096,7 @@ export const register: Register = (on, options) => {
             }
             const cards = isTicketView
               ? [
-                  card(`${prefix}-${file.id}-head`, boardHead([...rows, ...emptyRows()])),
+                  ...(rows.length + emptyRows().length === 0 ? [] : [card(`${prefix}-${file.id}-head`, boardHead([...rows, ...emptyRows()]))]),
                   ...sections.map(section => (
                     <Box key={`${prefix}-${file.id}-board-${section.name}`} flexDirection="column" gap={1}>
                       {section.name !== '' && (
@@ -3107,7 +4177,10 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         {heading('Orchestrator', orchestrator.isActive ? '' : 'Idle')}
         {orchestratorView(orchestrator.history, 0).entries.slice(0, 5).map(entry => (
-          <Text key={`orchestrator-${entry.id}`} dimColor={!entry.isRunning}>{` ${entry.isRunning ? '•' : '·'} ${clock(entry.at)}  ${entry.line}`}</Text>
+          <Text key={`orchestrator-${entry.id}`} dimColor={!entry.isRunning}>
+            {` ${entry.isRunning ? '•' : '·'} ${clock(entry.at)}  ${entry.line}`}
+            {entry.detail !== undefined && <Text dimColor>{`  ${clip(entry.detail, Math.max(10, columns - 20 - entry.line.length))}`}</Text>}
+          </Text>
         ))}
         {heading('Agents', view.agents.length === 0 ? '' : `${view.live} running, ${view.agents.length - view.live} done`)}
         {ledger(view).finished.length > 0 && (
@@ -3174,16 +4247,7 @@ export const register: Register = (on, options) => {
           <Button key={one.key} label={one.label} onPress={one.onPress} />
         ))}
         {view.total > 0 && <Text color={ACCENT}>{`${bar(view.done, view.total, width)} ${Math.round((view.done / view.total) * 100)}%`}</Text>}
-        {view.completed > 0 && (
-          <Button
-            key="todo-toggle"
-            label={isCompletedShown ? 'Hide completed' : `Show completed (${view.completed})`}
-            onPress={() => {
-              isCompletedShown = !isCompletedShown
-              redraw($)
-            }}
-          />
-        )}
+        {archiveLink !== undefined && <Button key="todo-show-completed" label={`Show completed (${view.archived})`} onPress={() => void openArchive($).catch(() => undefined)} />}
         {todoLedger(view).map((file, _, all) => (
           <Box key={file.id} flexDirection="column" marginTop={1}>
             <Text dimColor={file.done === file.total} bold={file.done < file.total}>

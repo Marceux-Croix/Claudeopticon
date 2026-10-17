@@ -22,26 +22,26 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <line x1="652" y1="10" x2="652" y2="108" stroke="rgba(255,255,255,.08)"/>
 <text x="652" y="124" text-anchor="end" fill="rgba(255,255,255,.38)" font-size="11">Now</text>
 <g>
-<circle cx="28" cy="24" r="12" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="28" y="28" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A1</text><circle cx="36.5" cy="32.5" r="4.5" fill="#3987e5" stroke="#07080F" stroke-width="2" class="c1k0"/>
+<circle cx="28" cy="24" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
+<text x="28" y="27.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A1</text><circle cx="38.8" cy="34.8" r="4.5" fill="#3987e5" stroke="#07080F" stroke-width="2" class="c1k0"/>
 <rect x="265" y="22" width="387" height="4" rx="2" fill="url(#progress)"/>
 <circle cx="652" cy="24" r="4" fill="#8B5CF6" class="pulse"/>
 <circle cx="652" cy="24" r="3.5" fill="#8B5CF6"/>
 <text x="704" y="28" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">9m 00s</text></g>
 <g>
-<circle cx="28" cy="54" r="12" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="28" y="58" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="36.5" cy="62.5" r="4.5" fill="#d95926" stroke="#07080F" stroke-width="2" class="c1k1"/>
+<circle cx="28" cy="54" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
+<text x="28" y="57.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="38.8" cy="64.8" r="4.5" fill="#d95926" stroke="#07080F" stroke-width="2" class="c1k1"/>
 <rect x="394" y="52" width="258" height="4" rx="2" fill="url(#progress)"/>
 <circle cx="652" cy="54" r="4" fill="#8B5CF6" class="pulse"/>
 <circle cx="652" cy="54" r="3.5" fill="#8B5CF6"/>
 <text x="704" y="58" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">6m 00s</text></g>
 <g opacity=".55">
-<circle cx="28" cy="84" r="12" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="28" y="88" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A3</text>
+<circle cx="28" cy="84" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
+<text x="28" y="87.8" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A3</text>
 <rect x="50" y="82" width="387.00000000000006" height="4" rx="2" fill="rgba(255,255,255,.22)"/>
 <path d="M 442.00000000000006 84 l 2.4 2.4 l 4.6 -5" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="704" y="88" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">9m 00s</text></g></svg>
-<svg x="0" y="148" xmlns="http://www.w3.org/2000/svg" width="720" height="105" viewBox="0 0 720 105" role="img" aria-label="O, Orchestrator: Running">
+<svg x="0" y="148" xmlns="http://www.w3.org/2000/svg" width="720" height="105" viewBox="0 0 720 105" role="img" aria-label="O, Orchestrator: Running, Harden the parser against bad input">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -57,14 +57,14 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 </style>
 <rect width="720" height="105" rx="12" fill="#07080F"/>
 <rect x="1" y="1" width="718" height="103" rx="11" fill="none" stroke="#1fa7b8" stroke-opacity=".55"/>
-<circle cx="28" cy="31" r="14.5" fill="none" stroke="#1fa7b8" stroke-width="1.5"/><circle cx="28" cy="31" r="12" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="28" y="35" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">O</text><circle cx="36.5" cy="39.5" r="4.5" fill="#1fa7b8" stroke="#07080F" stroke-width="2" class="c2k0"/>
-<text x="52" y="36" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Orchestrator</text>
+<circle cx="28" cy="31" r="16.5" fill="none" stroke="#1fa7b8" stroke-width="1.5"/><circle cx="28" cy="31" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
+<text x="28" y="34.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">O</text><circle cx="38.8" cy="41.8" r="4.5" fill="#1fa7b8" stroke="#07080F" stroke-width="2" class="c2k0"/>
+<text x="52" y="36" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Harden the parser against bad input</text>
 <rect x="647" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
 <text x="675.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>
 <circle cx="56" cy="52" r="4" fill="#1fa7b8" class="c2k0"/>
 <text x="66" y="56" fill="rgba(255,255,255,.62)" font-size="12">Working on <tspan fill="#1fa7b8" font-weight="500">Fix the parser crash on empty input</tspan></text>
-<text x="52" y="76" fill="rgba(255,255,255,.62)" font-size="12">main conversation · 57 tool calls</text>
+<text x="52" y="76" fill="rgba(255,255,255,.62)" font-size="12">Orchestrator · main conversation · 57 tool calls</text>
 <text x="52" y="96" fill="rgba(255,255,255,.62)" font-size="12" class="mono">Run the parser tests</text></svg>
 <svg x="0" y="265" xmlns="http://www.w3.org/2000/svg" width="720" height="133" viewBox="0 0 720 133" role="img" aria-label="A1, Write the v2 config migration: Running">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
@@ -82,8 +82,8 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 </style>
 <rect width="720" height="133" rx="12" fill="#07080F"/>
 <rect x="1" y="1" width="718" height="131" rx="11" fill="none" stroke="#3987e5" stroke-opacity=".55"/>
-<circle cx="28" cy="31" r="14.5" fill="none" stroke="#3987e5" stroke-width="1.5"/><circle cx="28" cy="31" r="12" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="28" y="35" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A1</text><circle cx="36.5" cy="39.5" r="4.5" fill="#3987e5" stroke="#07080F" stroke-width="2" class="c3k0"/>
+<circle cx="28" cy="31" r="16.5" fill="none" stroke="#3987e5" stroke-width="1.5"/><circle cx="28" cy="31" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
+<text x="28" y="34.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A1</text><circle cx="38.8" cy="41.8" r="4.5" fill="#3987e5" stroke="#07080F" stroke-width="2" class="c3k0"/>
 <text x="52" y="36" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Write the v2 config migration</text>
 <rect x="647" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
 <text x="675.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>
@@ -114,8 +114,8 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 </style>
 <rect width="720" height="133" rx="12" fill="#07080F"/>
 <rect x="1" y="1" width="718" height="131" rx="11" fill="none" stroke="#d95926" stroke-opacity=".55"/>
-<circle cx="28" cy="31" r="14.5" fill="none" stroke="#d95926" stroke-width="1.5"/><circle cx="28" cy="31" r="12" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="28" y="35" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="36.5" cy="39.5" r="4.5" fill="#d95926" stroke="#07080F" stroke-width="2" class="c4k0"/>
+<circle cx="28" cy="31" r="16.5" fill="none" stroke="#d95926" stroke-width="1.5"/><circle cx="28" cy="31" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
+<text x="28" y="34.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="38.8" cy="41.8" r="4.5" fill="#d95926" stroke="#07080F" stroke-width="2" class="c4k0"/>
 <text x="52" y="36" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Draft the plugin API docs</text>
 <rect x="647" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
 <text x="675.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>

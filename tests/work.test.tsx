@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { ORCH, boardHead, clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
-import { psPath, applyRefRenames, removeDuplicateTickets, removedNote, foldParts, itemLines, renumberLines, appendSections, applyRenames, nonBlankLines, renameNote, notifiedEnd, RULES, callSummary, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, readKeptTickets, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
+import { labelFontSize, setLabelBase, agentLabel as labelOf, ORCH, boardHead, clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
+import { psPath, readKeptIds, closedBlocks, removeBlocks, addToArchive, openCommand, nextTicketIds, nextIdsLine, ticketValue, insertIds, numberedNote, archiveName, isSubstantialChange, readKeptArchived, applyRefRenames, removeDuplicateTickets, removedNote, foldParts, itemLines, renumberLines, appendSections, applyRenames, nonBlankLines, renameNote, notifiedEnd, RULES, callSummary, callDetail, orchestratorTitle, readTitle, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, readKeptTickets, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
 import type { AgentRow, TodoFile } from '../types'
 import type { FileView } from '../hooks/cards'
 
@@ -100,7 +100,7 @@ test('the cards take the width they are given, within 300 to 960 px', async () =
 
 test('one pane shows the todo and the agents, and the link between them', async ($, on) => {
   mock.clock(on)
-  on('fs.exists', () => ({ value: true }))
+  on('fs.exists', (_$, e) => ({ value: !e.path.endsWith('archive') }))
   on('fs.list', () => ({ value: [{ name: 'PLAN.md', kind: 'file', size: 1, mtimeMs: 2, isLink: false }] }))
   on('fs.read', () => ({ value: PLAN }))
   on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'a1' }))
@@ -139,7 +139,7 @@ test('describeCall', async () => {
   expect(describeCall('Bash', { command: 'ls -la\nmore' })).toBe('Bash: ls -la')
 })
 
-test('each file shows 12 items, and its button shows them all, then 12 again', async ($, on) => {
+test('each file shows its top 12 open items, and its button shows them all, then 12 again', async ($, on) => {
   mock.clock(on)
   const lines = Array.from({ length: 30 }, (_, i) => `- [${i < 10 ? 'x' : ' '}] item ${i}`).join('\n')
   on('fs.exists', (_$, e) => ({ value: e.path.endsWith('.claude_todo') }))
@@ -157,8 +157,6 @@ test('each file shows 12 items, and its button shows them all, then 12 again', a
   expect(await items()).toBe(12)
   await ui.press({ key: 'file-toggle-BIG.md' })
   expect(await items()).toBe(20)
-  await ui.press({ key: 'todo-toggle' })
-  expect(await items()).toBe(30)
   await ui.press({ key: 'file-toggle-BIG.md' })
   expect(await items()).toBe(12)
 })
@@ -283,14 +281,14 @@ test('finished agents stay hidden until the button shows them', async ($, on) =>
   expect(await agentCards()).toBe(1)
 })
 
-test('the completed ledger keeps checked items, complete files and the archive, behind one button', async () => {
+test('the ledger keeps checked items, complete files and the archive; the counts include the archive', async () => {
   const list: TodoFile[] = [
     { name: 'OPEN.md', folder: '.claude_todo', mtimeMs: 3, items: parseTodo('- [ ] next\n- [x] shipped') },
     { name: 'DONE.md', folder: '.claude_todo', mtimeMs: 2, items: parseTodo('- [x] a\n- [x] b') },
     { name: 'archive/OLD.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo('- [x] c\n- [x] d\n- [x] e'), isArchived: true },
   ]
   const view = buildView(list, [], 0)
-  expect([view.done, view.total, view.completed]).toEqual([3, 4, 6])
+  expect([view.done, view.total, view.archived]).toEqual([6, 7, 3])
   const open = todoLedger(view, false)
   expect(open.map(file => file.name)).toEqual(['OPEN.md'])
   expect(open[0]?.items.map(item => item.text)).toEqual(['next'])
@@ -314,11 +312,16 @@ test('the scan reads the archive folder as finished work', async ($, on) => {
   on('agent.list', () => ({ value: [] }))
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
-  expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).not.toContain('old one')
-  await ui.press({ key: 'todo-toggle' })
-  const drawn = JSON.stringify(await ui.findAll({ type: 'Svg' }))
-  expect(drawn).toContain('old one')
-  expect(drawn).toContain('archive/OLD.md')
+  // The archive's done tickets are in the counts, but not on the board; the toggle is gone.
+  const board = JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(board).not.toContain('old one')
+  expect(board).toContain('Todo 2 of 3 done')
+  expect(await ui.find({ key: 'todo-toggle' })).toBeUndefined()
+  // Search covers the archive.
+  await ui.input({ key: 'todo-search', text: 'old', kind: 'change' })
+  const found = JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(found).toContain('old one')
+  expect(found).toContain('archive/OLD.md')
 })
 
 test('a sort reply keeps old categories and assignments, adds new ones only up to five, and drops strays', async () => {
@@ -378,14 +381,14 @@ test('searching replaces the todo cards with results, and Clear search brings th
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   const shown = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
   expect(await shown()).toContain('gamma task')
-  expect(await shown()).not.toContain('beta task done')
+  // A done ticket still in a live file shows in the Done column.
+  expect(await shown()).toContain('beta task done')
   await ui.input({ key: 'todo-search', text: 'beta', kind: 'change' })
   expect(await shown()).toContain('beta task done')
   expect(await shown()).not.toContain('gamma task')
   expect(await ui.find({ type: 'Text', text: /1 matching items/ })).toBeDefined()
   await ui.press({ key: 'search-clear' })
   expect(await shown()).toContain('gamma task')
-  expect(await shown()).not.toContain('beta task done')
 })
 
 test('the sorter asks the model once for unsorted open items and saves the book', async ($, on) => {
@@ -615,7 +618,6 @@ test('ticket view: an open ticket sends itself to Claude once, then asks for sta
   })
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
-  await ui.press({ key: 'todo-toggle' })
   const ticket = 'ticket-OPEN.md-ship the new parser'
   const svgs = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
   expect((await ui.find({ key: ticket }))?.text).toContain('\u22D9')
@@ -991,7 +993,8 @@ test('the mod gives Claude its todo rules as a context block of its own, once', 
   const context = await $.prompt.context({ blocks: [{ name: 'claudeMd', text: 'mine' }] } as never)
   expect(context.blocks.map(block => block.name)).toEqual(['claudeMd', 'claudeopticon'])
   expect(context.blocks[1]?.text).toBe(RULES)
-  expect(RULES).toContain('#T<n>')
+  expect(RULES).toContain('4 digits and capital letters')
+  expect(RULES).toContain('An item with no ID gets one from the mod')
   expect(RULES).toContain('mcp__claudeopticon__move_ticket')
 })
 
@@ -1271,6 +1274,9 @@ test('a folder input picks a move_ticket target exactly, never by a word in the 
   expect(findTicket(list, '#T1', 'b/.claude_todo/TODO.md')?.item.text).toBe('#T1 Second')
 })
 
+/** The empty `archive/TODO.md` the mod makes for the Show completed link: a test of other files leaves it out. */
+const withoutLink = (files: Record<string, string>) => Object.fromEntries(Object.entries(files).filter(([path]) => !path.endsWith('/archive/TODO.md') || files[path] !== ''))
+
 /** The path a PowerShell script names through `psPath`, with forward slashes. */
 const fromPs = (script: string) => String.fromCodePoint(...(/\[char\[\]\]\(([\d,]+)\)/.exec(script)![1]!.split(',').map(Number))).replace(/\\/g, '/')
 
@@ -1281,7 +1287,7 @@ const fromPs = (script: string) => String.fromCodePoint(...(/\[char\[\]\]\(([\d,
  * answers; a trash command named in `failing` exits 1, and one named in `stays` exits 0 but leaves the
  * file. Any other trash command removes the file from `files`, as the real one would.
  */
-function repoWith(on: Parameters<Parameters<typeof test>[1]>[1], files: Record<string, string>, opts: { hasNearest: boolean; listed: string[]; root?: string; rev?: string; links?: Record<string, string>; uname?: string; failing?: string[]; stays?: string[] }) {
+function repoWith(on: Parameters<Parameters<typeof test>[1]>[1], files: Record<string, string>, opts: { hasNearest: boolean; listed: string[]; root?: string; rev?: string; links?: Record<string, string>; uname?: string; failing?: string[]; stays?: string[]; exits?: Record<string, number>; log?: string[]; dangling?: string[]; hold?: Promise<void> }) {
   const R = opts.root ?? '/repo'
   const state = { hasNearest: opts.hasNearest, listed: opts.listed }
   const writes: string[] = []
@@ -1318,6 +1324,9 @@ function repoWith(on: Parameters<Parameters<typeof test>[1]>[1], files: Record<s
 
       return out('')
     }
+    if (['open', 'xdg-open', 'explorer.exe'].includes(argv[0]!)) {
+      return opts.failing?.includes(argv[0]!) ? fail : ({ value: { exitCode: opts.exits?.[argv[0]!] ?? 0, stdout: '', stderr: '' } } as never)
+    }
     if (argv[0] === 'rm') {
       delete files[argv[2]!]
 
@@ -1333,13 +1342,21 @@ function repoWith(on: Parameters<Parameters<typeof test>[1]>[1], files: Record<s
   // It does the same to a Windows path (`C:/repo`), which `abs` hands back whole.
   const abs = (path: string) => /[A-Za-z]:\/.*$/.exec(path)?.[0] ?? path
   on('fs.exists', (_$, e) => ({ value: abs(e.path).endsWith('.git') || (abs(e.path).endsWith('.claude_todo') && !inside(abs(e.path)) && state.hasNearest) || (inside(abs(e.path)) && (abs(e.path) in files || Object.keys(files).some(path => path.startsWith(`${abs(e.path)}/`)))) }))
-  on('fs.stat', (_$, e) => ({ value: { kind: abs(e.path) in files ? 'file' : 'dir', size: 0, mtimeMs: 1, isLink: false, realPath: opts.links?.[abs(e.path)] ?? (inside(abs(e.path)) ? abs(e.path) : `${R}/.claude_todo`) } }) as never)
-  on('fs.list', (_$, e) => ({ value: (inside(abs(e.path)) ? names(abs(e.path)) : state.hasNearest ? names(`${R}/.claude_todo`) : []).map(name => ({ name, kind: 'file', size: 1, mtimeMs: 2, isLink: false })) }))
-  on('fs.read', (_$, e) => ({ value: files[inside(abs(e.path)) ? abs(e.path) : `${R}/.claude_todo/${abs(e.path).split('/').pop()}`] ?? '' }))
-  on('fs.write', (_$, e) => {
+  on('fs.stat', (_$, e) => (opts.log?.push(`stat:${abs(e.path)}`), { value: { kind: abs(e.path) in files ? 'file' : 'dir', size: 0, mtimeMs: 1, isLink: false, realPath: opts.links?.[abs(e.path)] ?? (inside(abs(e.path)) ? abs(e.path) : `${R}/.claude_todo`) } }) as never)
+  on('fs.list', (_$, e) => ({ value: [...(inside(abs(e.path)) ? names(abs(e.path)) : state.hasNearest ? names(`${R}/.claude_todo`) : []), ...(opts.dangling ?? []).filter(path => path.slice(0, path.lastIndexOf('/')) === abs(e.path)).map(path => path.slice(path.lastIndexOf('/') + 1))].map(name => ({ name, kind: 'file', size: 1, mtimeMs: 2, isLink: false })) }))
+  on('fs.read', (_$, e) => (opts.log?.push(`read:${abs(e.path)}`), { value: files[inside(abs(e.path)) ? abs(e.path) : `${R}/.claude_todo/${abs(e.path).split('/').pop()}`] ?? '' }))
+  on('fs.write', async (_$, e) => {
     const path = inside(abs(e.path)) ? abs(e.path) : `${R}/.claude_todo/${abs(e.path).split('/').pop()}`
+    opts.log?.push(`write:${path}`)
+    // A held write: the test presses a button while this write is in flight.
+    if (opts.hold !== undefined && e.text !== '') {
+      await opts.hold
+    }
     files[path] = e.text as string
-    writes.push(path)
+    // The mod makes an empty archive/TODO.md for the Show completed link: not one of the writes a test counts.
+    if (!(path.endsWith('/archive/TODO.md') && e.text === '')) {
+      writes.push(path)
+    }
 
     return { value: undefined } as never
   })
@@ -1408,11 +1425,10 @@ test('one board holds the tickets of every file together, under a header with a 
   expect(drawn).toContain('1 of 3')
   expect(drawn).toContain('0 of 2')
   expect(drawn).not.toContain('mods/x')
-  // Four tickets in the columns (Open 2, In progress 2); the Done ticket is not shown.
-  for (const one of ['Alpha open', 'Alpha active', 'Beta open', 'Beta active']) {
+  // Five tickets in the columns (Open 2, In progress 2, Done 1): the done ticket is still in its live file.
+  for (const one of ['Alpha open', 'Alpha active', 'Beta open', 'Beta active', 'Alpha done']) {
     expect(drawn).toContain(one)
   }
-  expect(drawn).not.toContain('Alpha done')
   // In a column, file order: Alpha before Beta.
   const order = (text: string) => drawn.indexOf(text)
   expect(order('Alpha open')).toBeLessThan(order('Beta open'))
@@ -1523,9 +1539,9 @@ const open = async ($: Parameters<Parameters<typeof test>[1]>[0]) => {
 test('helpers: renumbering, sections, references and the exact-duplicate rule', async () => {
   const used = new Set(['t1', 't2'])
   // A new ID skips the reserved IDs of the files still to come.
-  expect(renumberLines(['- [ ] #T1 A'], new Set(['t1']), new Set(['t2', 't3'])).pairs).toEqual([{ from: 'T1', to: 'T4' }])
+  expect(renumberLines(['- [ ] #T1 A'], new Set(['t1']), new Set(['t2', 't3'])).pairs).toEqual([{ from: 'T1', to: 'T0004' }])
   const out = renumberLines(['- [ ] #T1 Docs', '- [x] #T7 Kept', '- [~] No id', '- note, see #T1 and #T7'], used)
-  expect(out.lines).toEqual(['- [ ] #T8 Docs', '- [x] #T7 Kept', '- [~] No id', '- note, see #T8 and #T7'])
+  expect(out.lines).toEqual(['- [ ] #T0008 Docs', '- [x] #T7 Kept', '- [~] No id', '- note, see #T0008 and #T7'])
   expect(applyRenames('#T1 and #T10 and #T3', { t1: 'T3', t3: 'T4' })).toBe('#T3 and #T10 and #T4')
   expect(appendSections('', [{ place: 'mods/x', lines: ['- [ ] a'] }])).toBe('## From mods/x\n\n- [ ] a\n')
   expect(appendSections('- [ ] top\n', [{ place: 'a', lines: ['- [ ] b'] }])).toBe('- [ ] top\n\n## From a\n\n- [ ] b\n')
@@ -1565,15 +1581,15 @@ test('Consolidate moves every other file into the one target, renumbers clashes,
   expect(await ui.find({ key: 'todo-delete-empty' })).toBeUndefined()
   expect(await ui.find({ key: 'todo-delete-dup-tickets' })).toBeUndefined()
   await ui.press({ key: 'todo-consolidate' })
-  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix\n\n## From BACKLOG.md\n\n- [ ] #T2 Backlog item\n\n## From mods/x/TODO.md\n\n- [ ] #T10 Docs\n- [ ] #T11 Ship, after #T10\n')
-  expect(files['/repo/.claude_todo/archive/OLD.md']).toBe('- [x] #T9 Old\n\n## From mods/x/archive/OLD.md\n\n- [x] #T12 Done in x\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Fix\n\n## From BACKLOG.md\n\n- [ ] #T2 Backlog item\n\n## From mods/x/TODO.md\n\n- [ ] #T000A Docs\n- [ ] #T000B Ship, after #T000A\n')
+  expect(files['/repo/.claude_todo/archive/OLD.md']).toBe('- [x] #T9 Old\n\n## From mods/x/archive/OLD.md\n\n- [x] #T000C Done in x\n')
   // The sources are empty, the target is not, and nothing is removed yet.
   expect(files['/repo/.claude_todo/BACKLOG.md']).toBe('')
   expect(files['/repo/mods/x/.claude_todo/TODO.md']).toBe('')
   expect(files['/repo/mods/x/.claude_todo/archive/OLD.md']).toBe('')
   expect(rmCalls(calls)).toEqual([])
-  expect(toasts.join('\n')).toContain('mods/x/TODO.md: #T1 is now #T10')
-  expect(JSON.stringify(await $.tool.call({ tool: 'Read', file_path: '/x' } as never))).toContain('#T1 is now #T10')
+  expect(toasts.join('\n')).toContain('mods/x/TODO.md: #T1 is now #T000A')
+  expect(JSON.stringify(await $.tool.call({ tool: 'Read', file_path: '/x' } as never))).toContain('#T1 is now #T000A')
   // The button is gone, and the next one has work.
   expect(await ui.find({ key: 'todo-consolidate' })).toBeUndefined()
   expect(await ui.find({ key: 'todo-delete-empty' })).toBeDefined()
@@ -1611,7 +1627,7 @@ test('Consolidate never reads, writes or empties through a symlink', async ($, o
   repoWith(on, files, { hasNearest: true, listed, links: { '/repo/mods/x/.claude_todo/archive/OLD.md': '/home/a/.claude/.claude_todo/OLD.md' } })
   const ui = await open($)
   await ui.press({ key: 'todo-consolidate' })
-  expect(files).toEqual(make())
+  expect(withoutLink(files)).toEqual(make())
 })
 
 test('Consolidate does not write a target that is a symlink, and empties no source', async ($, on) => {
@@ -1810,7 +1826,7 @@ test('Delete empty todos on macOS uses /usr/bin/trash without --, and never rm',
   expect(calls.some(call => call.startsWith('osascript'))).toBe(false)
   expect(calls.filter(call => call.startsWith('uname'))).toEqual(['uname -s'])
   expect(rmCalls(calls).filter(call => call.startsWith('rm --'))).toEqual([])
-  expect(Object.keys(files)).toEqual(['/repo/.claude_todo/TODO.md'])
+  expect(Object.keys(withoutLink(files))).toEqual(['/repo/.claude_todo/TODO.md'])
   expect(toasts).toContain('Moved 1 empty todo file to the Trash')
 })
 
@@ -1827,7 +1843,7 @@ test('Delete empty todos on Linux tries gio, then trash-put, then kioclient5', a
   const one = await trashRun($, on, first, { uname: 'Linux' })
   expect(one.calls).toContain("gio trash -- /repo/mods/x/.claude_todo/OLD's.md")
   expect(one.calls.some(call => call.startsWith('trash-put'))).toBe(false)
-  expect(Object.keys(first)).toEqual(['/repo/.claude_todo/TODO.md'])
+  expect(Object.keys(withoutLink(first))).toEqual(['/repo/.claude_todo/TODO.md'])
 })
 
 test('Delete empty todos on Linux falls back to trash-put when gio fails', async ($, on) => {
@@ -1873,7 +1889,7 @@ test('Delete empty todos on a Windows path uses PowerShell, with the path as cha
   expect(calls.some(call => call.startsWith('uname') || call.startsWith('/usr/bin/trash'))).toBe(false)
   expect(calls.some(call => call.includes('[System.IO.Directory]::Delete('))).toBe(true)
   expect(calls.some(call => call.startsWith('rm'))).toBe(false)
-  expect(Object.keys(files)).toEqual(['C:/repo/.claude_todo/TODO.md'])
+  expect(Object.keys(withoutLink(files))).toEqual(['C:/repo/.claude_todo/TODO.md'])
   expect(toasts).toContain('Moved 1 empty todo file to the Recycle Bin')
 })
 
@@ -2158,6 +2174,129 @@ test('a stored claim comes back after a reload, and a claim on a ticket that is 
   expect(readKeptTickets(store.get('orchestrator:sess-1'))).toEqual([['#t2', false]])
 })
 
+const PROGRESS = 'mcp__claudeopticon__report_progress'
+const orchSvgs = async (ui: Awaited<ReturnType<Parameters<Parameters<typeof test>[1]>[0]['ui']['mount']>>) => (await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg))
+
+test('report_progress title from the main conversation titles the orchestrator card; a helper\'s title is ignored', async ($, on) => {
+  orchSetup($, on)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  await $.tool.call({ tool: PROGRESS, done: 0, total: 2, items: ['#T2'], title: 'Helper headline', agentId: 'a1' } as never)
+  await $.tool.call({ tool: PROGRESS, done: 0, total: 2, items: ['#T2'] } as never)
+  const fallback = (await orchSvgs(ui)).find(orchCard) ?? ''
+  expect(fallback).not.toContain('Helper headline')
+  await $.tool.call({ tool: PROGRESS, done: 0, total: 2, items: ['#T2'], title: '  Polish the copy\nsecond line' } as never)
+  const card = (await orchSvgs(ui)).find(orchCard) ?? ''
+  expect(card).toContain('>Polish the copy<')
+  expect(card).toContain('Orchestrator')
+  expect(card).toContain('main conversation')
+})
+
+test('without a title the orchestrator card is titled by its first ticket, plus how many more', () => {
+  expect(orchestratorTitle(undefined, ['#T1 Ship the parser'])).toBe('#T1 Ship the parser')
+  expect(orchestratorTitle(undefined, ['#T1 Ship the parser', '#T2 B', '#T3 C'])).toBe('#T1 Ship the parser and 2 more')
+  expect(orchestratorTitle('Release work', ['#T1 Ship the parser', '#T2 B'])).toBe('Release work')
+  expect(orchestratorTitle(undefined, [])).toBe('Orchestrator')
+  expect(readTitle('   ')).toBeUndefined()
+  expect(readTitle(7)).toBeUndefined()
+  expect(readTitle('x'.repeat(200))?.length).toBe(80)
+  const list: TodoFile[] = [{ name: 'A.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo('- [ ] #T1 Ship the parser\n- [~] #T3 Check the invoice') }]
+  const make = (keys: string[], title?: string) => buildView(list, [], 0, { keys: new Set(keys), isRunning: true, toolCalls: 57, ...(title === undefined ? {} : { title }) }).orchestrator!
+  expect(make(['#t1']).description).toBe('#T1 Ship the parser')
+  expect(make(['#t1', '#t3']).description).toBe('#T1 Ship the parser and 1 more')
+  const view = buildView(list, [], 0, { keys: new Set(['#t1']), isRunning: true, toolCalls: 57 })
+  const card = agentSvg(view.orchestrator!, view)
+  expect(card.source).toContain('Orchestrator\u2002·\u2002main conversation\u2002·\u200257 tool calls')
+  expect(card.alt).toContain('O, Orchestrator: Running')
+})
+
+test('the orchestrator title is kept by session, comes back after a reload, and goes with the last ticket', async ($, on) => {
+  const store = new Map<string, unknown>()
+  const { edit } = orchSetup($, on, store)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  await edit('- [~] #T1 Ship the parser\n- [ ] #T2 Review the copy\n- [ ] #T3 Check the invoice')
+  await $.tool.call({ tool: PROGRESS, done: 0, total: 1, items: ['#T1'], title: 'Parser work' } as never)
+  await new Promise(resolve => setTimeout(resolve, 5))
+  expect(store.get('orchestrator-title:sess-1')).toBe('Parser work')
+  expect((await orchSvgs(ui)).find(orchCard)).toContain('>Parser work<')
+  await edit('- [x] #T1 Ship the parser\n- [ ] #T2 Review the copy\n- [ ] #T3 Check the invoice')
+  expect((await orchSvgs(ui)).find(orchCard)).toBeUndefined()
+  await new Promise(resolve => setTimeout(resolve, 5))
+  expect(store.get('orchestrator-title:sess-1')).toBe('')
+})
+
+test('a stored orchestrator title comes back after a reload', async ($, on) => {
+  const store = new Map<string, unknown>([['orchestrator:sess-1', [['#t2', false]]], ['orchestrator-title:sess-1', 'Copy review']])
+  orchSetup($, on, store)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  expect((await orchSvgs(ui)).find(orchCard)).toContain('>Copy review<')
+})
+
+test('the rules tell Claude to report a title when it works on tickets itself', () => {
+  expect(RULES).toContain('report_progress` with `title`')
+})
+
+test('callDetail gives the native detail per tool, relative paths, one line, hidden secrets and no repeat of the summary', () => {
+  const root = '/repo'
+  expect(callDetail('Bash', { command: 'npm test -- --run\nnext line' }, 'Run tests', root)).toBe('npm test -- --run')
+  expect(callDetail('Read', { file_path: '/repo/src/a.ts' }, 'Read: /repo/src/a.ts', root)).toBe('src/a.ts')
+  expect(callDetail('Edit', { file_path: '/elsewhere/a.ts' }, 'x', root)).toBe('/elsewhere/a.ts')
+  expect(callDetail('Write', { file_path: '/repo/b.md' }, 'x', root)).toBe('b.md')
+  expect(callDetail('NotebookEdit', { notebook_path: '/repo/n.ipynb' }, 'x', root)).toBe('n.ipynb')
+  expect(callDetail('Grep', { pattern: 'foo.*bar' }, 'x', root)).toBe('foo.*bar')
+  expect(callDetail('Grep', { pattern: 'foo', path: '/repo/hooks' }, 'x', root)).toBe('foo  hooks')
+  expect(callDetail('Glob', { pattern: '**/*.ts' }, 'x', root)).toBe('**/*.ts')
+  expect(callDetail('WebFetch', { url: 'https://example.com/a' }, 'x', root)).toBe('https://example.com/a')
+  expect(callDetail('WebSearch', { query: 'svg text fit' }, 'x', root)).toBe('svg text fit')
+  expect(callDetail('Task', { subagent_type: 'reviewer', model: 'opus' }, 'x', root)).toBe('reviewer, opus')
+  expect(callDetail('Agent', { subagent_type: 'reviewer' }, 'x', root)).toBe('reviewer')
+  expect(callDetail('Skill', { skill: 'code-style' }, 'x', root)).toBe('code-style')
+  expect(callDetail('mcp__x__tool', { query: 'q', url: 'u' }, 'x', root)).toBeUndefined()
+  expect(callDetail('Bash', {}, 'x', root)).toBeUndefined()
+  expect(callDetail('Bash', { command: 'ls' }, 'ls', root)).toBeUndefined()
+  for (const command of ['curl --password hunter2 x', 'export TOKEN=abc', 'curl -H "Authorization: Bearer x" u', 'run --api_key k', 'echo $SECRET']) {
+    expect(callDetail('Bash', { command }, 'x', root)).toBe('(hidden)')
+  }
+  expect(callDetail('Bash', { command: 'a'.repeat(1000) }, 'x', root)?.length).toBe(300)
+})
+
+test('the orchestrator card draws a dim mono detail line per entry, in a taller card, and none when there is no detail', () => {
+  const plain = orchestratorSvg([{ line: 'A', at: 0, isRunning: false }, { line: 'B', at: 0, isRunning: false }])
+  const rich = orchestratorSvg([{ line: 'A', at: 0, isRunning: false, detail: 'npm test <all>' }, { line: 'B', at: 0, isRunning: false }])
+  expect(rich.height).toBe(plain.height + 16)
+  expect(rich.source).toContain('npm test &lt;all&gt;')
+  expect(rich.source).not.toContain('<all>')
+  expect(rich.source).toMatch(/font-size="11" class="mono">npm test/)
+  expect(plain.source).not.toContain('font-size="11"')
+  expect(rich.source).toContain(`height="${rich.height}"`)
+  const long = orchestratorSvg([{ line: 'A', at: 0, isRunning: false, detail: 'x'.repeat(400) }])
+  expect(long.source).toContain('…')
+  expect(long.source).not.toContain('x'.repeat(400))
+})
+
+test('main-conversation calls store their detail; a duplicate or an MCP call has none; the terminal view shows it after the line', async ($, on) => {
+  orchSetup($, on)
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: '', stderr: '', interrupted: false } }) as never)
+  on('tool.call', { tool: 'Read' }, () => ({ result: {} }) as never)
+  await begin($)
+  await $.tool.call({ tool: 'Bash', command: 'npm test', description: 'Run the tests' } as never)
+  await $.tool.call({ tool: 'Bash', command: 'curl --password x u', description: 'Call the API' } as never)
+  await $.tool.call({ tool: 'Bash', command: 'ls' } as never)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const drawn = (await orchSvgs(ui)).join('')
+  expect(drawn).toContain('>npm test<')
+  expect(drawn).toContain('>(hidden)<')
+  expect(drawn).not.toContain('hunter')
+  expect(drawn).not.toContain('--password')
+  const terminal = await $.ui.mount({ plugin: 'claudeopticon', surface: 'terminal', ...PANE })
+  const text = JSON.stringify(await terminal.drawn())
+  expect(text).toContain('Run the tests')
+  expect(text).toContain('npm test')
+  expect(text).not.toContain('--password')
+})
+
 test('the text view lists the orchestrator before the agents', async ($, on) => {
   orchSetup($, on, new Map<string, unknown>([['orchestrator:sess-1', [['#t2', false]]]]))
   await begin($)
@@ -2165,4 +2304,1007 @@ test('the text view lists the orchestrator before the agents', async ($, on) => 
   const drawn = JSON.stringify(await ui.drawn())
   expect(drawn).toContain('main conversation')
   expect(drawn.indexOf('main conversation')).toBeLessThan(drawn.indexOf('Helper'))
+})
+
+// ---------------------------------------------------------------- archiving closed tickets
+
+const PLAN_TEXT = ['# Plan', '', '## Core', '- [x] #T1 Done parser', '  note under it', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', '- [x] #T5 Done docs', 'prose stays'].join('\n')
+
+test('closedBlocks finds a top-level done ticket with its indented lines, only when every box in the block is done', () => {
+  const blocks = closedBlocks(PLAN_TEXT)
+  expect(blocks.map(block => block.lines)).toEqual([['- [x] #T1 Done parser', '  note under it'], ['- [x] #T5 Done docs']])
+  expect(blocks.map(block => block.heading)).toEqual(['## Core', '## Docs'])
+  expect(blocks.map(block => [block.from, block.to])).toEqual([[3, 5], [10, 11]])
+  // A done subtask under an open ticket stays; a done child under a done ticket goes with it.
+  expect(closedBlocks('- [ ] #T1 Open\n  - [x] done child')).toEqual([])
+  expect(closedBlocks('- [x] #T1 Done\n  - [x] done child\n    - [X] deeper')[0]?.lines.length).toBe(3)
+  expect(closedBlocks('- [x] #T1 Done\n  - [~] child going')).toEqual([])
+  // Only an unindented ticket line starts a block; the bullet and the box case can differ.
+  expect(closedBlocks('  - [x] indented only')).toEqual([])
+  expect(closedBlocks('* [X] Star bullet')[0]?.lines).toEqual(['* [X] Star bullet'])
+  // A block runs past blank lines while the next non-blank line is indented; the blanks after its last line are not taken.
+  expect(closedBlocks('- [x] A\n\n  later indent\n\n- [x] B').map(block => [block.lines, block.from, block.to])).toEqual([[['- [x] A', '', '  later indent'], 0, 3], [['- [x] B'], 4, 5]])
+  // An open or in-progress subtask after a blank line keeps the whole block: it never joins the item above.
+  expect(closedBlocks('- [x] A\n  - [x] done\n\n  - [ ] open after a blank')).toEqual([])
+  expect(closedBlocks('- [x] A\n\n\n    - [~] going')).toEqual([])
+  // Prose, a table and a code fence are never moved.
+  expect(closedBlocks('| a | b |\n|---|---|\n```\n- [x] in a fence\n```').length).toBe(0)
+  // A block with no heading above it has none.
+  expect(closedBlocks('- [x] Top')[0]?.heading).toBeUndefined()
+  // Removing the blocks leaves everything else exactly.
+  expect(removeBlocks(PLAN_TEXT, blocks)).toBe(['# Plan', '', '## Core', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', 'prose stays'].join('\n'))
+})
+
+test('addToArchive groups blocks under their heading, never twice', () => {
+  const blocks = closedBlocks(PLAN_TEXT)
+  const fresh = addToArchive('', blocks)
+  expect(fresh).toBe('## Core\n\n- [x] #T1 Done parser\n  note under it\n\n## Docs\n\n- [x] #T5 Done docs\n')
+  // A retry adds nothing: the exact block is there, and it is what this mod wrote last.
+  expect(addToArchive(fresh, blocks, blocks.map(block => block.lines))).toBe(fresh)
+  // Under an existing heading the block goes at the end of that section; another section is untouched.
+  const merged = addToArchive('## Docs\n\n- [x] #T0 Older\n\n## Other\n\n- [x] #T9 x\n', [blocks[1]!])
+  expect(merged).toBe('## Docs\n\n- [x] #T0 Older\n- [x] #T5 Done docs\n\n## Other\n\n- [x] #T9 x\n')
+  // A new heading goes at the end of the file; a block with no heading goes at the end with none.
+  expect(addToArchive('- [x] #T0 Older\n', [blocks[0]!])).toBe('- [x] #T0 Older\n\n## Core\n\n- [x] #T1 Done parser\n  note under it\n')
+  expect(addToArchive('## Core\n\n- [x] #T0 Older\n', closedBlocks('- [x] #T7 Loose'))).toBe('## Core\n\n- [x] #T0 Older\n- [x] #T7 Loose\n')
+  // A heading with nothing under it takes the block after a blank line.
+  expect(addToArchive('## Docs\n', [blocks[1]!])).toBe('## Docs\n\n- [x] #T5 Done docs\n')
+})
+
+test('closedBlocks: a fence line in a block keeps it, and the fence state still holds', () => {
+  expect(closedBlocks('- [x] A\n  ```\n- [x] fenced\n  ```\n- [x] B').map(block => block.lines)).toEqual([['- [x] B']])
+  expect(closedBlocks('- [x] A\n  ~~~\n  code\n  ~~~').length).toBe(0)
+})
+
+test('CRLF: a trailing carriage return never hides a checkbox, and a checkbox-like line that fails the match counts open', () => {
+  expect(closedBlocks('- [x] A\r\n  - [ ] open\r\n')).toEqual([])
+  expect(closedBlocks('- [x] A\n  - [ ] open\r\n- [x] B\r\n').map(block => block.lines)).toEqual([['- [x] B']])
+  expect(closedBlocks('- [x] A\r\n  note\r\n')[0]?.lines).toEqual(['- [x] A', '  note'])
+  expect(closedBlocks('- [x] A\n  - [ ]')).toEqual([])
+  expect(parseTodo('- [ ] a\r\n- [x] b\r').map(item => [item.text, item.status])).toEqual([['a', 'pending'], ['b', 'completed']])
+  // The archive keeps its own line ending, else the source's.
+  const [block] = closedBlocks('## Core\r\n- [x] #T1 Done parser\r\n  note under it\r\n')
+  expect(addToArchive('## Core\r\n\r\n- [x] #T0 Older\r\n', [block!])).toBe('## Core\r\n\r\n- [x] #T0 Older\r\n- [x] #T1 Done parser\r\n  note under it\r\n')
+  expect(addToArchive('', [block!], [], '\r\n')).toBe('## Core\r\n\r\n- [x] #T1 Done parser\r\n  note under it\r\n')
+  expect(addToArchive('- [x] #T0 Older\n', [block!], [], '\r\n')).toBe('- [x] #T0 Older\n\n## Core\n\n- [x] #T1 Done parser\n  note under it\n')
+})
+
+test('parseTodo skips checkbox lines inside code fences', () => {
+  expect(parseTodo('- [ ] a\n```\n- [ ] fenced\n```\n~~~\n- [x] tilde\n~~~\n- [x] b').map(item => item.text)).toEqual(['a', 'b'])
+})
+
+test('fences are CommonMark-like: a fence closes only on its own character, at least as long, with nothing else on the line', () => {
+  // A tilde line inside a backtick fence does not close it, and nothing in it is parsed.
+  expect(parseTodo('```\n~~~\n- [x] in code\n```\n- [ ] #T1 real').map(item => item.text)).toEqual(['#T1 real'])
+  const text = '```\n~~~\n- [x] in code\n```\n- [x] #T2 done'
+  const [block, ...more] = closedBlocks(text)
+  expect(more).toEqual([])
+  expect(block?.lines).toEqual(['- [x] #T2 done'])
+  // The line in code stays where it is when the block is cut.
+  expect(removeBlocks(text, [block!])).toBe('```\n~~~\n- [x] in code\n```')
+  // A 4-backtick fence holds a 3-backtick line; a shorter run does not close it.
+  const four = '````\n```\n- [x] in code\n```\n````\n- [ ] #T3 real\n- [x] #T4 done'
+  expect(parseTodo(four).map(item => item.text)).toEqual(['#T3 real', '#T4 done'])
+  expect(closedBlocks(four).map(one => one.lines)).toEqual([['- [x] #T4 done']])
+  // A closing line with an info string is content; a longer closing run closes.
+  expect(parseTodo('```\n```js\n- [ ] hidden\n````\n- [ ] #T5 real').map(item => item.text)).toEqual(['#T5 real'])
+  // A backtick fence's info string may not hold a backtick: no fence opens.
+  expect(parseTodo('```a`b\n- [ ] #T6 real').map(item => item.text)).toEqual(['#T6 real'])
+  // Four spaces of indent is code by indent, not a fence.
+  expect(parseTodo('    ```\n- [ ] #T7 real').map(item => item.text)).toEqual(['#T7 real'])
+})
+
+test('addToArchive does not take a heading inside a code fence for a heading', () => {
+  const [block] = closedBlocks('## Core\n- [x] #T1 Done parser\n  note under it')
+  expect(addToArchive('## Core\n\n- [x] #T0 Older\n\n## Other\n\n```\n## Core\n```\n', [block!])).toBe('## Core\n\n- [x] #T0 Older\n- [x] #T1 Done parser\n  note under it\n\n## Other\n\n```\n## Core\n```\n')
+  expect(addToArchive('## Core\n\n- [x] #T0 Older\n\n```\n# install\n```\n- [x] #T3 After fence\n\n## Other\n', [block!])).toBe('## Core\n\n- [x] #T0 Older\n\n```\n# install\n```\n- [x] #T3 After fence\n- [x] #T1 Done parser\n  note under it\n\n## Other\n')
+})
+
+test('addToArchive skips a block only when it stands whole in the archive and this mod wrote it last', () => {
+  const one = closedBlocks('- [x] #T1 Done parser')
+  const arch = '- [x] #T1 Done parser\n'
+  // A new block that equals an old archived line is added.
+  expect(addToArchive(arch, one)).toBe('- [x] #T1 Done parser\n- [x] #T1 Done parser\n')
+  expect(addToArchive(arch, one, [one[0]!.lines])).toBe(arch)
+  // A longer archived block does not count as the run: the next line is indented.
+  expect(addToArchive('- [x] #T1 Done parser\n  note\n', one, [one[0]!.lines])).toBe('- [x] #T1 Done parser\n  note\n- [x] #T1 Done parser\n')
+})
+
+test('openCommand picks the opener per platform, with no shell, and archiveName picks the file', () => {
+  expect(openCommand('/repo/.claude_todo/archive/TODO.md', 'Darwin')).toEqual(['open', '/repo/.claude_todo/archive/TODO.md'])
+  expect(openCommand('/home/a/my repo/a.md', 'Linux')).toEqual(['xdg-open', '/home/a/my repo/a.md'])
+  expect(openCommand('/home/a/a.md', '')).toEqual(['xdg-open', '/home/a/a.md'])
+  expect(openCommand('C:/repo x/.claude_todo/archive/TODO.md', 'Linux')).toEqual(['explorer.exe', 'C:\\repo x\\.claude_todo\\archive\\TODO.md'])
+  const file = (name: string, folder = '/r', isArchived?: true) => ({ name, folder, ...(isArchived ? { isArchived } : {}) })
+  expect(archiveName([file('A.md'), file('todo.md')], '/r')).toBe('todo.md')
+  expect(archiveName([file('A.md'), file('archive/TODO.md', '/r', true)], '/r')).toBe('TODO.md')
+  expect(archiveName([file('NOTES.md')], '/r')).toBe('NOTES.md')
+  expect(archiveName([file('A.md'), file('B.md')], '/r')).toBe('TODO.md')
+  expect(archiveName([file('archive/OLD.md', '/r', true)], '/r')).toBe('OLD.md')
+  expect(archiveName([file('A.md', '/other')], '/r')).toBe('TODO.md')
+  expect(readKeptArchived([{ text: 't', status: 'completed', owners: [], key: 'k' }, { text: 'x', status: 'pending', owners: [], key: 'k' }, 3])).toEqual([{ text: 't', status: 'completed', owners: [], key: 'k' }])
+})
+
+test('a closed ticket moves to archive/<same file> after 5 seconds, under its heading, and the live file keeps the rest', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': PLAN_TEXT }
+  const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  const ui = await open($)
+  // The archive file is made, empty, for the Show completed link: nothing else yet.
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('')
+  // Debounce: seen closed at the first scan; the second scan, 3 s on, is too early.
+  await clock.advance(3000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe(PLAN_TEXT)
+  expect(writes).toEqual([])
+  await clock.advance(3000)
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('## Core\n\n- [x] #T1 Done parser\n  note under it\n\n## Docs\n\n- [x] #T5 Done docs\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe(['# Plan', '', '## Core', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', 'prose stays'].join('\n'))
+  // The Done column lists them, from this session; the counts still hold the moved tickets.
+  const drawn = JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(drawn).toContain('Done parser')
+  expect(drawn).toContain('Done docs')
+  expect(drawn).toContain('Todo 3 of 5 done')
+  // A ticket closed later is newer: it leads the Done column.
+  files['/repo/.claude_todo/TODO.md'] += '\n- [x] #T6 Later done'
+  await clock.advance(6000)
+  await clock.advance(3000)
+  const later = JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toContain('- [x] #T6 Later done')
+  expect(later.indexOf('Later done')).toBeGreaterThan(-1)
+  expect(later.indexOf('Later done')).toBeLessThan(later.indexOf('Done parser'))
+})
+
+test('a ticket reopened inside the 5 seconds is not moved', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [x] #T1 Mis-click' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(3000)
+  files['/repo/.claude_todo/TODO.md'] = '- [ ] #T1 Mis-click'
+  await clock.advance(9000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 Mis-click')
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('')
+})
+
+test('a source that changed during the move is not rewritten, and the retry adds the block to the archive once', async ($, on) => {
+  const clock = mock.clock(on)
+  const archive = '/repo/.claude_todo/archive/TODO.md'
+  const files: Record<string, string> = {}
+  let current = '- [x] #T1 Done parser\n- [ ] #T2 Open lexer'
+  let isSettled = false
+  Object.defineProperty(files, '/repo/.claude_todo/TODO.md', {
+    enumerable: true,
+    configurable: true,
+    // The first read after the archive was written finds a new line: the source changed meanwhile.
+    get: () => {
+      if (!isSettled && (files[archive] ?? '') !== '') {
+        isSettled = true
+
+        return `${current}\n- [ ] #T3 added meanwhile`
+      }
+
+      return current
+    },
+    set: value => {
+      current = value as string
+    },
+  })
+  files[archive] = ''
+  const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(6000)
+  // The source check failed after the archive was written: the archive is put back as it was.
+  expect(files[archive]).toBe('')
+  expect(writes).toEqual([archive])
+  expect(current).toBe('- [x] #T1 Done parser\n- [ ] #T2 Open lexer')
+  // The next scan finds it unchanged: the source is cut, and the archive keeps one copy.
+  await clock.advance(3000)
+  expect(current).toBe('- [ ] #T2 Open lexer')
+  expect(files[archive]).toBe('- [x] #T1 Done parser\n')
+})
+
+test('a source that changed during the move, with an archive that changed too, keeps the archive and the retry does not add the block twice', async ($, on) => {
+  const clock = mock.clock(on)
+  const archive = '/repo/.claude_todo/archive/TODO.md'
+  const files: Record<string, string> = {}
+  let current = '- [x] #T1 Done parser\n- [ ] #T2 Open lexer'
+  let isSettled = false
+  Object.defineProperty(files, '/repo/.claude_todo/TODO.md', {
+    enumerable: true,
+    configurable: true,
+    // The first read after the archive was written finds a new line, and the archive changes too.
+    get: () => {
+      if (!isSettled && (files[archive] ?? '') !== '') {
+        isSettled = true
+        files[archive] += '- [x] #T0 someone else\n'
+
+        return `${current}\n- [ ] #T3 added meanwhile`
+      }
+
+      return current
+    },
+    set: value => {
+      current = value as string
+    },
+  })
+  files[archive] = ''
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(6000)
+  // Not equal to what the step wrote, so it is not rolled back.
+  expect(files[archive]).toBe('- [x] #T1 Done parser\n- [x] #T0 someone else\n')
+  await clock.advance(3000)
+  expect(current).toBe('- [ ] #T2 Open lexer')
+  expect(files[archive]).toBe('- [x] #T1 Done parser\n- [x] #T0 someone else\n')
+})
+
+test('a new closed ticket that equals an old archived line is added to the archive, not dropped', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [x] #T1 Done parser', '/repo/.claude_todo/archive/TODO.md': '- [x] #T1 Done parser\n  old note\n' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(6000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('')
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('- [x] #T1 Done parser\n  old note\n- [x] #T1 Done parser\n')
+})
+
+test('a CRLF file archives with its own line ending, and an open subtask under a mixed file is never archived', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [x] #T1 Done\r\n  note\r\n- [x] #T2 Mixed\n  - [ ] #T3 open child\r\n' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(6000)
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('- [x] #T1 Done\r\n  note\r\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [x] #T2 Mixed\n  - [ ] #T3 open child\r\n')
+})
+
+test('an open subtask after a blank line keeps its parent in the live file', async ($, on) => {
+  const clock = mock.clock(on)
+  const text = '- [x] #T1 Parent\n  - [x] #T2 done child\n\n  - [ ] #T3 open child\n- [x] #T4 Plain'
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': text }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(9000)
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('- [x] #T4 Plain\n')
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [x] #T1 Parent\n  - [x] #T2 done child\n\n  - [ ] #T3 open child')
+})
+
+test('the compare is the last call before each write: the checks come first, then the read', async ($, on) => {
+  const clock = mock.clock(on)
+  const log: string[] = []
+  const live = '/repo/.claude_todo/TODO.md'
+  const archive = '/repo/.claude_todo/archive/TODO.md'
+  const files: Record<string, string> = { [live]: '- [x] #T1 Done\n- [ ] Open', [archive]: '- [x] #T0 Old\n' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], log })
+  await open($)
+  await clock.advance(15000)
+  // Numbering wrote the live file, then the archive move wrote the archive and then the live file.
+  const writes = log.flatMap((entry, at) => (entry.startsWith('write:') ? [at] : []))
+  expect(writes.length).toBeGreaterThanOrEqual(3)
+  for (const at of writes) {
+    if (log[at] === `write:${live}` || (log[at] === `write:${archive}` && files[archive] !== '')) {
+      expect(log[at - 1]).toBe(log[at]!.replace('write:', 'read:'))
+    }
+  }
+})
+
+test('Consolidate refuses to start while the archive move runs', async ($, on) => {
+  const clock = mock.clock(on)
+  let release = () => {}
+  const hold = new Promise<void>(resolve => {
+    release = resolve
+  })
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [x] #T1 Done\n- [ ] #T2 Open', '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T3 Elsewhere' }
+  const log: string[] = []
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', 'mods/x/.claude_todo/TODO.md'], hold, log })
+  const ui = await open($)
+  await clock.advance(3000)
+  const moving = clock.advance(3000)
+  // Let the move reach its held write: the second write to the archive file (the first makes it, empty).
+  const writesToArchive = () => log.filter(entry => entry === 'write:/repo/.claude_todo/archive/TODO.md').length
+  for (let i = 0; i < 200 && writesToArchive() < 2; i += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  expect(writesToArchive()).toBe(2)
+  await ui.press({ key: 'todo-consolidate' })
+  release()
+  await moving
+  for (let i = 0; i < 500; i += 1) {
+    await Promise.resolve()
+  }
+  // The press did nothing: the other file was not merged and emptied.
+  expect(files['/repo/mods/x/.claude_todo/TODO.md']).toBe('- [ ] #T3 Elsewhere')
+})
+
+test('a dangling symlink where the archive file would be is never written over', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [x] #T1 Done', '/repo/.claude_todo/archive/OTHER.md': '- [x] #T0 Old' }
+  const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], dangling: ['/repo/.claude_todo/archive/TODO.md'] })
+  await open($)
+  await clock.advance(12000)
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBeUndefined()
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [x] #T1 Done')
+  expect(writes).toEqual([])
+})
+
+test('numbering and the archive move leave code fences alone', async ($, on) => {
+  const clock = mock.clock(on)
+  const text = ['- [ ] Real', '```', '- [ ] Fenced', '- [x] Fenced done', '```', '~~~', '- [ ] Tilde', '~~~'].join('\n')
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': text }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(15000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe(text.replace('- [ ] Real', '- [ ] #T0001 Real'))
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('')
+})
+
+const SYMLINKS: [string, Record<string, string>][] = [
+  ['an archive file that is a symlink', { '/repo/.claude_todo/archive/TODO.md': '/home/a/.claude/.claude_todo/archive/TODO.md' }],
+  ['an archive folder that is a symlink', { '/repo/.claude_todo/archive': '/home/a/elsewhere' }],
+  ['a source file that is a symlink', { '/repo/.claude_todo/TODO.md': '/home/a/other/TODO.md' }],
+]
+for (const [name, links] of SYMLINKS) {
+  test(`${name}: nothing is moved or written`, async ($, on) => {
+    const clock = mock.clock(on)
+    const make = () => ({ '/repo/.claude_todo/TODO.md': '- [x] #T1 Done parser', '/repo/.claude_todo/archive/TODO.md': '- [x] #T0 Old' })
+    const files: Record<string, string> = make()
+    const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], links })
+    await open($)
+    await clock.advance(9000)
+    expect(files).toEqual(make())
+    expect(writes).toEqual([])
+  })
+}
+
+test('the global folder is never written', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/home/a/.claude/.claude_todo/TODO.md': '- [x] #T1 Done parser' }
+  const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], root: '/home/a/.claude' })
+  await open($)
+  await clock.advance(9000)
+  expect(files).toEqual({ '/home/a/.claude/.claude_todo/TODO.md': '- [x] #T1 Done parser' })
+  expect(writes).toEqual([])
+})
+
+test('a sub-folder of the repo has its closed tickets archived beside it', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 Open', '/repo/mods/x/.claude_todo/WORK.md': '# W\n- [x] #T7 Done in x' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', 'mods/x/.claude_todo/WORK.md'] })
+  await open($)
+  await clock.advance(6000)
+  // The block keeps its heading, of any level.
+  expect(files['/repo/mods/x/.claude_todo/archive/WORK.md']).toBe('# W\n\n- [x] #T7 Done in x\n')
+  expect(files['/repo/mods/x/.claude_todo/WORK.md']).toBe('# W')
+})
+
+test('the counts of a file and of the heading include its same-named archive file', () => {
+  const list: TodoFile[] = [
+    { name: 'TODO.md', folder: '/r/.claude_todo', mtimeMs: 2, items: parseTodo('- [ ] #T1 open\n- [~] #T2 going') },
+    { name: 'archive/TODO.md', folder: '/r/.claude_todo', mtimeMs: 1, items: parseTodo('- [x] #T3 a\n- [x] #T4 b\n- [ ] #T5 not closed'), isArchived: true },
+    { name: 'TODO.md', folder: '/r/mods/x/.claude_todo', mtimeMs: 2, items: parseTodo('- [ ] #T1 other') },
+  ]
+  const view = buildView(list, [], 0)
+  const row = (folder: string) => view.files.find(file => file.name === 'TODO.md' && file.items[0]?.folder === folder)
+  expect([row('/r/.claude_todo')?.done, row('/r/.claude_todo')?.total]).toEqual([2, 4])
+  expect([row('/r/mods/x/.claude_todo')?.done, row('/r/mods/x/.claude_todo')?.total]).toEqual([0, 1])
+  expect([view.done, view.total, view.archived, view.active]).toEqual([2, 5, 2, 1])
+})
+
+// ---------------------------------------------------------------- Recategorize
+
+test('isSubstantialChange: a different number of groups, or a quarter of the tickets in a group that does not map', () => {
+  const old = { categories: ['A', 'B'], items: { t1: 'A', t2: 'A', t3: 'B', t4: 'B', t5: 'B' } }
+  const keys = ['t1', 't2', 't3', 't4', 't5']
+  const next = (items: Record<string, string>) => ({ categories: [...new Set(Object.values(items))], items })
+  // Renamed groups, same split: nothing moves.
+  expect(isSubstantialChange(old, next({ t1: 'X', t2: 'X', t3: 'Y', t4: 'Y', t5: 'Y' }), keys)).toBe(false)
+  // One of five (20%) moves: not enough.
+  expect(isSubstantialChange(old, next({ t1: 'X', t2: 'X', t3: 'X', t4: 'Y', t5: 'Y' }), keys)).toBe(false)
+  // Two of five (40%) move.
+  expect(isSubstantialChange(old, next({ t1: 'X', t2: 'Y', t3: 'Y', t4: 'X', t5: 'Y' }), keys)).toBe(true)
+  // Exactly a quarter: four tickets, one moves.
+  expect(isSubstantialChange({ categories: ['A', 'B'], items: { t1: 'A', t2: 'A', t3: 'B', t4: 'B' } }, next({ t1: 'X', t2: 'X', t3: 'X', t4: 'Y' }), keys.slice(0, 4))).toBe(true)
+  // A different number of groups counts at once.
+  expect(isSubstantialChange(old, next({ t1: 'X', t2: 'X', t3: 'Y', t4: 'Y', t5: 'Z' }), keys)).toBe(true)
+  // Tickets with no old category are an old group of their own: they all move when the new group is not that one.
+  expect(isSubstantialChange({ categories: [], items: {} }, next({ t1: 'X', t2: 'Y' }), ['t1', 't2'])).toBe(true)
+})
+
+/** Four open tickets, sorted into Code (#T1, #T2) and Docs (#T3, #T4), and a model that answers `reply`. */
+async function recategorizeSetup($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1], reply: () => unknown) {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/TODO.md': ['- [ ] #T1 parser', '- [ ] #T2 lexer', '- [ ] #T3 guide', '- [ ] #T4 faq'].join('\n'),
+    '/repo/.claude_todo/categories.json': JSON.stringify({ categories: ['Code', 'Docs'], items: { '#t1': 'Code', '#t2': 'Code', '#t3': 'Docs', '#t4': 'Docs' } }),
+  }
+  const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  const prompts: string[] = []
+  on('model.complete', (_$, e) => {
+    prompts.push(e.prompt)
+    const out = reply()
+
+    return { value: out === undefined ? { isAnswered: false, text: '' } : { isAnswered: true, text: JSON.stringify(out), usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } } as never
+  })
+  const ui = await open($)
+
+  return { clock, files, writes, prompts, ui }
+}
+
+test('Recategorize applies a real change: the new names and assignments are written, from scratch', async ($, on) => {
+  const { files, writes, prompts, ui } = await recategorizeSetup($, on, () => ({ categories: ['Lexing', 'Parsing', 'Writing'], assign: { 1: 'Parsing', 2: 'Lexing', 3: 'Writing', 4: 'Writing' } }))
+  expect(await ui.find({ key: 'todo-recategorize' })).toBeDefined()
+  await ui.press({ key: 'todo-recategorize' })
+  expect(prompts.length).toBe(1)
+  // The current assignments are ignored: no existing categories in the prompt.
+  expect(prompts[0]).toContain('There are no categories yet')
+  expect(writes).toEqual(['/repo/.claude_todo/categories.json'])
+  expect(JSON.parse(files['/repo/.claude_todo/categories.json']!)).toEqual({ categories: ['Lexing', 'Parsing', 'Writing'], items: { '#t1': 'Parsing', '#t2': 'Lexing', '#t3': 'Writing', '#t4': 'Writing' } })
+  expect(await ui.find({ type: 'Text', text: /current categories are correct/ })).toBeUndefined()
+})
+
+test('Recategorize keeps the old names when the new sort is only a rename, and says so for 4 seconds', async ($, on) => {
+  const { clock, files, writes, ui } = await recategorizeSetup($, on, () => ({ categories: ['Software', 'Writing'], assign: { 1: 'Software', 2: 'Software', 3: 'Writing', 4: 'Writing' } }))
+  const before = files['/repo/.claude_todo/categories.json']
+  await ui.press({ key: 'todo-recategorize' })
+  expect(files['/repo/.claude_todo/categories.json']).toBe(before)
+  expect(writes).toEqual([])
+  expect(await ui.find({ type: 'Text', text: /The current categories are correct/ })).toBeDefined()
+  await clock.advance(3000)
+  expect(await ui.find({ type: 'Text', text: /The current categories are correct/ })).toBeDefined()
+  await clock.advance(1000)
+  expect(await ui.find({ type: 'Text', text: /The current categories are correct/ })).toBeUndefined()
+  expect(await ui.find({ key: 'todo-recategorize' })).toBeDefined()
+})
+
+test('Recategorize says so when the model fails, changes nothing, and the note goes after 4 seconds', async ($, on) => {
+  const { clock, files, writes, ui } = await recategorizeSetup($, on, () => undefined)
+  const before = files['/repo/.claude_todo/categories.json']
+  await ui.press({ key: 'todo-recategorize' })
+  expect(await ui.find({ type: 'Text', text: /Could not recategorize/ })).toBeDefined()
+  expect(files['/repo/.claude_todo/categories.json']).toBe(before)
+  expect(writes).toEqual([])
+  await clock.advance(4000)
+  expect(await ui.find({ type: 'Text', text: /Could not recategorize/ })).toBeUndefined()
+})
+
+test('Recategorize is hidden when no ticket is open', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [x] #T1 done' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  const ui = await open($)
+  expect(await ui.find({ key: 'todo-recategorize' })).toBeUndefined()
+})
+
+// ---------------------------------------------------------------- Show completed link
+
+test('Show completed is a button that opens the archive file, made empty when missing, and counts the archived tickets', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 open', '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T1 other' }
+  const { calls } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', 'mods/x/.claude_todo/TODO.md'] })
+  const ui = await open($)
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('')
+  // The desktop app draws a Link as plain text unless it is https: so it is a Button, on both surfaces.
+  const term = await $.ui.mount({ plugin: 'claudeopticon', surface: 'terminal', ...PANE })
+  const button = JSON.stringify(await term.drawn())
+  expect(button).not.toContain('"type":"Link"')
+  expect(button).toContain('"label":"Show completed (0)"')
+  expect(await ui.find({ key: 'todo-show-completed' })).toBeDefined()
+  expect(JSON.stringify(await ui.drawn())).toContain('"label":"Show completed (0)"')
+  // The empty archive file is not an empty todo to delete, and the old toggle is gone.
+  expect(await ui.find({ key: 'todo-delete-empty' })).toBeUndefined()
+  expect(await ui.find({ key: 'todo-toggle' })).toBeUndefined()
+  // macOS: `open <path>`, no shell.
+  await ui.press({ key: 'todo-show-completed' })
+  expect(calls).toContain('open /repo/.claude_todo/archive/TODO.md')
+  await term.unmount()
+  // With closed tickets in two archive files: N is their total.
+  files['/repo/.claude_todo/archive/TODO.md'] = '- [x] #T2 a\n- [x] #T3 b'
+  files['/repo/mods/x/.claude_todo/archive/TODO.md'] = '- [x] #T4 c\n- [ ] #T5 not closed'
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const again = JSON.stringify(await (await $.ui.mount({ plugin: 'claudeopticon', surface: 'terminal', ...PANE })).drawn())
+  expect(again).toContain('"label":"Show completed (3)"')
+})
+
+test('Show completed opens with xdg-open on Linux, explorer.exe with backslashes on Windows, and toasts when it fails', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = { '/home/a/repo/.claude_todo/TODO.md': '- [ ] #T1 open' }
+  const { calls } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], root: '/home/a/repo', uname: 'Linux', failing: ['xdg-open'] })
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => {
+    toasts.push(JSON.stringify(e))
+
+    return { value: undefined } as never
+  })
+  const ui = await open($)
+  await ui.press({ key: 'todo-show-completed' })
+  expect(calls).toContain('xdg-open /home/a/repo/.claude_todo/archive/TODO.md')
+  expect(calls.filter(call => call === 'uname -s').length).toBe(1)
+  expect(toasts.join('\n')).toContain('Could not open /home/a/repo/.claude_todo/archive/TODO.md')
+})
+
+test('Show completed on Windows runs explorer.exe with a backslash path; its exit code 1 is not a failure', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = { 'C:/repo/.claude_todo/TODO.md': '- [ ] #T1 open' }
+  const { calls } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], root: 'C:/repo', exits: { 'explorer.exe': 1 } })
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => {
+    toasts.push(JSON.stringify(e))
+
+    return { value: undefined } as never
+  })
+  const ui = await open($)
+  await ui.press({ key: 'todo-show-completed' })
+  expect(calls).toContain('explorer.exe C:\\repo\\.claude_todo\\archive\\TODO.md')
+  expect(toasts.join('\n')).not.toContain('Could not open')
+})
+
+test('the Show completed link is not made when the folder is not safe to write', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 open' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], links: { '/repo/.claude_todo/archive': '/home/a/elsewhere' } })
+  files['/repo/.claude_todo/archive/OLD.md'] = ''
+  const ui = await open($)
+  expect(JSON.stringify(await ui.drawn())).not.toContain('"type":"Link"')
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBeUndefined()
+})
+
+// ---------------------------------------------------------------- ticket IDs and auto-numbering
+
+test('ticket IDs: T plus a digit then digits and letters parse in any case, #TODO does not, and values are base 36', () => {
+  const ids = parseTodo(['- [ ] #T12 old', '- [ ] #T002A new', '- [ ] #t002a lower', '- [ ] #TODO fix', '- [ ] #PROJ7 other prefix', '- [ ] #TA1 letter first', '- [ ] #T1x2y'].join('\n')).map(item => item.id)
+  expect(ids).toEqual(['T12', 'T002A', 't002a', undefined, 'PROJ7', 'TA1', 'T1x2y'])
+  expect(ticketValue('T25')).toBe(77)
+  expect(ticketValue('T0026')).toBe(78)
+  expect(ticketValue('t002a')).toBe(82)
+  expect(ticketValue('PROJ7')).toBeUndefined()
+  expect(ticketValue('TODO')).toBeUndefined()
+  expect(applyRenames('#TODO and #T12 and #T002A', { t12: 'T0001', t002a: 'T0002' })).toBe('#TODO and #T0001 and #T0002')
+})
+
+test('the next free ticket IDs follow the highest value, old or new, and skip forms that start with a letter', () => {
+  expect(nextTicketIds([], 2)).toEqual(['T0001', 'T0002'])
+  // Old #T25 (77) then (78).
+  expect(nextTicketIds(['t25'], 3)).toEqual(['T0026', 'T0027', 'T0028'])
+  expect(nextTicketIds(['t0029', 'T1'], 2)).toEqual(['T002A', 'T002B'])
+  expect(nextTicketIds(['t002a', 'proj9'], 1)).toEqual(['T002B'])
+  // 9ZZZ is the last 4-character form that starts with a digit: then 5 characters, still a digit first.
+  expect(nextTicketIds(['t9zzz'], 2)).toEqual(['T10000', 'T10001'])
+  expect(nextTicketIds(['t9zzy'], 2)).toEqual(['T9ZZZ', 'T10000'])
+  expect(nextIdsLine(['t25'])).toBe('Next free ticket IDs: #T0026, #T0027, #T0028')
+  expect(insertIds('# P\n- [ ] a\n  - [~] b\nc', [1, 2], ['T0001', 'T0002'])).toBe('# P\n- [ ] #T0001 a\n  - [~] #T0002 b\nc')
+  expect(numberedNote([])).toBeUndefined()
+})
+
+test('a ticket with no ID gets the next free one after 5 seconds, at any indent, open, active or done; archives and ID-less prose stay', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/TODO.md': ['# Plan', '- [ ] Fix x', '  - [~] Sub', '    - [x] **Deep** done', '- [ ] #T25 Old', '- [ ] #TODO not an id', 'prose'].join('\n'),
+    '/repo/.claude_todo/archive/OLD.md': '- [x] #T3C Old\n- [x] Archived without ID',
+  }
+  const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  const contexts: (readonly string[] | undefined)[] = []
+  on('prompt.submit', (_$, e) => {
+    contexts.push(e.context)
+
+    return { text: e.text, context: e.context }
+  })
+  const before = files['/repo/.claude_todo/TODO.md']
+  await open($)
+  // Debounce: seen at the first scan; 3 s on is too early.
+  await clock.advance(3000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe(before)
+  await clock.advance(3000)
+  // The next free value is one past the highest of every file, the archive's #T3C (120) included.
+  expect(files['/repo/.claude_todo/TODO.md']).toBe(['# Plan', '- [ ] #T003D Fix x', '  - [~] #T003E Sub', '    - [x] #T003F **Deep** done', '- [ ] #T25 Old', '- [ ] #T003G #TODO not an id', 'prose'].join('\n'))
+  expect(files['/repo/.claude_todo/archive/OLD.md']).toBe('- [x] #T3C Old\n- [x] Archived without ID')
+  // Idempotent: no further write however long it waits.
+  const done = writes.filter(path => path.endsWith('/TODO.md')).length
+  await clock.advance(30000)
+  expect(writes.filter(path => path.endsWith('/TODO.md')).length).toBe(done)
+  expect(files['/repo/.claude_todo/TODO.md']).not.toContain('#T003H')
+  // Claude hears of it once, and gets the next free IDs with each prompt.
+  await $.prompt.submit({ text: 'go' } as never)
+  await $.prompt.submit({ text: 'again' } as never)
+  const first = contexts[0]?.join('\n') ?? ''
+  expect(first).toContain('gave an ID to these todo tickets')
+  expect(first).toContain('#T003D is "Fix x"')
+  expect(first).toContain('Next free ticket IDs: #T003H, #T003I, #T003J')
+  expect(contexts[1]?.join('\n')).not.toContain('gave an ID')
+  // The IDs named to Claude are reserved: the next prompt names fresh ones.
+  expect(contexts[1]?.join('\n')).toContain('Next free ticket IDs: #T003K, #T003L, #T003M')
+})
+
+test('an ID named to Claude is never given to a line, the next prompt names fresh ones, and the reservation is kept in the store', async ($, on) => {
+  const clock = mock.clock(on)
+  const store = new Map<string, unknown>()
+  on('store.get', (_$, e) => ({ value: store.get(e.key) }) as never)
+  on('store.set', (_$, e) => {
+    store.set(e.key, e.value)
+
+    return { value: undefined } as never
+  })
+  on('session.id', () => ({ value: 'sess-1' }) as never)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 a\n- [ ] new' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  const contexts: string[] = []
+  on('prompt.submit', (_$, e) => {
+    contexts.push((e.context ?? []).join('\n'))
+
+    return { text: e.text, context: e.context }
+  })
+  await begin($)
+  await $.prompt.submit({ text: 'go' } as never)
+  expect(contexts[0]).toContain('Next free ticket IDs: #T0002, #T0003, #T0004')
+  for (let i = 0; i < 5; i += 1) {
+    await Promise.resolve()
+  }
+  expect(readKeptIds(store.get('reserved:sess-1'))).toEqual(['t0002', 't0003', 't0004'])
+  // A new line gets the next ID after the reserved ones.
+  await clock.advance(9000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 a\n- [ ] #T0005 new')
+  await $.prompt.submit({ text: 'again' } as never)
+  expect(contexts[1]).toContain('Next free ticket IDs: #T0006, #T0007, #T0008')
+  // An ID Claude used leaves the reservation.
+  files['/repo/.claude_todo/TODO.md'] += '\n- [ ] #T0003 mine'
+  // The fake folder keeps one mtime: a full resync (every 60 ticks) reads the edit.
+  await clock.advance(60000)
+  await $.prompt.submit({ text: 'third' } as never)
+  for (let i = 0; i < 5; i += 1) {
+    await Promise.resolve()
+  }
+  expect(readKeptIds(store.get('reserved:sess-1'))).not.toContain('t0003')
+  expect(readKeptIds(store.get('reserved:sess-1'))).toContain('t0002')
+  expect(readKeptIds(['t1', 3, null])).toEqual(['t1'])
+})
+
+test('a line that only refers to another ticket gets an ID of its own; a line with its own leading ID, or a first ID nobody owns, does not', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/TODO.md': ['- [ ] #T5 The parser', '- [ ] Fix bug from #T5', '- [ ] #T6 Has own, after #T5', '- [ ] Note about #T9 unowned', '  - [ ] Follow up of #T5 and #T6'].join('\n'),
+  }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(9000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe(['- [ ] #T5 The parser', '- [ ] #T000A Fix bug from #T5', '- [ ] #T6 Has own, after #T5', '- [ ] Note about #T9 unowned', '  - [ ] #T000B Follow up of #T5 and #T6'].join('\n'))
+})
+
+test('Consolidate is not interrupted by numbering: the scan inside it numbers nothing', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/TODO.md': '- [ ] #T1 a\n- [ ] fresh',
+    '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T2 b',
+  }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', 'mods/x/.claude_todo/TODO.md'] })
+  const ui = await open($)
+  // Past the 5 s debounce, between two scans.
+  await clock.advance(5500)
+  await ui.press({ key: 'todo-consolidate' })
+  expect(files['/repo/.claude_todo/TODO.md']).toContain('- [ ] fresh\n')
+  await clock.advance(3000)
+  expect(files['/repo/.claude_todo/TODO.md']).toContain('- [ ] #T0003 fresh')
+})
+
+test('numbering shares one number line across folders: each new ID is unique project-wide', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = {
+    '/repo/.claude_todo/TODO.md': '- [ ] #T1 a\n- [ ] new one',
+    '/repo/mods/x/.claude_todo/TODO.md': '- [ ] #T5 b\n- [ ] other new',
+  }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md', 'mods/x/.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(6000)
+  const added = [files['/repo/.claude_todo/TODO.md']!.split('\n')[1]!, files['/repo/mods/x/.claude_todo/TODO.md']!.split('\n')[1]!]
+  expect(added.map(line => line.slice(0, 12)).sort()).toEqual(['- [ ] #T0006', '- [ ] #T0007'])
+  expect(files['/repo/.claude_todo/TODO.md']!.startsWith('- [ ] #T1 a\n')).toBe(true)
+})
+
+test('a line that gets its ID from Claude inside the 5 seconds is not numbered by the mod', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] Fix x' }
+  const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(3000)
+  files['/repo/.claude_todo/TODO.md'] = '- [ ] #T0030 Fix x'
+  await clock.advance(9000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T0030 Fix x')
+  expect(writes).toEqual([])
+})
+
+test('a file that changed between the read and the write is not numbered; the next scan tries again', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = {}
+  let current = '- [ ] Fix x'
+  let reads = 0
+  let isArmed = false
+  Object.defineProperty(files, '/repo/.claude_todo/TODO.md', {
+    enumerable: true,
+    configurable: true,
+    // While armed, the second read of a scan finds a new line: the file changed meanwhile.
+    get: () => {
+      if (!isArmed) {
+        return current
+      }
+      reads += 1
+
+      return reads === 2 ? `${current}\n- [ ] added meanwhile` : current
+    },
+    set: value => {
+      current = value as string
+    },
+  })
+  const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(3000)
+  isArmed = true
+  await clock.advance(3000)
+  expect(current).toBe('- [ ] Fix x')
+  expect(writes).toEqual([])
+  await clock.advance(3000)
+  expect(current).toBe('- [ ] #T0001 Fix x')
+  expect(writes).toEqual(['/repo/.claude_todo/TODO.md'])
+})
+
+test('numbering and the archive move do not write one file with stale text: a done unnumbered ticket is numbered, then archived', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [x] Done thing\n- [ ] Open thing' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(6000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [x] #T0001 Done thing\n- [ ] #T0002 Open thing')
+  await clock.advance(9000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T0002 Open thing')
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('- [x] #T0001 Done thing\n')
+})
+
+test('a prompt during numbering never names an ID numbering gives, and numbering never gives one a prompt named', async ($, on) => {
+  const clock = mock.clock(on)
+  const store = new Map<string, unknown>()
+  on('store.get', (_$, e) => ({ value: store.get(e.key) }) as never)
+  on('store.set', (_$, e) => {
+    store.set(e.key, e.value)
+
+    return { value: undefined } as never
+  })
+  on('session.id', () => ({ value: 'sess-1' }) as never)
+  let release = () => {}
+  const hold = new Promise<void>(resolve => {
+    release = resolve
+  })
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 a\n- [ ] new' }
+  const log: string[] = []
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], hold, log })
+  const contexts: string[] = []
+  on('prompt.submit', (_$, e) => {
+    contexts.push((e.context ?? []).join('\n'))
+
+    return { text: e.text, context: e.context }
+  })
+  await begin($)
+  await clock.advance(3000)
+  const numbering = clock.advance(3000)
+  for (let i = 0; i < 200 && !log.includes('write:/repo/.claude_todo/TODO.md'); i += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  expect(log).toContain('write:/repo/.claude_todo/TODO.md')
+  // Numbering is in flight, its write held: the prompt names IDs after the one numbering gives.
+  await $.prompt.submit({ text: 'go' } as never)
+  expect(contexts[0]).toContain('Next free ticket IDs: #T0003, #T0004, #T0005')
+  release()
+  await numbering
+  await clock.advance(1000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T1 a\n- [ ] #T0002 new')
+})
+
+test('archiveDone and numberTickets never write in one overlap: a scan that finds the lock held skips', async ($, on) => {
+  const clock = mock.clock(on)
+  let release = () => {}
+  const hold = new Promise<void>(resolve => {
+    release = resolve
+  })
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [x] #T1 Done\n- [ ] new' }
+  const log: string[] = []
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], hold, log })
+  await open($)
+  await clock.advance(3000)
+  const first = clock.advance(3000)
+  for (let i = 0; i < 200 && !log.includes('write:/repo/.claude_todo/TODO.md'); i += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  // Numbering holds the lock in its write; later scans run meanwhile.
+  const second = clock.advance(3000)
+  for (let i = 0; i < 40; i += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  expect(log.filter(entry => entry.startsWith('write:') && entry !== 'write:/repo/.claude_todo/archive/TODO.md')).toEqual(['write:/repo/.claude_todo/TODO.md'])
+  expect(log.filter(entry => entry === 'write:/repo/.claude_todo/archive/TODO.md').length).toBeLessThanOrEqual(1)
+  release()
+  await first
+  await second
+  await clock.advance(9000)
+  // Both land, one after the other.
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] #T0002 new')
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('- [x] #T1 Done\n')
+})
+
+test('a Mark done pressed during numbering waits, then keeps both changes', async ($, on) => {
+  const clock = mock.clock(on)
+  let release = () => {}
+  const hold = new Promise<void>(resolve => {
+    release = resolve
+  })
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [~] #T1 a\n- [ ] new' }
+  const log: string[] = []
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], hold, log })
+  const ui = await open($)
+  await clock.advance(3000)
+  const numbering = clock.advance(3000)
+  for (let i = 0; i < 200 && !log.includes('write:/repo/.claude_todo/TODO.md'); i += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  expect(log).toContain('write:/repo/.claude_todo/TODO.md')
+  void ui.press({ key: 'ticket-done-TODO.md-#t1' })
+  // The press reaches the mod while the numbering write is still held.
+  for (let i = 0; i < 20; i += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  release()
+  await numbering
+  for (let i = 0; i < 40; i += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [x] #T1 a\n- [ ] #T0002 new')
+})
+
+test('an archive that ends inside an open code fence gets nothing: the move is skipped, with one toast', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [x] #T1 Done\n- [ ] #T2 Open', '/repo/.claude_todo/archive/TODO.md': '- [x] #T0 Old\n```\nsample' }
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => {
+    toasts.push(JSON.stringify(e))
+
+    return { value: undefined } as never
+  })
+  const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  await open($)
+  await clock.advance(12000)
+  await clock.advance(12000)
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [x] #T1 Done\n- [ ] #T2 Open')
+  expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('- [x] #T0 Old\n```\nsample')
+  expect(writes).toEqual([])
+  expect(toasts.filter(one => one.includes('Not archived: /repo/.claude_todo/archive/TODO.md has an unclosed code block')).length).toBe(1)
+})
+
+for (const [name, links] of [
+  ['a source file that is a symlink', { '/repo/.claude_todo/TODO.md': '/home/a/other/TODO.md' }],
+  ['a todo folder that is a symlink', { '/repo/.claude_todo': '/home/a/elsewhere' }],
+] as [string, Record<string, string>][]) {
+  test(`numbering: ${name} is never written`, async ($, on) => {
+    const clock = mock.clock(on)
+    const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] Fix x' }
+    const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], links })
+    await open($)
+    await clock.advance(12000)
+    expect(files['/repo/.claude_todo/TODO.md']).toBe('- [ ] Fix x')
+    expect(writes).toEqual([])
+  })
+}
+
+test('numbering never writes the global folder', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/home/a/.claude/.claude_todo/TODO.md': '- [ ] Fix x' }
+  const { writes } = repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'], root: '/home/a/.claude' })
+  await open($)
+  await clock.advance(12000)
+  expect(files['/home/a/.claude/.claude_todo/TODO.md']).toBe('- [ ] Fix x')
+  expect(writes).toEqual([])
+})
+
+test('with the rules option off, the prompt carries no next-IDs line', { options: { rules: false } }, async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 a' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  const contexts: (readonly string[] | undefined)[] = []
+  on('prompt.submit', (_$, e) => {
+    contexts.push(e.context)
+
+    return { text: e.text, context: e.context }
+  })
+  await open($)
+  await clock.advance(1000)
+  await $.prompt.submit({ text: 'go' } as never)
+  expect(contexts[0]?.join('\n') ?? '').not.toContain('Next free ticket IDs')
+})
+
+test('agent labels fit their circle at any length, and count from the kept base after a reload', () => {
+  // Instrument Sans at weight 500: A is 0.461 em, a digit 0.664 em; the circle leaves at most 17 px.
+  for (const label of ['A1', 'A10', 'A100', 'A1000', 'A10000']) {
+    const width = (0.461 + 0.664 * (label.length - 1)) * labelFontSize(label)
+    expect(width).toBeLessThanOrEqual(17)
+  }
+  expect(labelFontSize('A1')).toBe(11)
+  expect(labelFontSize('A23')).toBe(9.5)
+  setLabelBase(200)
+  expect(labelOf(0)).toBe('A201')
+  expect(labelNote('how is A201 doing? and A1?', [{ id: 'x', description: 'Kept', type: 'general-purpose', status: 'running', startedAt: 1, toolCalls: 0, brief: '' } as AgentRow], 200)).toContain('- A201: "Kept"')
+  setLabelBase(0)
+  expect(labelOf(0)).toBe('A1')
+})
+
+// ---------------------------------------------------------------- close the work that is done
+
+/** A pane over one todo file the test can edit and one helper whose status it sets; the prompts' contexts are kept. */
+function endSetup($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1], file: string) {
+  const state = { file, mtime: 1, status: 'running' }
+  const clock = mock.clock(on)
+  on('store.get', () => ({ value: undefined }) as never)
+  on('store.set', () => ({ value: undefined }) as never)
+  on('session.id', () => ({ value: 'sess-1' }) as never)
+  on('fs.exists', (_$, e) => ({ value: e.path.endsWith('.claude_todo') }))
+  on('fs.list', () => ({ value: [{ name: 'OPEN.md', kind: 'file', size: 1, mtimeMs: state.mtime, isLink: false }] }))
+  on('fs.read', () => ({ value: state.file }))
+  on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'a1' }))
+  on('agent.list', () => ({ value: [{ id: 'a1', description: 'Parser #T0026', type: 'general-purpose', status: state.status }] }))
+  on('turn.complete', () => ({ text: '' }) as never)
+  on('tool.call', { tool: 'Edit' }, () => ({ result: {} }) as never)
+  const contexts: string[] = []
+  on('prompt.submit', (_$, e) => {
+    contexts.push((e.context ?? []).join('\n'))
+
+    return { text: e.text, context: e.context }
+  })
+  const edit = (next: string) => {
+    state.file = next
+    state.mtime += 1
+
+    return $.tool.call({ tool: 'Edit', file_path: '/repo/.claude_todo/OPEN.md' } as never)
+  }
+
+  return { state, clock, edit, contexts }
+}
+
+test('the rules tell Claude to close finished work in the same turn', () => {
+  expect(RULES).toContain('check it off (`- [x]`) in the same turn, before your final reply')
+  expect(RULES).toContain('Never leave finished work open or in progress')
+  expect(RULES).toContain('When an agent you started for an item finishes, check its result and close the item if the work is done')
+})
+
+test('an agent that ends with a ticket still open queues one note for Claude', async ($, on) => {
+  const { state, contexts } = endSetup($, on, '- [~] #T0026 Ship the parser\n- [x] #T0027 Done already')
+  await begin($)
+  await $.agent.spawn({ prompt: 'Work on #T0026', description: 'Parser #T0026', subagentType: 'general-purpose' } as never)
+  state.status = 'completed'
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', agentId: 'a1' } as never).catch(() => undefined)
+  await $.prompt.submit({ text: 'go' } as never)
+  await $.prompt.submit({ text: 'again' } as never)
+  const first = contexts[0] ?? ''
+  expect(first).toContain('A1 finished. Its tickets are still open or in progress: #T0026 Ship the parser. Close each one whose work is done.')
+  expect(first).not.toContain('#T0027')
+  expect(contexts[1] ?? '').not.toContain('finished')
+})
+
+test('an agent that ends with its tickets done queues no note', async ($, on) => {
+  const { state, contexts } = endSetup($, on, '- [x] #T0026 Ship the parser')
+  await begin($)
+  await $.agent.spawn({ prompt: 'Work on #T0026', description: 'Parser #T0026', subagentType: 'general-purpose' } as never)
+  state.status = 'completed'
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', agentId: 'a1' } as never).catch(() => undefined)
+  await $.prompt.submit({ text: 'go' } as never)
+  expect(contexts[0] ?? '').not.toContain('Its tickets are still open')
+})
+
+test('the next prompt names the in-progress tickets the orchestrator claimed, and not again within 30 minutes', async ($, on) => {
+  const { clock, edit, contexts } = endSetup($, on, ORCH_FILE)
+  await begin($)
+  await edit('- [~] #T0026 Ship the parser\n- [ ] #T2 Review the copy\n- [~] #T3 Check the invoice')
+  await $.prompt.submit({ text: 'one' } as never)
+  expect(contexts[0] ?? '').toContain('Still in progress from earlier: #T0026 Ship the parser. Close any whose work is done.')
+  expect(contexts[0] ?? '').not.toContain('#T3')
+  await $.prompt.submit({ text: 'two' } as never)
+  expect(contexts[1] ?? '').not.toContain('Still in progress')
+  await clock.advance(29 * 60 * 1000)
+  await $.prompt.submit({ text: 'three' } as never)
+  expect(contexts[2] ?? '').not.toContain('Still in progress')
+  await clock.advance(2 * 60 * 1000)
+  await $.prompt.submit({ text: 'four' } as never)
+  expect(contexts[3] ?? '').toContain('Still in progress from earlier: #T0026 Ship the parser')
 })

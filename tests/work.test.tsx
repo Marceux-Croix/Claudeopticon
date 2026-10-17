@@ -780,8 +780,9 @@ test('the top card has the token total and agents finished in one line, a legend
   expect(svg).toContain('>623.59M</tspan><tspan fill="rgba(255,255,255,.62)"> tokens total</tspan>')
   expect(svg).toContain('>2 of 3</tspan>')
   expect(svg).toContain('agents finished')
-  expect(svg).toContain('Live agents (left axis)')
-  expect(svg).toContain('Tokens since compact (right axis)')
+  expect(svg).toContain('>Live agents<')
+  expect(svg).toContain('>Tokens since compact<')
+  expect(svg).not.toContain('(left axis)')
   expect(svg).toContain('30m ago')
   expect(svg).toContain('>20m ago<')
   expect(svg).toContain('>10m ago<')
@@ -793,25 +794,32 @@ test('the top card has the token total and agents finished in one line, a legend
   expect(svg).not.toMatch(/>\d+%</)
   expect(svg).not.toContain('NaN')
   expect(card.height).toBe(HERO_H)
-  // The card keeps its height with data, without, and with a stacked legend at a narrow width.
+  // The card keeps its height with data, without, and with the key on its own row at a narrow width.
   setWidth(300)
   expect(heroSvg(view).height).toBe(HERO_H)
   setWidth(384)
 })
 
-test('the trace colors: agents blue and tokens orange, dark as drawn and light by class', async () => {
+test('the trace colors: agents yellow and tokens lime, dark as drawn and light by class', async () => {
   const series = { agents: [[HERO_NOW - 5 * MIN, 1], [HERO_NOW - 2 * MIN, 2]] as Point[], tokens: [[HERO_NOW - 4 * MIN, 1_000_000]] as Point[], compacts: [] }
   const svg = heroSvg(graphView(series, { tokens: 1_000_000 })).source
-  expect(svg).toContain('stroke="#60A5FA" class="sa" stroke-width="1.5"')
-  expect(svg).toContain('stroke="#FB923C" class="st" stroke-width="1.25"')
-  expect(svg).toContain('.fa{fill:#2563EB}.sa{stroke:#2563EB}.ft{fill:#EA580C}.st{stroke:#EA580C}.pt{stop-color:#EA580C}')
-  expect(svg).toContain('stop-color="#FB923C" class="pt" stop-opacity=".16"')
+  expect(svg).toContain('stroke="#FACC15" class="sa" stroke-width="1.5"')
+  expect(svg).toContain('stroke="#A3E635" class="st" stroke-width="1.25"')
+  expect(svg).toContain('.fa{fill:#CA8A04}.sa{stroke:#CA8A04}.ft{fill:#65A30D}.st{stroke:#65A30D}.pt{stop-color:#65A30D}')
+  expect(svg).toContain('stop-color="#A3E635" class="pt" stop-opacity=".18"')
+  // The key has line swatches in the trace colors: on its own row at 384 px, in the top row at 720 px.
+  expect(svg).toMatch(/<line x1="24" y1="47" x2="38" y2="47" stroke="#FACC15" class="sa" stroke-width="2"/)
+  setWidth(720)
+  const wide = heroSvg(graphView(series, { tokens: 1_000_000 })).source
+  setWidth(384)
+  expect(wide).toMatch(/<line x1="\d+" y1="25.5" x2="\d+" y2="25.5" stroke="#FACC15" class="sa" stroke-width="2"/)
+  expect(wide).toMatch(/y1="25.5"[^>]*stroke="#A3E635" class="st" stroke-width="2"/)
   expect(svg).not.toContain('#8B5CF6" class="sa"')
-  // Axis labels and end values take their trace's color.
-  expect(svg).toMatch(/fill="#60A5FA" class="fa" font-size="11.5"[^>]*>4</)
-  expect(svg).toMatch(/fill="#FB923C" class="ft" font-size="11.5"[^>]*>1.5M</)
-  expect(svg).toMatch(/class="fa" font-size="12" font-weight="600">2 live</)
-  expect(svg).toMatch(/class="ft" font-size="12" font-weight="600">1.00M</)
+  // Axis labels are neutral ink; end values take their trace's color.
+  expect(svg).toMatch(/fill="rgba\(255,255,255,.88\)" font-size="11.5">4</)
+  expect(svg).toMatch(/fill="rgba\(255,255,255,.88\)" font-size="11.5">1.5M</)
+  expect(svg).toMatch(/<tspan fill="#FACC15" class="fa" font-weight="600">2<\/tspan><tspan fill="rgba\(255,255,255,.62\)"> live<\/tspan>/)
+  expect(svg).toMatch(/<tspan fill="#A3E635" class="ft" font-weight="600">1.00M<\/tspan><\/text>/)
 })
 
 test('the series records a point only when the value changes, and keeps 30 minutes plus one point before', async () => {
@@ -841,8 +849,8 @@ test('the series records a point only when the value changes, and keeps 30 minut
 test('the plot starts the line at the left edge from the point before the window, and ignores older points', async () => {
   const series = { agents: [[HERO_NOW - 50 * MIN, 1], [HERO_NOW - 40 * MIN, 3], [HERO_NOW - 10 * MIN, 2]] as Point[], tokens: [], compacts: [] }
   const svg = heroSvg(graphView(series)).source
-  // The point 40 minutes ago (value 3) is the last one before the window: the path starts at the left edge, x=48, at 3 of 4 (y=121: the legend is stacked at 384 px, so the plot top is 78).
-  expect(svg).toMatch(/<path d="M 48 121 H /)
+  // The point 40 minutes ago (value 3) is the last one before the window: the path starts at the left edge, x=48, at 3 of 4 (the key is on its own row at 384 px, so the plot top is 62).
+  expect(svg).toMatch(/<path d="M 48 109 H /)
   expect(svg).not.toContain('>No activity yet<')
 })
 
@@ -968,13 +976,14 @@ test('the axis labels: 4 grid intervals, whole numbers on the left, M and k on t
   const series = { agents: [[HERO_NOW - 5 * MIN, 5]] as Point[], tokens: [[HERO_NOW - 5 * MIN, 44_810_000]] as Point[], compacts: [] }
   const svg = heroSvg(graphView(series, { tokens: 44_810_000 })).source
   // Left top is 6, labeled 0, 3 and 6 only (1.5 and 4.5 are not whole). Right top is 60M: 0M, 15M, 30M, 45M, 60M.
-  expect((svg.match(/class="fa" font-size="11.5"/g) ?? []).length).toBe(3)
+  expect((svg.match(/text-anchor="end" fill="rgba\(255,255,255,.88\)" font-size="11.5"/g) ?? []).length).toBe(3)
   for (const label of ['0M', '15M', '30M', '45M', '60M']) {
     expect(svg).toContain(`>${label}<`)
   }
   expect(svg.match(/<line x1="48" /g)?.length).toBe(5)
   expect(svg).toContain('>44.81M<')
-  expect(svg).toContain('>5 live<')
+  expect(svg).toContain('> live</tspan>')
+  expect(svg).toContain('font-weight="600">5</tspan>')
 })
 
 test('the top card changes only with the data and each 30 s step of time, so a redraw between steps sends the same markup', async () => {

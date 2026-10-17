@@ -61,10 +61,10 @@ The pane opens at the start of each session. To open it again, run `/claudeoptic
 
 The top card is a live graph of the last 30 minutes, with two lines:
 
-- **Live agents** (blue, left axis): how many helper agents run at each moment.
-- **Tokens since compact** (orange, right axis): how much text Claude has processed since the last compaction, when Claude Code shrinks a long conversation to free up room. A token is the unit of Claude's usage. At a compaction the line drops to zero, and a dashed line marks it.
+- **Live agents** (yellow, left axis): how many helper agents run at each moment.
+- **Tokens since compact** (lime green, right axis): how much text Claude has processed since the last compaction, when Claude Code shrinks a long conversation to free up room. A token is the unit of Claude's usage. At a compaction the line drops to zero, and a dashed line marks it.
 
-The small text at the top left gives the totals: all tokens this session, and how many agents have finished. Each line ends in a dot with its current value. The axes grow when a line would leave the graph, and shrink only after the values stay below half for 5 minutes, so they rarely move. The graph redraws at most every 5 seconds while numbers change, and every 30 seconds otherwise. A reload keeps the last 30 minutes. Todo progress is in the Todo section's header.
+The top row gives the totals, all tokens this session and how many agents have finished, followed by the key for the two lines. Each line ends in a dot with its current value. The axis numbers are in plain text color. The axes grow when a line would leave the graph, and shrink only after the values stay below half for 5 minutes, so they rarely move. The graph redraws at most every 5 seconds while numbers change, and every 30 seconds otherwise. A reload keeps the last 30 minutes. Todo progress is in the Todo section's header.
 
 ### Orchestrator: what Claude is doing
 

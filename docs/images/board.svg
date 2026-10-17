@@ -84,7 +84,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <text x="14" y="48" fill="rgba(255,255,255,.88)" font-size="13"><tspan x="14" dy="0">Fix the parser crash on empty input</tspan></text>
 <rect x="14" y="58" width="21" height="18" rx="9" fill="#1fa7b8"/>
 <text x="24.5" y="71" text-anchor="middle" fill="#FFFFFF" font-size="10.5" font-weight="700">O</text>
-<text x="43" y="71" fill="rgba(255,255,255,.62)" font-size="11">Orchestrator</text></svg>
+<text x="43" y="71" fill="rgba(255,255,255,.62)" font-size="11">Harden the parser against bad input</text></svg>
 <text x="370" y="134" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">Open</text>
 <svg x="366" y="144" xmlns="http://www.w3.org/2000/svg" width="354" height="66" viewBox="0 0 354 66" role="img" aria-label="Open: Draft the release notes">
 <style>

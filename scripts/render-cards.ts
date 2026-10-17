@@ -169,10 +169,10 @@ function pane(): string {
   add(agentSvg(orchestrator, view))
   add(withStop(agentSvg(agents[0]!, view), 'Running'))
   add(withStop(agentSvg(agents[1]!, view), 'Running'))
-  head('Todo', `${view.done} of ${view.total} done, ${view.active} in progress`, `Show completed (${view.completed})`)
+  head('Todo', `${view.done} of ${view.total} done, ${view.active} in progress`, `Show completed (${view.archived})`)
   parts.push(`<rect x="${PANE_PAD}" y="${y}" width="220" height="30" rx="8" fill="none" stroke="rgba(255,255,255,.22)"/>
 <text x="${PANE_PAD + 12}" y="${y + 20}" font-family='${FONT}' font-size="13.5" fill="${DIM}">Search open and done items</text>`)
-  parts.push(buttonRow(PANE_PAD + 228, y, ['Search', 'Show as list']).svg)
+  parts.push(buttonRow(PANE_PAD + 228, y, ['Search', 'Show as list', 'Recategorize']).svg)
   y += 30 + GAP
   parts.push(`<text x="${PANE_PAD}" y="${y + 20}" font-family='${FONT}' font-size="13.5" fill="${DIM}">Categories</text>`)
   parts.push(buttonRow(PANE_PAD + 84, y, ['Config', 'Docs', 'Parser', 'Release'], true).svg)

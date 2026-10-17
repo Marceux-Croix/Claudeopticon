@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0
+
+- Closed tickets move to the archive on their own. About 5 seconds after a ticket is checked off, the mod moves it to the file of the same name in `.claude_todo/archive/`, under the heading it had, and makes the archive file when it is missing. The live todo holds only open and in-progress tickets. Nothing is deleted.
+- **Show completed (N)** opens the archive file in your default app. The in-pane list of completed tickets is gone; the Done column shows the tickets archived this session.
+- New **Recategorize** button. It sorts all open tickets again and keeps the new groups only when they differ in a real way. Otherwise it says that the current categories are correct.
+- New ticket IDs are `#T` plus 4 digits and capital letters, the first a digit (`#T002A`), counting in base 36. Old IDs such as `#T12` stay valid. The mod gives Claude the next three free IDs with each prompt.
+- A ticket with no ID gets the next free one from the mod.
+- Agent labels keep their numbers after `/reload-plugins`, also past 200 agents in a session. The label circle is slightly bigger, and long labels such as A1000 shrink to fit it. Chat names are read up to A999999.
+- Finished tickets get closed. The rules now tell Claude to check off an item in the same turn its work is done. When an agent ends with its tickets still open, or a ticket Claude claimed stays in progress, the mod reminds Claude to close each one whose work is done. It never closes a ticket itself.
+- The Orchestrator agent card's title is a headline Claude writes for the work it does itself, through a new optional `title` on `report_progress`. Until then, it is the text of its first ticket.
+- Each line on the Orchestrator card has a second line with the detail from the action itself: the command, file path, pattern, web address or agent type. Commands that look like they hold a secret show "(hidden)".
+- The rules for Claude follow these changes. Claude no longer moves whole files to the archive.
+
 ## 0.6.1
 
 - When Claude works on a ticket itself, with no helper agent, the ticket shows an **O** tag that blinks while Claude works, and an Orchestrator card shows in the Agents card. A ticket counts as Claude's own when Claude moves it to in progress, names it in a progress report, or you send it with the Send button.

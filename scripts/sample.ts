@@ -50,7 +50,7 @@ export const agents: AgentView[] = [
 
 /** The main conversation, working on a ticket itself: it leads the Agents card, before A1. */
 export const orchestrator: AgentView = {
-  index: ORCH, description: 'Orchestrator', type: 'main conversation', status: 'running', isEnded: false,
+  index: ORCH, description: 'Harden the parser against bad input', type: 'main conversation', status: 'running', isEnded: false,
   startedAt: NOW, toolCalls: 57, doing: 'Run the parser tests', links: [live[2]!],
 }
 
@@ -67,16 +67,16 @@ export const view: View = {
   ],
   agents,
   orchestrator,
-  done: 27, active: 5, total: 46, completed: 27, live: 2, now: NOW,
+  done: 27, active: 5, total: 46, archived: 24, live: 2, now: NOW,
   usage: { tokens: 17_384_000, atCompact: 12_100_000, since: 0 },
 }
 
 export const entries = [
-  { line: 'Run the parser tests', at: NOW - 20_000, isRunning: true },
-  { line: 'Read the config loader', at: NOW - 75_000, isRunning: false },
-  { line: 'Search the docs for the plugin API', at: NOW - 140_000, isRunning: false },
-  { line: 'Edit the release checklist', at: NOW - 230_000, isRunning: false },
-  { line: 'Start an agent for the config migration', at: NOW - 330_000, isRunning: false },
+  { line: 'Run the parser tests', detail: 'npm test -- --run src/parser', at: NOW - 20_000, isRunning: true },
+  { line: 'Read the config loader', detail: 'src/config/loader.ts', at: NOW - 75_000, isRunning: false },
+  { line: 'Search the docs for the plugin API', detail: 'registerPlugin  docs', at: NOW - 140_000, isRunning: false },
+  { line: 'Edit the release checklist', detail: '.claude_todo/release.md', at: NOW - 230_000, isRunning: false },
+  { line: 'Start an agent for the config migration', detail: 'general-purpose, sonnet', at: NOW - 330_000, isRunning: false },
 ]
 
 /** Board tickets: [item, id, category]. */

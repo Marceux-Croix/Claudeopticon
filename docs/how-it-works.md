@@ -9,14 +9,14 @@ Claudeopticon is one hooks module, `hooks/register.tsx`, plus the card drawings 
 | `session.start` | Registers `/claudeopticon` and the two tools, reads the todo, opens the pane. |
 | `prompt.context` | Adds the todo rules as a context block, unless the `rules` option is off. |
 | `ui.render` | Draws the pane: SVG cards on the desktop app and VS Code, text on a terminal. |
-| `tool.call` | Counts each agent's tool calls, records Claude's call summaries, starts and ends background task cards, rereads the todo after an edit in `.claude_todo/`, and answers `report_progress` and `move_ticket`. |
+| `tool.call` | Counts each agent's tool calls, records Claude's call summaries, rereads the todo after an edit in `.claude_todo/`, and answers `report_progress` and `move_ticket`. |
 | `agent.spawn` | Adds a line to each agent's prompt that asks for progress reports, and starts the agent's row. |
 | `prompt.submit` | Attaches notes for Claude: agents you named by label, and moves you made by hand. |
 | `turn.step`, `turn.complete`, `session.compact` | Add up tokens per agent and per session, and record the count at a compaction. |
 
 A clock tick each second refreshes running agents. An agent missing from the agent list for 15 seconds ends with the status `ended`. Agent rows (the last 200) are saved per session, so a reload keeps start times, counts, links and progress.
 
-An agent is idle when its turn ends (`turn.complete` with its ID) and no tool call or model request of its own follows, while it waits on no background task it started. Claude Code keeps such an agent open until something stops it. The card shows it as Idle, out of the live count, its time and timeline bar stopped at the end of the turn, and its last command as "Last:". Its next call or request ends the idle time.
+An agent is idle when its turn ends (`turn.complete` with its ID) and no tool call or model request of its own follows. Claude Code keeps such an agent open until something stops it. The card shows it as Idle, out of the live count, its time and timeline bar stopped at the end of the turn, and its last command as "Last:". Its next call or request ends the idle time.
 
 **Stop** runs the `TaskStop` tool with the agent's ID. That aborts the agent's loop: no more turns, no summary.
 
@@ -29,10 +29,6 @@ The mod shows the tickets of every `.claude_todo/` folder in the repo together, 
 ## Linking agents to tickets
 
 Strongest first: the ID in the agent's description or prompt (a whole ID: `#T1` does not match `#T12`); a `report_progress` claim; a Haiku match of the task against open items (at most three); a quote of the item's text. Only running agents link.
-
-## Background tasks
-
-A card starts when the launching call returns a task ID (`backgroundTaskId` from a background Bash call, `taskId` from `Monitor` and `Workflow`). It ends when the task's notification reports `completed`, `failed` or `killed`, or when `TaskStop` names it. A task a helper agent starts reports its end to that agent, not to the main conversation, so its card ends when that agent ends (or after 15 s with no such agent). Haiku shortens the description to a name once; until it answers, the cut description stands in.
 
 ## Categories
 

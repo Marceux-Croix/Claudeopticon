@@ -1,5 +1,5 @@
 /** Sample data for the README images: a fictional CLI tool with a parser, docs and a release. */
-import type { AgentView, ItemStatus, ItemView, View, TaskView } from '../hooks/cards.ts'
+import type { AgentView, ItemStatus, ItemView, View } from '../hooks/cards.ts'
 
 export const NOW = Date.UTC(2026, 9, 15, 14, 40, 0)
 const MIN = 60_000
@@ -79,10 +79,3 @@ export const progressTickets = [
 export const openTickets = [
   [t(28), '#T29', 'Release'], [t(30), '#T31', 'Docs'], [t(35), '#T36', 'Release'],
 ] as const
-
-/** Background tasks: two still running (newest first), then one done. */
-export const tasks: TaskView[] = [
-  { name: 'Watch the deploy log', kind: 'monitor', status: 'running', startedAt: NOW - 4 * 60_000 - 20_000 },
-  { name: 'Run the web build in watch mode', kind: 'shell', status: 'running', startedAt: NOW - 11 * 60_000 },
-  { name: 'Review the release diff', kind: 'workflow', status: 'completed', startedAt: NOW - 9 * 60_000, endedAt: NOW - 2 * 60_000 - 5_000 },
-]

@@ -1,10 +1,9 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { boardHead, clock, orchestratorSvg, AGENT_COLORS, tokens, agentShare, agentSvg, fileCards, heroSvg, setWidth, ticketSvg, timelineSvg, wrap } from '../hooks/cards'
-import { psPath, applyRefRenames, removeDuplicateTickets, removedNote, foldParts, endAgentTasks, itemLines, renumberLines, appendSections, applyRenames, nonBlankLines, renameNote, taskLines, launchedTask, endedTask, readTaskName, taskNamePrompt, RULES, callSummary, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
+import { psPath, applyRefRenames, removeDuplicateTickets, removedNote, foldParts, itemLines, renumberLines, appendSections, applyRenames, nonBlankLines, renameNote, notifiedEnd, RULES, callSummary, orchestratorView, pageLabel, findTicket, moveQuestion, setBox, movesNote, statusPrompt, sendScope, PROGRESS_NOTE, turnTokens, filterNames, withoutHidden, matchPrompt, readMatchReply, ticketColumns, ticketPrompt, ticketSummary, applySortReply, claimScore, findTodoDirWith, isGlobalTodo, todoFoldersIn, repoRoots, pickFolders, findTickets, narrowTickets, MAX_FOLDERS, plainText, progressReply, readClaims, buildView, categoryGroups, describeCall, itemKey, labelNote, ledger, linkAgents, parseTodo, readProgress, searchTodo, sortPrompt, todoLedger } from '../hooks/register'
 import type { AgentRow, TodoFile } from '../types'
 import type { FileView } from '../hooks/cards'
-import type { BackgroundTask } from '../hooks/register'
 
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
@@ -1002,64 +1001,10 @@ test('with the rules option off, the mod adds no context block', { options: { ru
   expect(context.blocks.map(block => block.name)).toEqual(['claudeMd'])
 })
 
-test('a background launch is read from its tool call; other calls launch nothing', async () => {
-  expect(launchedTask('Bash', { command: 'npm run build', description: 'Build the app', run_in_background: true }, { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b1' })).toEqual({ id: 'b1', kind: 'shell', stock: 'Build the app' })
-  expect(launchedTask('Bash', { command: 'ls' }, { stdout: '', stderr: '', interrupted: false })).toBeUndefined()
-  expect(launchedTask('Monitor', { description: 'Watch the deploy log', timeout_ms: 1000 }, { taskId: 'm1', timeoutMs: 1000 })?.kind).toBe('monitor')
-  expect(launchedTask('Workflow', {}, { status: 'async_launched', taskId: 'w1', workflowName: 'review', summary: 'Review the diff' })?.stock).toBe('review: Review the diff')
-  expect(launchedTask('Read', { file_path: '/x' }, { taskId: 'no' })).toBeUndefined()
-  expect(endedTask('<task-notification><task-id>b1</task-id><status>completed</status></task-notification>')).toEqual({ id: 'b1', status: 'completed' })
-  expect(endedTask('<task-id>m1</task-id><status>killed</status>')?.status).toBe('killed')
-  expect(endedTask('<task-id>m1</task-id><event>line</event>')).toBeUndefined()
-  expect(readTaskName('"Build the app."\nmore')).toBe('Build the app')
-  expect(readTaskName('   ')).toBeUndefined()
-  expect(taskNamePrompt('npm run build')).toContain('2 to 5 plain words')
-})
-
-test('a background task gets a line in the tasks card, named once by Haiku, and a stop ends it', async ($, on) => {
-  mock.clock(on)
-  const prompts: string[] = []
-  on('fs.exists', () => ({ value: false }))
-  on('agent.list', () => ({ value: [] }))
-  on('model.complete', (_$, e) => {
-    prompts.push(e.prompt)
-
-    return { value: { isAnswered: true, text: 'Build the web app', usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }
-  })
-  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b7' } }) as never)
-  on('tool.call', { tool: 'TaskStop' }, () => ({ result: { message: 'stopped', task_id: 'b7', task_type: 'local_bash' } }) as never)
-  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
-  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
-  const svgs = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
-  expect(await ui.find({ type: 'Text', text: /^None in this session yet$/ })).toBeDefined()
-  await $.tool.call({ tool: 'Bash', command: 'npm run build -- --watch', description: 'Run the web build in watch mode', run_in_background: true } as never)
-  for (let i = 0; i < 200 && !(await svgs()).includes('Build the web app'); i += 1) {
-    await Promise.resolve()
-  }
-  expect(await svgs()).toContain('>Build the web app<')
-  expect(await svgs()).toContain('class=\\"pulse\\"')
-  expect(await ui.find({ type: 'Text', text: /^1 running, 0 finished$/ })).toBeDefined()
-  await $.tool.call({ tool: 'Bash', command: 'npm run build -- --watch', description: 'Something else', run_in_background: true } as never)
-  expect(prompts.filter(prompt => prompt.includes('background task')).length).toBe(1)
-  await $.tool.call({ tool: 'TaskStop', task_id: 'b7' } as never)
-  expect(await svgs()).not.toContain('>Build the web app<')
-  await ui.press({ key: 'tasks-toggle' })
-  expect(await svgs()).toContain('>Build the web app (stopped)<')
-})
-
-test('task lines read like the Orchestrator card: the name, and how a task ended when it did not finish cleanly', async () => {
-  const base = { kind: 'shell' as const, stock: 's', startedAt: 5 }
-  expect(taskLines([
-    { ...base, id: 'a', name: 'Build', status: 'running' },
-    { ...base, id: 'b', name: 'Lint', status: 'completed', endedAt: 9 },
-    { ...base, id: 'c', name: 'Deploy', status: 'failed', endedAt: 9 },
-    { ...base, id: 'd', name: 'Watch', status: 'killed', endedAt: 9 },
-  ])).toEqual([
-    { line: 'Build', at: 5, isRunning: true },
-    { line: 'Lint', at: 5, isRunning: false },
-    { line: 'Deploy (failed)', at: 5, isRunning: false },
-    { line: 'Watch (stopped)', at: 5, isRunning: false },
-  ])
+test('a task notification reports an ID and an end status; other messages report none', () => {
+  expect(notifiedEnd('<task-notification><task-id>b1</task-id><status>completed</status></task-notification>')).toEqual({ id: 'b1', status: 'completed' })
+  expect(notifiedEnd('<task-id>m1</task-id><status>stopped</status>')?.status).toBe('killed')
+  expect(notifiedEnd('<task-id>m1</task-id><event>line</event>')).toBeUndefined()
 })
 
 test("an agent's model requests add up to a token count beside its tool calls", async ($, on) => {
@@ -1185,15 +1130,6 @@ test('agent data is kept by session, so a reload shows each agent as it was', as
   expect(models).toBe(0)
   const kept = store.get('agents:sess-1') as { id: string }[]
   expect(kept.map(row => row.id)).toEqual(['a1'])
-})
-
-test("a background task a helper agent started ends when that agent ends; the main conversation's own stays", () => {
-  const task = (id: string, agentId?: string): BackgroundTask => ({ id, stock: id, name: id, kind: 'shell', status: 'running', startedAt: 0, ...(agentId === undefined ? {} : { agentId }) })
-  const tasks = [task('t1', 'a1'), task('t2', 'a2'), task('t3'), task('t4', 'gone')]
-  const ended = endAgentTasks(tasks, [row({ id: 'a1', status: 'killed' }), row({ id: 'a2', status: 'running' })], 20_000)
-  expect(ended.map(one => one.status)).toEqual(['ended', 'running', 'running', 'ended'])
-  expect(endAgentTasks(tasks, [], 5_000).map(one => one.status)).toEqual(['running', 'running', 'running', 'running'])
-  expect(taskLines(ended)[0]?.line).toBe('t1')
 })
 
 test('a pane drawn under an older title is opened again once, with the current one', async ($, on) => {

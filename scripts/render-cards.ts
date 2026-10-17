@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { agentSvg, boardHead, orchestratorSvg, heroSvg, setWidth, ticketSvg, timelineSvg, type Card } from '../hooks/cards.ts'
-import { agents, entries, openTickets, progressTickets, tasks, view } from './sample.ts'
+import { agents, entries, openTickets, progressTickets, view } from './sample.ts'
 
 const WIDTH = 720
 const GAP = 12
@@ -142,7 +142,7 @@ function ticketButtons(card: Card, x: number, y: number, width: number, glyphs: 
 
 /**
  * The whole Claudeopticon pane, top to bottom, in the order the pane draws it: the top card; Orchestrator;
- * Background tasks; Agents with the timeline and the agent cards; Todo with its controls, the file
+ * Agents with the timeline and the agent cards; Todo with its controls, the file
  * card and the ticket board. The headings and buttons are the host's own, drawn here to match.
  */
 function pane(): string {
@@ -164,8 +164,6 @@ function pane(): string {
   const pages = buttonRow(PANE_PAD + 120, y, ['Older'])
   parts.push(`<text x="${PANE_PAD}" y="${y + 20}" font-family='${FONT}' font-size="13.5" fill="${DIM}">Newest 5 of 38</text>`, pages.svg)
   y += 30 + GAP + 6
-  head('Background tasks', '2 running, 1 finished', 'Show finished tasks (1)')
-  add(orchestratorSvg(tasks.filter(task => task.status === 'running').map(task => ({ line: task.name, at: task.startedAt, isRunning: true }))))
   head('Agents', '2 live, 1 finished', 'Show finished agents (1)')
   add(timelineSvg(view, agents.slice(0, 2)))
   add(withStop(agentSvg(agents[0]!, view), 'Running'))
@@ -211,7 +209,6 @@ const files: Record<string, string> = {
   'top.svg': heroSvg(view).source,
   'orchestrator.svg': orchestratorSvg(entries).source,
   'agents.svg': stack([timelineSvg(view, agents), withStop(agentSvg(agents[0]!, view), 'Running'), withStop(agentSvg(agents[1]!, view), 'Running')]),
-  'tasks.svg': orchestratorSvg(tasks.map(task => ({ line: task.name, at: task.startedAt, isRunning: task.status === 'running' }))).source,
   'board.svg': board(),
   'pane.svg': pane(),
 }

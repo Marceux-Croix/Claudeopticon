@@ -2,7 +2,7 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { AgentRow, AgentRowStatus, Progress, TodoFile, TodoItem, TodoStatus } from '../types'
 import { ACCENT, DANGER, GREEN, clock, tokens, orchestratorSvg, plural, agentColor, agentLabel, agentSvg, stopInsetPx, cardWidth, elapsed, boardHead, fileCards, heroSvg, longItems, ticketSvg, setWidth, timelineSvg } from './cards'
-import type { AgentView, FileView, ItemStatus, ItemView, TaskView, Usage, View } from './cards'
+import type { AgentView, FileView, ItemStatus, ItemView, Usage, View } from './cards'
 
 const PANE = 'claudeopticon'
 const TITLE = 'Claudeopticon'
@@ -1641,7 +1641,6 @@ async function refreshAgents($: EngineInterface, isForced = false): Promise<void
     }
   }
   agentRows = [...known.values()]
-  backgroundTasks = endAgentTasks(backgroundTasks, agentRows, time)
   lastClock = time
   clockMs = time
   redraw($)
@@ -2211,125 +2210,16 @@ export function orchestratorView(history: readonly OrchestratorEntry[], page: nu
   return { entries: newest.slice(at * ORCHESTRATOR_PAGE, (at + 1) * ORCHESTRATOR_PAGE), page: at, pages }
 }
 
-// ---------------------------------------------------------------- background tasks
+// ---------------------------------------------------------------- task notifications
 
-/**
- * The session's background tasks other than agents (those have their own card): shell commands run
- * in the background, monitors and workflows. Each starts with the tool call that launched it and
- * ends with its notification or a TaskStop. Its name is made once, at the start, and never changes.
- */
-/** `agentId`: the helper agent that started the task, absent for the main conversation's own. */
-export type BackgroundTask = TaskView & { id: string; stock: string; agentId?: string }
-let backgroundTasks: BackgroundTask[] = []
-let isFinishedTasksShown = false
+const NOTIFIED_ENDS: Record<string, AgentRowStatus> = { completed: 'completed', failed: 'failed', killed: 'killed', stopped: 'killed', timeout: 'failed', timed_out: 'failed' }
 
-const TASK_ENDS: Record<string, BackgroundTask['status']> = { completed: 'completed', failed: 'failed', killed: 'killed', stopped: 'killed', timeout: 'failed', timed_out: 'failed' }
-
-/** The task a finished tool call launched in the background, from its input and its result; none for any other call. */
-export function launchedTask(tool: string, input: Record<string, unknown>, result: unknown): Omit<BackgroundTask, 'name' | 'status' | 'startedAt'> | undefined {
-  const out = (typeof result === 'object' && result !== null ? result : {}) as Record<string, unknown>
-  const text = (key: string) => (typeof input[key] === 'string' ? (input[key] as string).trim() : '')
-  if (tool === 'Bash' && typeof out.backgroundTaskId === 'string') {
-    return { id: out.backgroundTaskId, kind: 'shell', stock: text('description') || text('command') }
-  }
-  if (tool === 'Monitor' && typeof out.taskId === 'string') {
-    return { id: out.taskId, kind: 'monitor', stock: text('description') || text('command') }
-  }
-  if (tool === 'Workflow' && typeof out.taskId === 'string') {
-    const name = typeof out.workflowName === 'string' ? out.workflowName : ''
-    const summary = typeof out.summary === 'string' ? out.summary : ''
-
-    return { id: out.taskId, kind: 'workflow', stock: [name, summary].filter(part => part !== '').join(': ') || 'Workflow' }
-  }
-
-  return undefined
-}
-
-/** The task ID and end status a task notification reports; none when it reports no end. */
-export function endedTask(text: string): { id: string; status: BackgroundTask['status'] } | undefined {
+/** The task ID and end status a task notification reports; none when it reports no end. A background agent's task ID is its agent ID. */
+export function notifiedEnd(text: string): { id: string; status: AgentRowStatus } | undefined {
   const id = /<task-id>\s*([^<\s]+)\s*<\/task-id>/.exec(text)?.[1]
-  const status = TASK_ENDS[(/<status>\s*([^<\s]+)\s*<\/status>/.exec(text)?.[1] ?? '').toLowerCase()]
+  const status = NOTIFIED_ENDS[(/<status>\s*([^<\s]+)\s*<\/status>/.exec(text)?.[1] ?? '').toLowerCase()]
 
   return id === undefined || status === undefined ? undefined : { id, status }
-}
-
-export function taskNamePrompt(stock: string): string {
-  return [
-    'Shorten this description of a background task in a coding session to a name of 2 to 5 plain words.',
-    'Keep its meaning. Start with a verb when it describes an action. No quotes, no period, no file paths.',
-    '',
-    stock.slice(0, 600),
-    '',
-    'Answer with the name alone.',
-  ].join('\n')
-}
-
-/** A name from the model's reply: its first line, without quotes or a period, at most 48 characters; none when empty. */
-export function readTaskName(reply: string): string | undefined {
-  const line = (reply.trim().split('\n')[0] ?? '').trim().replace(/^["'`]+|["'`.]+$/g, '').trim()
-
-  return line === '' ? undefined : line.slice(0, 48)
-}
-
-/** Until the model names a task (or if it cannot), its own description stands in, cut short. */
-function fallbackName(stock: string): string {
-  const line = stock.split('\n')[0] ?? ''
-
-  return line.length > 48 ? `${line.slice(0, 45)}...` : line || 'Background task'
-}
-
-/** Names a new task once, with Haiku; the name then stays as it is. */
-async function nameTask($: EngineInterface, id: string, stock: string): Promise<void> {
-  const reply = await $.model.complete({ model: SORT_MODEL, prompt: taskNamePrompt(stock), maxTokens: 30 }).catch(() => undefined)
-  const name = reply?.isAnswered === true ? readTaskName(reply.text) : undefined
-  if (name !== undefined) {
-    backgroundTasks = backgroundTasks.map(task => (task.id === id ? { ...task, name } : task))
-    redraw($)
-  }
-}
-
-/** The task card's lines, in the Orchestrator card's style: the name, and how a task ended when it did not finish cleanly. */
-export function taskLines(tasks: readonly BackgroundTask[]): { line: string; at: number; isRunning: boolean }[] {
-  return tasks.map(task => ({
-    line: task.status === 'failed' ? `${task.name} (failed)` : task.status === 'killed' ? `${task.name} (stopped)` : task.name,
-    at: task.startedAt,
-    isRunning: task.status === 'running',
-  }))
-}
-
-async function trackLaunch($: EngineInterface, tool: string, input: Record<string, unknown>, result: unknown, agentId: string | undefined): Promise<void> {
-  const launched = launchedTask(tool, input, result)
-  if (launched === undefined || backgroundTasks.some(task => task.id === launched.id)) {
-    return
-  }
-  backgroundTasks = [...backgroundTasks, { ...launched, name: fallbackName(launched.stock), status: 'running', startedAt: await $.clock.now(), ...(agentId === undefined ? {} : { agentId }) }]
-  redraw($)
-  void nameTask($, launched.id, launched.stock)
-}
-
-/**
- * Ends the running tasks whose helper agent has ended or is gone: a task an agent starts tells that
- * agent when it ends, never the main conversation, so without this its line stays live for good.
- */
-export function endAgentTasks(tasks: readonly BackgroundTask[], rows: readonly AgentRow[], time: number): BackgroundTask[] {
-  return tasks.map(task => {
-    if (task.status !== 'running' || task.agentId === undefined) {
-      return task
-    }
-    const row = rows.find(one => one.id === task.agentId)
-    const isGone = row === undefined ? time - task.startedAt > UNLISTED_MS : isEnded(row.status)
-
-    return isGone ? { ...task, status: 'ended' as const, endedAt: time } : task
-  })
-}
-
-async function endTask($: EngineInterface, id: string, status: BackgroundTask['status']): Promise<void> {
-  const time = await $.clock.now()
-  const known = backgroundTasks.some(task => task.id === id && task.status === 'running')
-  if (known) {
-    backgroundTasks = backgroundTasks.map(task => (task.id === id ? { ...task, status, endedAt: time } : task))
-    redraw($)
-  }
 }
 
 // ---------------------------------------------------------------- loop
@@ -2396,9 +2286,9 @@ function start($: EngineInterface): void {
 
         return
       }
-      // A live agent, or a running task a helper agent started, keeps the agent list checked.
-      if (pendingTools.size > 0 || agentRows.some(row => !isEnded(row.status)) || backgroundTasks.some(task => task.status === 'running' && task.agentId !== undefined)) {
-        await refreshAgents($, backgroundTasks.some(task => task.status === 'running' && task.agentId !== undefined && agentRows.every(row => row.id !== task.agentId || isEnded(row.status))))
+      // A live agent keeps the agent list checked.
+      if (pendingTools.size > 0 || agentRows.some(row => !isEnded(row.status))) {
+        await refreshAgents($)
       }
       if (ticks % SCAN_EVERY === 0) {
         await scan($)
@@ -2610,13 +2500,6 @@ export const register: Register = (on, options) => {
     if (typeof path === 'string' && path.includes(DIR)) {
       await scan($).catch(() => undefined)
     }
-    if (ran.deny === undefined) {
-      const input = e as unknown as Record<string, unknown>
-      await trackLaunch($, e.tool, input, ran.result, e.agentId).catch(() => undefined)
-      if (e.tool === 'TaskStop' && typeof input.task_id === 'string') {
-        await endTask($, input.task_id, 'killed').catch(() => undefined)
-      }
-    }
     // Moves made by hand reach the main conversation with its next tool result, mid-turn.
     const queued = id === undefined ? queuedNotes() : []
     if (queued.length === 0 || ran.deny !== undefined) {
@@ -2631,13 +2514,12 @@ export const register: Register = (on, options) => {
 
   on('prompt.submit', async ($, e, next) => {
     if (e.origin?.kind === 'task-notification') {
-      const ended = endedTask(e.text)
+      const ended = notifiedEnd(e.text)
       if (ended !== undefined) {
-        await endTask($, ended.id, ended.status).catch(() => undefined)
         // A background agent's notification carries its task ID, which is its agent ID: its row
         // takes the status it reports, also over an `ended` row.
         if (agentRows.some(row => row.id === ended.id && (row.status === 'ended' || !isEnded(row.status)))) {
-          agentRows = agentRows.map(row => (row.id === ended.id ? { ...row, status: ended.status as AgentRowStatus, endedAt: row.endedAt ?? clockMs } : row))
+          agentRows = agentRows.map(row => (row.id === ended.id ? { ...row, status: ended.status, endedAt: row.endedAt ?? clockMs } : row))
           redraw($)
         }
       }
@@ -2700,14 +2582,10 @@ export const register: Register = (on, options) => {
       await addBurn($, turnTokens(e.usage)).catch(() => undefined)
     }
     if (e.agentId !== undefined) {
-      // A turn that ends with nothing after it leaves the agent finished but open, until a stop. One
-      // that waits on a background task of its own is still at work.
+      // A turn that ends with nothing after it leaves the agent finished but open, until a stop.
       const id = e.agentId
-      const isWaitingOnTask = backgroundTasks.some(task => task.agentId === id && task.status === 'running')
-      if (!isWaitingOnTask) {
-        const time = await $.clock.now()
-        agentRows = agentRows.map(row => (row.id === id && !isEnded(row.status) ? { ...row, idleSince: time } : row))
-      }
+      const time = await $.clock.now()
+      agentRows = agentRows.map(row => (row.id === id && !isEnded(row.status) ? { ...row, idleSince: time } : row))
       // The end of an agent's turn folds in its last tokens at once, not on the next clock step.
       await refreshAgents($, true).catch(() => undefined)
     } else {
@@ -2738,8 +2616,6 @@ export const register: Register = (on, options) => {
     if (Svg !== undefined) {
       setWidth((e.props.bodyColumns ?? 48) * CELL_PX)
       const { active, idle, finished, shown } = ledger(view)
-      const runningTasks = backgroundTasks.filter(task => task.status === 'running').sort((a, b) => b.startedAt - a.startedAt)
-      const finishedTasks = backgroundTasks.filter(task => task.status !== 'running').sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))
       const card = (key: string, drawn: { source: string; width: number; alt: string }) => (
         <Svg key={key} source={drawn.source} alt={drawn.alt} width={drawn.width} />
       )
@@ -2804,18 +2680,6 @@ export const register: Register = (on, options) => {
               )}
             </Box>
           )}
-          {section(
-            'tasks',
-            'Background tasks',
-            backgroundTasks.length === 0 ? 'None in this session yet' : `${runningTasks.length} running, ${finishedTasks.length} finished`,
-            finishedTasks.length === 0 ? undefined : isFinishedTasksShown ? 'Hide finished tasks' : `Show finished tasks (${finishedTasks.length})`,
-            () => {
-              isFinishedTasksShown = !isFinishedTasksShown
-              redraw($)
-            },
-          )}
-          {(runningTasks.length > 0 || (isFinishedTasksShown && finishedTasks.length > 0)) &&
-            card('tasks', orchestratorSvg(taskLines([...runningTasks, ...(isFinishedTasksShown ? finishedTasks : [])])))}
           {section(
             'agents',
             'Agents',
@@ -3089,12 +2953,6 @@ export const register: Register = (on, options) => {
         {orchestratorView(orchestrator.history, 0).entries.slice(0, 5).map(entry => (
           <Text key={`orchestrator-${entry.id}`} dimColor={!entry.isRunning}>{` ${entry.isRunning ? '•' : '·'} ${clock(entry.at)}  ${entry.line}`}</Text>
         ))}
-        {heading('Background tasks', backgroundTasks.length === 0 ? '' : `${backgroundTasks.filter(task => task.status === 'running').length} running, ${backgroundTasks.filter(task => task.status !== 'running').length} done`)}
-        {backgroundTasks
-          .filter(task => task.status === 'running' || isFinishedTasksShown)
-          .map(task => (
-            <Text key={`task-${task.id}`} dimColor={task.status !== 'running'}>{` ${task.status === 'running' ? '•' : task.status === 'completed' ? '✓' : '×'} ${task.name}  ${elapsed((task.endedAt ?? clockMs) - task.startedAt)}`}</Text>
-          ))}
         {heading('Agents', view.agents.length === 0 ? '' : `${view.live} running, ${view.agents.length - view.live} done`)}
         {ledger(view).finished.length > 0 && (
           <Button

@@ -282,16 +282,6 @@ export function orchestratorSvg(entries: readonly { line: string; at: number; is
   return stage(h, parts.join('\n'), `Orchestrator: ${entries.map(entry => `${clock(entry.at)} ${entry.line}`).join('; ')}`)
 }
 
-/** A background task as the pane draws it: its short name, what kind it is, and how it stands. */
-export type TaskView = {
-  name: string
-  kind: 'shell' | 'monitor' | 'workflow'
-  /** `ended`: the helper agent that started it ended, and no word came of how the task ended. */
-  status: 'running' | 'completed' | 'failed' | 'killed' | 'ended'
-  startedAt: number
-  endedAt?: number
-}
-
 /** An actor disk: 12 px radius, letter 500; the state dot at its lower right (STG-DRAW-7, CMP-AV-4). */
 function actor(cx: number, cy: number, index: number, state: 'working' | 'failed' | 'none', isMatch: boolean, blinks: Blinks): string {
   const color = agentColor(index)

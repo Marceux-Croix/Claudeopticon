@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0
+
+- The Background tasks card is gone. Claude Code now has its own task tracker, which does this job better. The Haiku request that named each task is gone with it.
+
 ## 0.5.3
 
 - Delete empty todos moves empty todo files to the Trash (the Recycle Bin on Windows) instead of deleting them, so you can get them back. It never falls back to an outright delete: if no trash command works, it keeps the file and says why.

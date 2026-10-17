@@ -4,9 +4,9 @@
 
 **A ticket system for Claude Code. Plan the work, hand it to Claude, and watch it get done.**
 
-Claudeopticon is a mod for Claude Code. It adds a work pane next to your conversation which shows your todo list as a ticket board, what Claude is doing, what its helpers (Claude Code calls them agents) are doing, and what runs in the background. You can send a ticket to Claude, ask how it is going, or move it yourself.
+Claudeopticon is a mod for Claude Code. It adds a work pane next to your conversation which shows your todo list as a ticket board, what Claude is doing, and what its helpers (Claude Code calls them agents) are doing. You can send a ticket to Claude, ask how it is going, or move it yourself.
 
-![The whole Claudeopticon pane: the top card, then Orchestrator, Background tasks, Agents and the Todo board, top to bottom](docs/images/pane.svg)
+![The whole Claudeopticon pane: the top card, then Orchestrator, Agents and the Todo board, top to bottom](docs/images/pane.svg)
 
 At its core is a ticket system that lives in your repo. Each line in `.claude_todo/` is a ticket with an ID such as `#T12`. From the board you can send a ticket to Claude, ask for a status update, or move it between Open, In progress and Done. Claude keeps each ticket's state up to date as it works, and every helper agent is linked to the tickets it works on.
 
@@ -68,14 +68,6 @@ The pane opens at the start of each session. To open it again, run `/claudeoptic
 ![The Orchestrator card](docs/images/orchestrator.svg)
 
 This card lists what Claude does itself, not its agents. Each line is the short description Claude already writes for an action, with its start time. The newest is on top. A pulsing dot means the action still runs. **Older** and **Newer** page through the history.
-
-### Background tasks: what runs in the background
-
-![The Background tasks card](docs/images/tasks.svg)
-
-Claude can start work that keeps running: a build, a server, a monitor (a watch on a log file), or a workflow of several agents. Each task gets a line with a short name, its start time, and a dot: pulsing while it runs, gray when it ended ("(failed)" or "(stopped)" if not clean). Haiku, Claude's small model, makes the name once, at the start. A task that a helper agent started ends with that agent.
-
-Finished tasks are hidden. **Show finished tasks** brings them back. Agents that run in the background have their own cards.
 
 ### Agents: what Claude's helpers are doing
 
@@ -174,11 +166,10 @@ Set options in the `/config` menu, under the plugin.
 
 ## Cost and privacy
 
-The mod uses Haiku for three small jobs:
+The mod uses Haiku for two small jobs:
 
 - **Sorting tickets into groups:** once per new ticket, up to 60 per request. Sorting a large todo the first time costs a few thousand tokens.
 - **Matching a new agent to its tickets:** one request per agent.
-- **Naming a background task:** one very short request per task.
 
 Everything else is free or nearly free: the Orchestrator card makes no requests, the instructions to Claude are about 400 tokens per conversation, a progress report is about 40 tokens, and card token counts come from usage Claude Code already reports.
 

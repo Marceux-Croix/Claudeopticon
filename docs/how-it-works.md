@@ -148,7 +148,7 @@ Text that looks like it holds a secret is replaced with "(hidden)" before it is 
 
 ## Ticket buttons
 
-`⋙` and `?` send a prompt to Claude. The manual moves (`≡` queued, `◐` in progress, `✓` done, `↩` open) rewrite one checkbox. Each move is queued as a note that goes to Claude with its next tool result or your next message. To change a move, Claude calls `move_ticket`, which asks you and writes only on a yes.
+`⋙` and `?` send a prompt to Claude. The manual moves (`≡` queued, `◐` in progress, `✓` done, `↩` back one column: in progress to queued, queued to open) rewrite one checkbox. A card shown in progress only because an agent works on it has no `↩`: its box is still open or queued. Each move is queued as a note that goes to Claude with its next tool result or your next message. To change a move, Claude calls `move_ticket`, which asks you and writes only on a yes.
 
 ## Queued tickets
 

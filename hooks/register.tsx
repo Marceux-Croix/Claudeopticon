@@ -63,7 +63,7 @@ import { addAloneTry, isItemsFailure, nextBatchSize, nextSortBatch, nextThrows, 
 import type { BatchThrows } from './sort-queue'
 import type { Axes, Series } from './series'
 import { bar, clip, textChildren } from './terminal-text'
-import { DONE_ACTION, QUEUE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, TICKET_GLYPHS } from './ticket-actions'
+import { DONE_ACTION, QUEUE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, TICKET_GLYPHS, UNSTART_ACTION } from './ticket-actions'
 import type { TicketAction } from './ticket-actions'
 import { drawnPlaces, isDrawnLine, setBox, statusNamed, STATUS_WORDS } from './ticket-boxes'
 import type { DrawnPlace } from './ticket-boxes'
@@ -5494,7 +5494,8 @@ export const register: Register = (on, options) => {
                     ? [QUEUE_ACTION, START_ACTION, DONE_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
                     : item.status === 'queued'
                       ? [REOPEN_ACTION, START_ACTION, DONE_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
-                      : [...(item.heldFrom === 'queued' ? [] : [QUEUE_ACTION]), ...(item.heldFrom === 'pending' ? [] : [REOPEN_ACTION]), DONE_ACTION, STATUS_ACTION]
+                      // Back moves one column, in progress to queued; a ticket held only by a live agent has no box to move back.
+                      : [...(item.heldFrom === undefined ? [UNSTART_ACTION] : []), DONE_ACTION, STATUS_ACTION]
               const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, actions: actions.length })
               const one = { sentKey, isSent, actions, drawn }
               prepared.set(item, one)

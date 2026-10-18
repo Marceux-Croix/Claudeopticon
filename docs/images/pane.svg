@@ -299,8 +299,6 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <text x="312" y="1623" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">✓</text>
 <rect x="264" y="1605" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
 <text x="278" y="1623" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">↩</text>
-<rect x="230" y="1605" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="244" y="1623" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">≡</text>
 <svg x="20" y="1655" xmlns="http://www.w3.org/2000/svg" width="354" height="152" viewBox="0 0 354 152" role="img" aria-label="In progress: Document the plugin API">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -327,8 +325,6 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <text x="312" y="1787" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">✓</text>
 <rect x="264" y="1769" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
 <text x="278" y="1787" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">↩</text>
-<rect x="230" y="1769" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="244" y="1787" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">≡</text>
 <svg x="20" y="1819" xmlns="http://www.w3.org/2000/svg" width="354" height="152" viewBox="0 0 354 152" role="img" aria-label="In progress: Fix the parser crash on empty input">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -355,8 +351,6 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <text x="312" y="1951" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">✓</text>
 <rect x="264" y="1933" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
 <text x="278" y="1951" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">↩</text>
-<rect x="230" y="1933" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="244" y="1951" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">≡</text>
 <text x="386" y="1471" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="600" fill="rgba(255,255,255,.55)">Queued  2</text>
 <svg x="386" y="1491" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Queued: Add a man page">
 <style>

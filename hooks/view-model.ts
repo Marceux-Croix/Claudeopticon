@@ -2,7 +2,8 @@
 
 import type { AgentRow, TodoFile } from '../types'
 import { isEnded } from './agent-ends'
-import { ORCH } from './agent-identity'
+import { colorSlots } from './agent-colors'
+import { AGENT_COLORS, ORCH, setColorSlots } from './agent-identity'
 import type { AgentView, FileView, ItemStatus, ItemView, View } from './card-types'
 import { categoryOf } from './categories'
 import type { CategoryBook } from './categories'
@@ -43,6 +44,8 @@ export function orchestratorTitle(title: string | undefined, tickets: readonly s
 /** What the pane draws, worked out once for the cards and the terminal alike. */
 export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], now: number, orch?: OrchestratorState): View {
   const links = linkAgents(list, rows)
+  // Every card drawn from this view takes its agent colors from these slots.
+  setColorSlots(colorSlots(rows.map(row => ({ startedAt: row.startedAt, endedAt: row.endedAt, idleSince: row.idleSince, isEnded: isEnded(row.status) })), AGENT_COLORS.length))
   const itemOwners = new Map<string, number[]>()
   const fileOwners = new Map<string, number[]>()
   rows.forEach((row, i) => {

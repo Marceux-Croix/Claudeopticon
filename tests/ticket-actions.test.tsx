@@ -25,6 +25,8 @@ test('every action has a distinct name, the two back buttons share one glyph, an
   const all = [SEND_ACTION, STATUS_ACTION, QUEUE_ACTION, START_ACTION, DONE_ACTION, REOPEN_ACTION, UNSTART_ACTION]
   expect(new Set(all.map(a => a.name)).size).toBe(7)
   expect(REOPEN_ACTION.glyph).toBe(UNSTART_ACTION.glyph)
+  // the back buttons are the one arrow, a hook to the right.
+  expect(REOPEN_ACTION.glyph).toBe('\u21AA')
   expect(TICKET_GLYPHS.size).toBe(6)
   for (const a of all) {
     expect(TICKET_GLYPHS.has(a.glyph)).toBe(true)

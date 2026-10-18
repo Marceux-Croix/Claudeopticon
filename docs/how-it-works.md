@@ -40,6 +40,7 @@ Each file in `hooks/` has one responsibility. `hooks.json` loads only `register.
 | `categories.ts` | The category book: sort prompt, reply, change test, backups, grouping and filter |
 | `sort-queue.ts` | Which open items the next sort call carries, and how a reply that does not parse narrows later calls |
 | `agent-match.ts` | The Haiku match of a new agent to open items: prompt and reply |
+| `agent-colors.ts` | Agent color slots: a free color at start, free again when the agent finishes |
 | `agent-identity.ts` | An agent's label, label size and color |
 | `agent-respawn.ts` | The row of an agent spawned again under an ID that has a row |
 | `claim-score.ts` | How well a claim names an item, and the best item per claim |
@@ -94,7 +95,7 @@ The tests follow the same layout: `tests/<module>.test.tsx` holds the cases of `
 | `turn.complete` | Counts no tokens. For an agent it marks the end of its turn (the agent is then idle if nothing follows) and folds in its last counts. For the main conversation it ends Running on the Orchestrator card. |
 | `session.compact` | Records the token count at a compaction, so the graph can start "since compact" from there. |
 
-A clock tick each second refreshes running agents. A request that counts tokens is awaited before the step returns, so the count is drawn and stored in order, except while the store does not answer: then the model request does not wait for it. An agent missing from the agent list for 15 seconds ends with the status `ended`. Agent rows (the last 200) are saved per session, so a reload keeps start times, counts, links and progress. The mod also stores how many agents came before the first kept row (`agents-base:<session id>`), so labels and colors count from there and A201 stays A201 after a reload. A label's font size shrinks with its length so it fits its 28 px circle with room to spare (at most 17 px of text, measured for Instrument Sans, the widest of the fallback fonts). Chat names are read up to six digits.
+A clock tick each second refreshes running agents. A request that counts tokens is awaited before the step returns, so the count is drawn and stored in order, except while the store does not answer: then the model request does not wait for it. An agent missing from the agent list for 15 seconds ends with the status `ended`. Agent rows (the last 200) are saved per session, so a reload keeps start times, counts, links and progress. The mod also stores how many agents came before the first kept row (`agents-base:<session id>`), so labels count from there and A201 stays A201 after a reload. A label's font size shrinks with its length so it fits its 28 px circle with room to spare (at most 17 px of text, measured for Instrument Sans, the widest of the fallback fonts). Chat names are read up to six digits. There are 16 agent colors, most distinct first (each the OKLab color farthest from those before it). An agent takes the first color that no live agent holds when it starts, and keeps it; the color is free again from the time the agent ends or goes idle (`colorSlots` in `agent-colors.ts`, set by each `buildView`). With all 16 held, a new agent shares the color with the fewest holders, so a color can repeat but no agent waits.
 
 An agent is idle when its turn ends (`turn.complete` with its ID) and no tool call or model request of its own follows. Claude Code keeps such an agent open until something stops it. The card shows it as Idle, out of the live count, its time and timeline bar stopped at the end of the turn, and its last command as "Last:". Its next call or request ends the idle time.
 
@@ -148,7 +149,7 @@ Text that looks like it holds a secret is replaced with "(hidden)" before it is 
 
 ## Ticket buttons
 
-`⋙` and `?` send a prompt to Claude. The manual moves (`≡` queued, `◐` in progress, `✓` done, `↩` back one column: in progress to queued, queued to open) rewrite one checkbox. A card shown in progress only because an agent works on it has no `↩`: its box is still open or queued. Each move is queued as a note that goes to Claude with its next tool result or your next message. To change a move, Claude calls `move_ticket`, which asks you and writes only on a yes.
+`⋙` and `?` send a prompt to Claude. Every ticket has `?`. Open and queued tickets have `⋙` until it is pressed once. The manual moves (`≡` queued, `◐` in progress, `✓` done, `↪` back one column: in progress to queued, queued to open) rewrite one checkbox. A card shown in progress only because an agent works on it has no `↪`: its box is still open or queued. Each move is queued as a note that goes to Claude with its next tool result or your next message. To change a move, Claude calls `move_ticket`, which asks you and writes only on a yes.
 
 ## Queued tickets
 

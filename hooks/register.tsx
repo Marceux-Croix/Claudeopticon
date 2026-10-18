@@ -5487,13 +5487,15 @@ export const register: Register = (on, options) => {
               const isSent = sentTickets.has(sentKey)
               const category = categoryOf(book, storedKey(item.key))
               const id = new RegExp(`#${ID_SRC}\\b`).exec(item.text)?.[0]
+              // Every ticket, in every column, ends with the status question mark.
+              const send = isSent ? [] : [SEND_ACTION]
               const actions: TicketAction[] =
                 item.status === 'completed'
-                  ? []
+                  ? [STATUS_ACTION]
                   : item.status === 'pending'
-                    ? [QUEUE_ACTION, START_ACTION, DONE_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
+                    ? [QUEUE_ACTION, START_ACTION, DONE_ACTION, ...send, STATUS_ACTION]
                     : item.status === 'queued'
-                      ? [REOPEN_ACTION, START_ACTION, DONE_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
+                      ? [REOPEN_ACTION, START_ACTION, DONE_ACTION, ...send, STATUS_ACTION]
                       // Back moves one column, in progress to queued; a ticket held only by a live agent has no box to move back.
                       : [...(item.heldFrom === undefined ? [UNSTART_ACTION] : []), DONE_ACTION, STATUS_ACTION]
               const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, actions: actions.length })
@@ -5543,7 +5545,7 @@ export const register: Register = (on, options) => {
                     <Box position="absolute" right={ACTION_RIGHT} bottom={ACTION_BOTTOM} flexDirection="row" gap={1}>
                       {actions.map(action => (
                         <Button
-                          key={keyText(action === SEND_ACTION || action === STATUS_ACTION ? `ticket-${item.file ?? file.name}-${item.key}` : `ticket-${action.name}-${item.file ?? file.name}-${item.key}`)}
+                          key={keyText(action === SEND_ACTION ? `ticket-${item.file ?? file.name}-${item.key}` : `ticket-${action.name}-${item.file ?? file.name}-${item.key}`)}
                           label={action.glyph}
                           hover={{ scope: sendScope(`${action.name}:${sentKey}`), bold: true }}
                           onPress={() => press(action)}

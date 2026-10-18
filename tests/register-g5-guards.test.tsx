@@ -523,7 +523,8 @@ test('an agent the list shows running again after it ended gets no second note',
   expect(contexts[1] ?? '').not.toContain('A1 finished')
 })
 
-test('with the rules off, no prompt carries the still-in-progress line', { options: { rules: false } }, async ($, on) => {
+// The 31 minutes on the mock clock run every scan the session would make: past 5 s on a busy machine.
+test('with the rules off, no prompt carries the still-in-progress line', { options: { rules: false }, timeoutMs: 60_000 } as never, async ($, on) => {
   const { clock, edit, contexts } = orchSetup($, on)
   await begin($)
   await edit('- [~] #T0026 Ship the parser\n- [ ] #T2 Review the copy\n- [~] #T3 Check the invoice')

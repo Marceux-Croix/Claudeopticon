@@ -84,7 +84,9 @@ function withStop(card: Card, badgeLabel: string): Card {
 /** The pane's own background, around the cards: the host draws it, not the mod. */
 const PANE_BG = '#1C1C1E'
 const PANE_PAD = 20
-const INK = 'rgba(255,255,255,.88)'
+// Not the cards' own text color: their light-theme CSS rules match that value anywhere in the image,
+// and would turn the pane's headings dark on its dark background.
+const INK = '#E2E2E5'
 const DIM = 'rgba(255,255,255,.55)'
 
 function esc(text: string): string {

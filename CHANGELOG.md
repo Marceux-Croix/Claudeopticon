@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.1
+
+### Features
+
+- Tokens per minute has its own scale: a blue column of numbers next to the green token scale on the right. The blue scale is always the green one divided by 10, so a high total since compact no longer flattens the rate line, and the two lines stay comparable.
+- Each axis's numbers are in its line's color: yellow, green and blue. The left margin mirrors the right one, so the plot is wider, and the key has more room above the plot.
+
+### Fixes
+
+- The pane image in the README shows its section headings in the light theme. The cards' light-theme colors no longer turn them dark on the dark background.
+
 ## 0.8.0
 
 ### Features

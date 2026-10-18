@@ -19,40 +19,45 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <line x1="24" y1="47" x2="38" y2="47" stroke="#FACC15" class="sa" stroke-width="2" stroke-linecap="round"/><text x="43" y="51.5" fill="rgba(255,255,255,.62)" font-size="12">Live agents</text>
 <line x1="125" y1="47" x2="139" y2="47" stroke="#A3E635" class="st" stroke-width="2" stroke-linecap="round"/><text x="144" y="51.5" fill="rgba(255,255,255,.62)" font-size="12">All tokens since compact</text>
 <line x1="310" y1="47" x2="324" y2="47" stroke="#60A5FA" class="sr" stroke-width="2" stroke-linecap="round"/><text x="329" y="51.5" fill="rgba(255,255,255,.62)" font-size="12">Tokens per minute</text>
-<line x1="96" y1="250" x2="624" y2="250" stroke="rgba(255,255,255,.08)"/>
-<text x="86" y="254" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">0</text>
-<text x="634" y="254" fill="rgba(255,255,255,.88)" font-size="11.5">0</text>
-<line x1="96" y1="203" x2="624" y2="203" stroke="rgba(255,255,255,.08)"/>
-<text x="86" y="207" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">1</text>
-<text x="634" y="207" fill="rgba(255,255,255,.88)" font-size="11.5">15M</text>
-<line x1="96" y1="156" x2="624" y2="156" stroke="rgba(255,255,255,.08)"/>
-<text x="86" y="160" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">2</text>
-<text x="634" y="160" fill="rgba(255,255,255,.88)" font-size="11.5">30M</text>
-<line x1="96" y1="109" x2="624" y2="109" stroke="rgba(255,255,255,.08)"/>
-<text x="86" y="113" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">3</text>
-<text x="634" y="113" fill="rgba(255,255,255,.88)" font-size="11.5">45M</text>
-<line x1="96" y1="62" x2="624" y2="62" stroke="rgba(255,255,255,.08)"/>
-<text x="86" y="66" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">4</text>
-<text x="634" y="66" fill="rgba(255,255,255,.88)" font-size="11.5">60M</text>
-<text transform="translate(50 156) rotate(-90)" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">Live agents</text>
-<text transform="translate(687 156) rotate(90)" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">Tokens</text>
-<text x="96" y="270" text-anchor="start" fill="rgba(255,255,255,.38)" font-size="11.5">30m ago</text>
-<text x="272" y="270" text-anchor="middle" fill="rgba(255,255,255,.38)" font-size="11.5">20m ago</text>
-<text x="448" y="270" text-anchor="middle" fill="rgba(255,255,255,.38)" font-size="11.5">10m ago</text>
-<text x="624" y="270" text-anchor="end" fill="rgba(255,255,255,.38)" font-size="11.5">Now</text>
-<line x1="307.2" y1="62" x2="307.2" y2="250" stroke="rgba(255,255,255,.38)" stroke-dasharray="3 4"/>
+<line x1="65" y1="250" x2="613" y2="250" stroke="rgba(255,255,255,.08)"/>
+<text x="49" y="254" text-anchor="end" fill="#FACC15" class="fa" font-size="11.5">0</text>
+<text x="629" y="254" fill="#A3E635" class="ft" font-size="11.5">0</text>
+<text x="662" y="254" fill="#60A5FA" class="fr" font-size="11.5">0</text>
+<line x1="65" y1="205.5" x2="613" y2="205.5" stroke="rgba(255,255,255,.08)"/>
+<text x="49" y="209.5" text-anchor="end" fill="#FACC15" class="fa" font-size="11.5">1</text>
+<text x="629" y="209.5" fill="#A3E635" class="ft" font-size="11.5">15M</text>
+<text x="662" y="209.5" fill="#60A5FA" class="fr" font-size="11.5">1.5M</text>
+<line x1="65" y1="161" x2="613" y2="161" stroke="rgba(255,255,255,.08)"/>
+<text x="49" y="165" text-anchor="end" fill="#FACC15" class="fa" font-size="11.5">2</text>
+<text x="629" y="165" fill="#A3E635" class="ft" font-size="11.5">30M</text>
+<text x="662" y="165" fill="#60A5FA" class="fr" font-size="11.5">3M</text>
+<line x1="65" y1="116.5" x2="613" y2="116.5" stroke="rgba(255,255,255,.08)"/>
+<text x="49" y="120.5" text-anchor="end" fill="#FACC15" class="fa" font-size="11.5">3</text>
+<text x="629" y="120.5" fill="#A3E635" class="ft" font-size="11.5">45M</text>
+<text x="662" y="120.5" fill="#60A5FA" class="fr" font-size="11.5">4.5M</text>
+<line x1="65" y1="72" x2="613" y2="72" stroke="rgba(255,255,255,.08)"/>
+<text x="49" y="76" text-anchor="end" fill="#FACC15" class="fa" font-size="11.5">4</text>
+<text x="629" y="76" fill="#A3E635" class="ft" font-size="11.5">60M</text>
+<text x="662" y="76" fill="#60A5FA" class="fr" font-size="11.5">6M</text>
+<text transform="translate(27 161) rotate(-90)" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">Live agents</text>
+<text transform="translate(693 161) rotate(90)" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">Tokens</text>
+<text x="65" y="270" text-anchor="start" fill="rgba(255,255,255,.38)" font-size="11.5">30m ago</text>
+<text x="247.7" y="270" text-anchor="middle" fill="rgba(255,255,255,.38)" font-size="11.5">20m ago</text>
+<text x="430.3" y="270" text-anchor="middle" fill="rgba(255,255,255,.38)" font-size="11.5">10m ago</text>
+<text x="613" y="270" text-anchor="end" fill="rgba(255,255,255,.38)" font-size="11.5">Now</text>
+<line x1="284.2" y1="72" x2="284.2" y2="250" stroke="rgba(255,255,255,.38)" stroke-dasharray="3 4"/>
 <defs><linearGradient id="tk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A3E635" class="pt" stop-opacity=".18"/><stop offset="1" stop-color="#A3E635" class="pt" stop-opacity="0"/></linearGradient></defs>
-<polygon points="96,250 96,152.9 113.6,147.4 131.2,141.9 148.8,136.4 166.4,131 184,125.5 201.6,120 219.2,114.5 236.8,109.1 254.4,103.6 272,98.1 289.6,92.6 307.2,92.6 307.2,250" fill="url(#tk)"/>
-<polyline points="96,152.9 113.6,147.4 131.2,141.9 148.8,136.4 166.4,131 184,125.5 201.6,120 219.2,114.5 236.8,109.1 254.4,103.6 272,98.1 289.6,92.6 307.2,92.6" fill="none" stroke="#A3E635" class="st" stroke-width="1.25" stroke-linejoin="round"/>
-<polygon points="307.2,250 307.2,247 324.8,239.3 342.4,231.7 360,224.1 377.6,216.4 395.2,208.8 412.8,201.2 430.4,193.5 448,185.9 465.6,178.3 483.2,170.6 500.8,163 518.4,155.4 536,147.8 553.6,140.1 571.2,132.5 588.8,124.9 606.4,117.2 624,109.6 624,250" fill="url(#tk)"/>
-<polyline points="307.2,247 324.8,239.3 342.4,231.7 360,224.1 377.6,216.4 395.2,208.8 412.8,201.2 430.4,193.5 448,185.9 465.6,178.3 483.2,170.6 500.8,163 518.4,155.4 536,147.8 553.6,140.1 571.2,132.5 588.8,124.9 606.4,117.2 624,109.6" fill="none" stroke="#A3E635" class="st" stroke-width="1.25" stroke-linejoin="round"/>
-<polyline points="96,250 104.8,250 113.6,250 122.4,244.5 131.2,244.5 140,244.5 148.8,244.5 157.6,244.5 166.4,244.5 175.2,244.5 184,244.5 192.8,244.5 201.6,244.5 210.4,244.5 219.2,244.5 228,244.5 236.8,244.5 245.6,244.5 254.4,244.5 263.2,244.5 272,244.5 280.8,244.5 289.6,244.5 298.4,244.5 307.2,244.5 316,250 324.8,250 333.6,242.4 342.4,242.4 351.2,242.4 360,242.4 368.8,242.4 377.6,242.4 386.4,242.4 395.2,242.4 404,242.4 412.8,242.4 421.6,242.4 430.4,242.4 439.2,242.4 448,242.4 456.8,242.4 465.6,242.4 474.4,242.4 483.2,242.4 492,242.4 500.8,242.4 509.6,242.4 518.4,242.4 527.2,242.4 536,242.4 544.8,242.4 553.6,242.4 562.4,242.4 571.2,242.4 580,242.4 588.8,242.4 597.6,242.4 606.4,242.4 615.2,242.4 624,242.4" fill="none" stroke="#60A5FA" class="sr" stroke-width="1.25" stroke-linejoin="round"/>
-<path d="M 96 203 H 148.8 V 156 H 219.2 V 109 H 289.6 V 156 H 377.6 V 203 H 430.4 V 156 H 500.8 V 109 H 553.6 V 156 H 624" fill="none" stroke="#FACC15" class="sa" stroke-width="1.5" stroke-linejoin="round"/>
-<text x="312.2" y="74" text-anchor="start" fill="none" stroke="#07080F" stroke-width="3" stroke-linejoin="round" font-size="11" aria-hidden="true">Compacted</text>
-<text x="312.2" y="74" text-anchor="start" fill="rgba(255,255,255,.38)" font-size="11">Compacted</text>
-<circle cx="624" cy="109.6" r="3.5" fill="#A3E635" class="ft" stroke="#07080F" stroke-width="2"/>
-<circle cx="624" cy="156" r="3.5" fill="#FACC15" class="fa" stroke="#07080F" stroke-width="2"/>
-<circle cx="624" cy="242.4" r="3.5" fill="#60A5FA" class="fr" stroke="#07080F" stroke-width="2"/>
-<text x="614" y="147" text-anchor="end" font-size="12" stroke="#07080F" stroke-width="3" stroke-linejoin="round" paint-order="stroke"><tspan fill="#FACC15" class="fa" font-weight="600">2</tspan><tspan fill="rgba(255,255,255,.62)"> live</tspan></text>
-<text x="614" y="101" text-anchor="end" font-size="12" stroke="#07080F" stroke-width="3" stroke-linejoin="round" paint-order="stroke"><tspan fill="#A3E635" class="ft" font-weight="600">44.81M</tspan></text>
-<text x="614" y="233" text-anchor="end" font-size="12" stroke="#07080F" stroke-width="3" stroke-linejoin="round" paint-order="stroke"><tspan fill="#60A5FA" class="fr" font-weight="600">2.43M</tspan><tspan fill="rgba(255,255,255,.62)">/min</tspan></text></svg>
+<polygon points="65,250 65,158 83.3,152.8 101.5,147.7 119.8,142.5 138.1,137.3 156.3,132.1 174.6,126.9 192.9,121.7 211.1,116.6 229.4,111.4 247.7,106.2 265.9,101 284.2,101 284.2,250" fill="url(#tk)"/>
+<polyline points="65,158 83.3,152.8 101.5,147.7 119.8,142.5 138.1,137.3 156.3,132.1 174.6,126.9 192.9,121.7 211.1,116.6 229.4,111.4 247.7,106.2 265.9,101 284.2,101" fill="none" stroke="#A3E635" class="st" stroke-width="1.25" stroke-linejoin="round"/>
+<polygon points="284.2,250 284.2,247.1 302.5,239.9 320.7,232.7 339,225.4 357.3,218.2 375.5,211 393.8,203.8 412.1,196.5 430.3,189.3 448.6,182.1 466.9,174.9 485.1,167.6 503.4,160.4 521.7,153.2 539.9,146 558.2,138.8 576.5,131.5 594.7,124.3 613,117.1 613,250" fill="url(#tk)"/>
+<polyline points="284.2,247.1 302.5,239.9 320.7,232.7 339,225.4 357.3,218.2 375.5,211 393.8,203.8 412.1,196.5 430.3,189.3 448.6,182.1 466.9,174.9 485.1,167.6 503.4,160.4 521.7,153.2 539.9,146 558.2,138.8 576.5,131.5 594.7,124.3 613,117.1" fill="none" stroke="#A3E635" class="st" stroke-width="1.25" stroke-linejoin="round"/>
+<polyline points="65,250 74.1,250 83.3,250 92.4,198.1 101.5,198.1 110.7,198.1 119.8,198.1 128.9,198.4 138.1,198.4 147.2,198.1 156.3,198.1 165.5,198.1 174.6,198.1 183.7,198.1 192.9,198.1 202,198.1 211.1,198.1 220.3,198.4 229.4,198.4 238.5,198.1 247.7,198.1 256.8,198.1 265.9,198.1 275.1,198.1 284.2,198.1 293.3,250 302.5,250 311.6,177.6 320.7,177.6 329.9,177.9 339,177.9 348.1,177.6 357.3,177.6 366.4,177.9 375.5,177.9 384.7,177.6 393.8,177.6 402.9,177.9 412.1,177.9 421.2,177.6 430.3,177.6 439.5,177.9 448.6,177.9 457.7,177.6 466.9,177.6 476,177.6 485.1,177.6 494.3,177.9 503.4,177.9 512.5,177.6 521.7,177.6 530.8,177.9 539.9,177.9 549.1,177.6 558.2,177.6 567.3,177.9 576.5,177.9 585.6,177.6 594.7,177.6 603.9,177.9 613,177.9" fill="none" stroke="#60A5FA" class="sr" stroke-width="1.25" stroke-linejoin="round"/>
+<path d="M 65 205.5 H 119.8 V 161 H 192.9 V 116.5 H 265.9 V 161 H 357.3 V 205.5 H 412.1 V 161 H 485.1 V 116.5 H 539.9 V 161 H 613" fill="none" stroke="#FACC15" class="sa" stroke-width="1.5" stroke-linejoin="round"/>
+<text x="289.2" y="84" text-anchor="start" fill="none" stroke="#07080F" stroke-width="3" stroke-linejoin="round" font-size="11" aria-hidden="true">Compacted</text>
+<text x="289.2" y="84" text-anchor="start" fill="rgba(255,255,255,.38)" font-size="11">Compacted</text>
+<circle cx="613" cy="117.1" r="3.5" fill="#A3E635" class="ft" stroke="#07080F" stroke-width="2"/>
+<circle cx="613" cy="161" r="3.5" fill="#FACC15" class="fa" stroke="#07080F" stroke-width="2"/>
+<circle cx="613" cy="177.9" r="3.5" fill="#60A5FA" class="fr" stroke="#07080F" stroke-width="2"/>
+<text x="603" y="152" text-anchor="end" font-size="12" stroke="#07080F" stroke-width="3" stroke-linejoin="round" paint-order="stroke"><tspan fill="#FACC15" class="fa" font-weight="600">2</tspan><tspan fill="rgba(255,255,255,.62)"> live</tspan></text>
+<text x="603" y="108" text-anchor="end" font-size="12" stroke="#07080F" stroke-width="3" stroke-linejoin="round" paint-order="stroke"><tspan fill="#A3E635" class="ft" font-weight="600">44.81M</tspan></text>
+<text x="603" y="173" text-anchor="end" font-size="12" stroke="#07080F" stroke-width="3" stroke-linejoin="round" paint-order="stroke"><tspan fill="#60A5FA" class="fr" font-weight="600">2.43M</tspan><tspan fill="rgba(255,255,255,.62)">/min</tspan></text></svg>

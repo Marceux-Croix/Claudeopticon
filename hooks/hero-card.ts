@@ -8,7 +8,7 @@ import { tokens } from './card-format'
 import { ACCENT, FAINT, LABEL, PAD, RULE, stage, STAGE_BG, SUB, W } from './card-stage'
 import { esc } from './card-text'
 import type { Card, View } from './card-types'
-import { emptySeries, onePerStep, QUANT_MS, stepAxes, tokenRate, WINDOW_MS, windowed } from './series'
+import { emptySeries, onePerStep, QUANT_MS, RATE_RATIO, stepAxes, tokenRate, WINDOW_MS, windowed } from './series'
 import type { Point } from './series'
 
 /** The top card's fixed height, in px. */
@@ -119,6 +119,15 @@ export function compactedBox(x: number, top: number, x0: number, x1: number, tak
   return sides.find(side => side.box.x0 >= x0 - 0.5 && side.box.x1 <= x1 + 0.5 && !taken.some(one => boxesMeet(grown(one), side.box)))
 }
 
+/** The right-hand label columns (#T003K): the first starts RIGHT_DX px right of the plot, the second RATE_GAP px after the first. */
+const RIGHT_DX = 16
+const RATE_GAP = 14
+/** How far the right axis title sits in from its place after the labels, and the extra space under the key, in px (#T003K). */
+const TITLE_IN = 10
+const KEY_SPACE = 10
+/** The extra space between the left axis title and the agent labels, in px (#T003K). */
+const LEFT_TITLE_SPACE = 10
+
 /** The right axis title's center from the plot's right edge, in px, as in the approved sample. */
 export const TITLE_DX = 63
 
@@ -140,18 +149,27 @@ export function heroSvg(view: View): Card {
   const axes = view.axes ?? stepAxes(undefined, series, view.now)
   const n = view.agents.length
   const usage = view.usage
-  // The left margin holds the axis title and the agent labels (right-aligned at x0 - 10): the
-  // title's center sits 46 px left of the plot, as in the approved sample, its glyphs from 9 px
-  // left of the center to 3 px right of it.
-  const x0 = W >= 700 ? 96 : 64
-  // The right margin holds the right axis labels (about 6.3 px a character) from x1 + 10, then the
+  // The right margin holds the right axis labels (about 6.3 px a character) from x1 + RIGHT_DX, then the
   // axis title, its glyphs 9 px right of its center, and 8 px to the edge. The title's center sits
   // 63 px right of the plot, as in the approved sample (x1 + 63 at 900 px), at every width; a widest
   // label longer than the sample's six characters pushes it on, so it stays 15 px clear of them.
+  // Two left-aligned columns from x1 + RIGHT_DX: all tokens since compact in the token color, and
+  // tokens per minute in the rate color, the token axis divided by RATE_RATIO (#T003K), RATE_GAP px after it.
   const rightLabels = [0, 1, 2, 3, 4].map(i => axisLabel((axes.tokens.max * i) / 4))
+  const rateLabels = [0, 1, 2, 3, 4].map(i => axisLabel((axes.tokens.max * i) / 4 / RATE_RATIO))
   const labelW = Math.ceil(Math.max(...rightLabels.map(label => label.length)) * 6.3)
-  const titleDx = Math.max(TITLE_DX, 10 + labelW + 15)
+  const rateW = Math.ceil(Math.max(...rateLabels.map(label => label.length)) * 6.3)
+  const titleDx = Math.max(TITLE_DX, RIGHT_DX + labelW + RATE_GAP + rateW + 15)
   const x1 = W - Math.max(W >= 700 ? 96 : 0, titleDx + 9 + 8)
+  // The left margin mirrors the right one (#T003K): the left title as far from the card's left
+  // edge as the right title from the right edge, then the gap from the rate labels to the right
+  // title plus LEFT_TITLE_SPACE to the agent labels, and the agent labels right-aligned RIGHT_DX px left of the plot.
+  // A title's glyphs reach 3 px to the plot side of its center.
+  const rightTitleX = x1 + titleDx - TITLE_IN
+  const leftTitleX = W - rightTitleX
+  const titleGap = rightTitleX - 3 - (x1 + RIGHT_DX + labelW + RATE_GAP + rateW)
+  const agentW = Math.ceil(String(axes.agents.max).length * 6.3)
+  const x0 = Math.ceil(leftTitleX + 3 + titleGap + LEFT_TITLE_SPACE + agentW + RIGHT_DX)
   const size = W < 520 ? 12 : 13
   // The totals keep clear of the Live dot (top right) when an agent is live, else of the edge; the
   // word "Live" is drawn only when it has room after them.
@@ -163,13 +181,15 @@ export function heroSvg(view: View): Card {
   const isInline = inlineLeft + KEY.reduce((sum, entry) => sum + keyWidth(entry) + KEY_GAP, -KEY_GAP) <= W - PAD - 14 - 40
   const rows = isInline ? keyRows(inlineLeft, Infinity) : keyRows(24, W - 24)
   const keyY = isInline ? 25.5 : 47
-  const top = isInline ? 56 : 62 + 16 * (rows.length - 1)
+  // KEY_SPACE px more under the key than the approved sample had (#T003K).
+  const top = (isInline ? 56 : 62 + 16 * (rows.length - 1)) + KEY_SPACE
   const bottom = 250
   const height = bottom - top
   const f = (v: number) => String(Math.round(v * 10) / 10)
   const px = (t: number) => x0 + Math.min(1, Math.max(0, (t - from) / WINDOW_MS)) * (x1 - x0)
   const ya = (v: number) => bottom - Math.min(1, v / axes.agents.max) * height
   const yt = (v: number) => bottom - Math.min(1, v / axes.tokens.max) * height
+  const yr = (v: number) => yt(v * RATE_RATIO)
   const parts: string[] = []
 
   parts.push(`<text x="24" y="30" font-size="${size}">${totals.parts.map(part => `<tspan ${INK[part.ink]}>${esc(part.text)}</tspan>`).join('')}</text>`)
@@ -187,21 +207,25 @@ export function heroSvg(view: View): Card {
     }
   })
 
-  // Grid and both axes: 4 intervals; the left axis labels whole numbers only (a top of 6 labels 0, 3, 6).
+  // Grid and the axes, each scale in its trace's color: 4 intervals; the left axis labels whole numbers only (a top of 6 labels 0, 3, 6).
   for (let i = 0; i <= 4; i += 1) {
     const y = bottom - (i / 4) * height
     const agentTick = (axes.agents.max * i) / 4
     parts.push(`<line x1="${x0}" y1="${f(y)}" x2="${x1}" y2="${f(y)}" stroke="${RULE}"/>`)
     if (Number.isInteger(agentTick)) {
-      parts.push(`<text x="${x0 - 10}" y="${f(y + 4)}" text-anchor="end" fill="${LABEL}" font-size="11.5">${agentTick}</text>`)
+      parts.push(`<text x="${x0 - RIGHT_DX}" y="${f(y + 4)}" text-anchor="end" fill="${AGENT_LINE}" class="fa" font-size="11.5">${agentTick}</text>`)
     }
-    parts.push(`<text x="${x1 + 10}" y="${f(y + 4)}" fill="${LABEL}" font-size="11.5">${rightLabels[i]}</text>`)
+    parts.push(`<text x="${x1 + RIGHT_DX}" y="${f(y + 4)}" fill="${TOKEN_LINE}" class="ft" font-size="11.5">${rightLabels[i]}</text>`)
+    parts.push(`<text x="${x1 + RIGHT_DX + labelW + RATE_GAP}" y="${f(y + 4)}" fill="${RATE_LINE}" class="fr" font-size="11.5">${rateLabels[i]}</text>`)
   }
   // Axis titles: the left one reads bottom to top, the right one top to bottom.
+  // The right title sits TITLE_IN px in from its place; the left one sits as far from the card's
+  // left edge as the right one from the right edge (#T003K): each title's glyphs end 9 px past its
+  // center on the edge side.
   const mid = f((top + bottom) / 2)
   parts.push(
-    `<text transform="translate(${x0 - 46} ${mid}) rotate(-90)" text-anchor="middle" fill="${SUB}" font-size="12">Live agents</text>`,
-    `<text transform="translate(${x1 + titleDx} ${mid}) rotate(90)" text-anchor="middle" fill="${SUB}" font-size="12">Tokens</text>`,
+    `<text transform="translate(${f(leftTitleX)} ${mid}) rotate(-90)" text-anchor="middle" fill="${SUB}" font-size="12">Live agents</text>`,
+    `<text transform="translate(${f(rightTitleX)} ${mid}) rotate(90)" text-anchor="middle" fill="${SUB}" font-size="12">Tokens</text>`,
   )
   // The time labels are about 44 px wide; the two in the middle go when the plot is too narrow to keep a gap.
   const isRoomy = (x1 - x0) / 3 >= 78
@@ -261,8 +285,8 @@ export function heroSvg(view: View): Card {
     })
     // Tokens per minute: a line on the token axis, from where the data starts.
     if (ratePts.length > 0) {
-      traces.push(ratePts.map(point => [px(point[0]), yt(point[1])]))
-      parts.push(`<polyline points="${ratePts.map(point => `${f(px(point[0]))},${f(yt(point[1]))}`).join(' ')}" fill="none" stroke="${RATE_LINE}" class="sr" stroke-width="1.25" stroke-linejoin="round"/>`)
+      traces.push(ratePts.map(point => [px(point[0]), yr(point[1])]))
+      parts.push(`<polyline points="${ratePts.map(point => `${f(px(point[0]))},${f(yr(point[1]))}`).join(' ')}" fill="none" stroke="${RATE_LINE}" class="sr" stroke-width="1.25" stroke-linejoin="round"/>`)
     }
     // Agents: a step line.
     if (agentPts.length > 0) {
@@ -289,7 +313,7 @@ export function heroSvg(view: View): Card {
       ends.push({ y: yt(lastToken[1]), text: tokens(lastToken[1]), color: TOKEN_LINE, cls: 'ft' })
     }
     if (lastRate !== undefined) {
-      ends.push({ y: yt(lastRate[1]), text: tokens(lastRate[1]), tail: '/min', color: RATE_LINE, cls: 'fr' })
+      ends.push({ y: yr(lastRate[1]), text: tokens(lastRate[1]), tail: '/min', color: RATE_LINE, cls: 'fr' })
     }
     const dots = endDots(ends, x1, STAGE_BG)
     // A Compacted label where its box clears every Compacted label drawn before it, and the end
@@ -313,9 +337,9 @@ export function heroSvg(view: View): Card {
     }
     const labels = ends.map(end => ({ y: end.y, width: endLabelWidth(end.text, end.tail) }))
     // Over the whole plot width (UCR-218, #T003B), and on into the left margin to 2 px right of the
-    // agent axis labels (right-aligned at x0 - 10): at 300 px the plot is about 156 px wide, and the
+    // agent axis labels (right-aligned at x0 - RIGHT_DX): at 300 px the plot is about 156 px wide, and the
     // clear place of a crowded state can start left of it.
-    const places = placeEndLabels(labels, { traces, dots: dots.boxes, marks: obstacles, soft: dashes }, { right: x1 - 10, minY: top + 10, maxY: bottom - 4, gap: 14, left: x0 - 8, dotX: x1 })
+    const places = placeEndLabels(labels, { traces, dots: dots.boxes, marks: obstacles, soft: dashes }, { right: x1 - 10, minY: top + 10, maxY: bottom - 4, gap: 14, left: x0 - RIGHT_DX + 2, dotX: x1 })
     // A label placed far from its dot always gets a thin leader to it (UCR-251), drawn under the
     // Compacted labels, the dots and the label halos, so a leader never strikes through letters.
     const boxes = places.map((place, i) => labelBox(place.y, labels[i]!.width, place.right))

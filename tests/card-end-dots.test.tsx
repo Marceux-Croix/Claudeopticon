@@ -3,8 +3,12 @@ import { expect, test } from 'claude-code/testing'
 import { dotGroups, endDots, MERGE_PX } from '../hooks/card-end-dots'
 import { setWidth } from '../hooks/card-stage'
 import { heroSvg } from '../hooks/hero-card'
+import { QUANT_MS, stepAxes } from '../hooks/series'
+import type { Series } from '../hooks/series'
+import { buildView } from '../hooks/view-model'
 import { heroStates } from '../scripts/sample'
 
+const MIN = 60_000
 const GREEN = { color: '#A3E635', cls: 'ft' }
 const BLUE = { color: '#60A5FA', cls: 'fr' }
 const YELLOW = { color: '#FACC15', cls: 'fa' }
@@ -39,7 +43,23 @@ test('UCR-112 the late-compact sample draws no two plain end dots on top of each
     for (let i = 1; i < ys.length; i += 1) {
       expect(ys[i]! - ys[i - 1]!).toBeGreaterThanOrEqual(MERGE_PX)
     }
-    // The equal green and blue ends (both near zero) share the split dot.
+    // #T003K: the rate is drawn at 10 x its value, so the green and blue ends of this sample no longer coincide: three plain dots, no split one.
+    expect(ys.length).toBe(3)
+    expect(svg).not.toMatch(/<path d="[^"]+" fill="#A3E635" class="ft"\/>/)
+  }
+  setWidth(384)
+})
+
+test('UCR-112 #T003K a state with the token count equal to 10 x the rate draws the green and blue ends as one split dot, at every width', () => {
+  // 900k tokens since compact; the last minute holds one rise of 90k, so the rate is 90k a minute and 10 x 90k is the count.
+  const now = 100 * QUANT_MS
+  const series: Series = { agents: [[now - 20 * MIN, 2]], tokens: [[now - 20 * MIN, 0], [now - 10 * MIN, 810_000], [now - 45_000, 900_000]], compacts: [] }
+  for (const width of [300, 384, 520, 720, 960]) {
+    setWidth(width)
+    const svg = heroSvg({ ...buildView([], [], now), series, axes: stepAxes(undefined, series, now), usage: { tokens: 900_000, since: 0 } }).source
+    // The agent end stays a plain dot; the green and blue ends share one ring with a wedge each.
+    expect(svg.match(/<circle cx="[\d.]+" cy="[\d.]+" r="3.5"/g)?.length).toBe(1)
+    expect(svg.match(/<circle cx="[\d.]+" cy="[\d.]+" r="5.5" fill="#07080F"\/>/g)?.length).toBe(1)
     expect(svg).toMatch(/<path d="[^"]+" fill="#A3E635" class="ft"\/>/)
     expect(svg).toMatch(/<path d="[^"]+" fill="#60A5FA" class="fr"\/>/)
   }

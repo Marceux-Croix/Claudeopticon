@@ -541,8 +541,8 @@ test('L3R3-170X a source name with a bidi override and a zero-width joiner is re
 
 // ---------------------------------------------------------------- the Queued column
 
-/** Property: the queue button writes `- [>]`, and a queued ticket offers open, start and send. */
-test('the queue button writes [>], and a queued ticket offers back to open, start and send', async ($, on) => {
+/** Property: the queue button writes `- [>]`, and a queued ticket offers open, start, done and send. */
+test('the queue button writes [>], and a queued ticket offers back to open, start, done and send', async ($, on) => {
   const clock = mock.clock(on)
   const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 Fix the parser' }
   repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
@@ -557,7 +557,7 @@ test('the queue button writes [>], and a queued ticket offers back to open, star
     drawn = JSON.stringify(await ui.findAll({ type: 'Button' }))
   }
   // The send button's key has no action name.
-  for (const key of ['ticket-reopen-TODO.md-#t1', 'ticket-start-TODO.md-#t1', 'ticket-TODO.md-#t1']) {
+  for (const key of ['ticket-reopen-TODO.md-#t1', 'ticket-start-TODO.md-#t1', 'ticket-done-TODO.md-#t1', 'ticket-TODO.md-#t1']) {
     expect(drawn).toContain(`"${key}"`)
   }
   expect(drawn).not.toContain('ticket-queue-TODO.md-#t1')
@@ -616,4 +616,14 @@ test('a reply that puts an open ticket off until later brings a deferred note, o
   await step()
   const second = (await $.tool.call({ tool: 'Read', file_path: '/repo/x.ts' } as never)) as { context?: string[] }
   expect((second.context ?? []).join('\n')).not.toContain('off until later')
+})
+
+/** Property: an open ticket has a done button, which writes `- [x]`. */
+test('an open ticket closes with its done button', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 Fix the parser' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  const ui = await open($)
+  await ui.press({ key: 'ticket-done-TODO.md-#t1' })
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [x] #T1 Fix the parser')
 })

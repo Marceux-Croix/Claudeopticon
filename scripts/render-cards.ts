@@ -200,8 +200,8 @@ function pane(): string {
   const colW = (WIDTH - (SIDE_BY - 1) * GAP) / SIDE_BY
   const columns = [
     { title: 'In progress', tickets: progressTickets, glyphs: ['≡', '↩', '✓', '?'] },
-    { title: 'Queued', tickets: queuedTickets, glyphs: ['↩', '◐', '⋙'] },
-    { title: 'Open', tickets: openTickets, glyphs: ['≡', '◐', '⋙'] },
+    { title: 'Queued', tickets: queuedTickets, glyphs: ['↩', '◐', '✓', '⋙'] },
+    { title: 'Open', tickets: openTickets, glyphs: ['≡', '◐', '✓', '⋙'] },
   ]
   let bottom = y
   columns.forEach((column, c) => {

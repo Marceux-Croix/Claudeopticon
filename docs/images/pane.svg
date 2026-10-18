@@ -377,9 +377,11 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="698" y="1579" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
 <text x="712" y="1597" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">⋙</text>
 <rect x="664" y="1579" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="678" y="1597" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">◐</text>
+<text x="678" y="1597" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">✓</text>
 <rect x="630" y="1579" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="644" y="1597" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">↩</text>
+<text x="644" y="1597" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">◐</text>
+<rect x="596" y="1579" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="610" y="1597" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">↩</text>
 <svg x="386" y="1629" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Queued: Run the release checklist">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -399,9 +401,11 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="698" y="1717" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
 <text x="712" y="1735" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">⋙</text>
 <rect x="664" y="1717" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="678" y="1735" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">◐</text>
+<text x="678" y="1735" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">✓</text>
 <rect x="630" y="1717" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="644" y="1735" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">↩</text>
+<text x="644" y="1735" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">◐</text>
+<rect x="596" y="1717" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="610" y="1735" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">↩</text>
 <text x="20" y="1999" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="600" fill="rgba(255,255,255,.55)">Open  3</text>
 <svg x="20" y="2019" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Open: Draft the release notes">
 <style>
@@ -422,9 +426,11 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="332" y="2107" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
 <text x="346" y="2125" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">⋙</text>
 <rect x="298" y="2107" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="312" y="2125" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">◐</text>
+<text x="312" y="2125" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">✓</text>
 <rect x="264" y="2107" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="278" y="2125" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">≡</text>
+<text x="278" y="2125" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">◐</text>
+<rect x="230" y="2107" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="244" y="2125" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">≡</text>
 <svg x="20" y="2157" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Open: Review the error messages">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -444,9 +450,11 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="332" y="2245" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
 <text x="346" y="2263" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">⋙</text>
 <rect x="298" y="2245" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="312" y="2263" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">◐</text>
+<text x="312" y="2263" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">✓</text>
 <rect x="264" y="2245" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="278" y="2263" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">≡</text>
+<text x="278" y="2263" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">◐</text>
+<rect x="230" y="2245" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="244" y="2263" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">≡</text>
 <svg x="20" y="2295" xmlns="http://www.w3.org/2000/svg" width="354" height="126" viewBox="0 0 354 126" role="img" aria-label="Open: Announce the release">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -466,7 +474,9 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="332" y="2383" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
 <text x="346" y="2401" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">⋙</text>
 <rect x="298" y="2383" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="312" y="2401" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">◐</text>
+<text x="312" y="2401" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">✓</text>
 <rect x="264" y="2383" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
-<text x="278" y="2401" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">≡</text>
+<text x="278" y="2401" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">◐</text>
+<rect x="230" y="2383" width="28" height="26" rx="6" fill="rgba(255,255,255,.1)"/>
+<text x="244" y="2401" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13" fill="#E2E2E5">≡</text>
 </svg>

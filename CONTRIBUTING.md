@@ -34,11 +34,11 @@ Each file in `hooks/` has one responsibility, which its first line states. Befor
 
 - `register.tsx` is the hooks module that `hooks.json` loads. It holds the hooks, the tools, every function that calls the engine through `$`, and the session state those functions write. `claude plugin validate` follows `$` only into functions in that file. Never add pure logic to it.
 - The other modules hold pure logic, types and constants, and never take `$`.
-- Todo text: `todo-markdown.ts`, `markdown-blocks.ts`, `html-blocks.ts`, `example-end.ts`, `todo-read.ts`, `unread-files.ts`, `unread-folders.ts`, `ticket-ids.ts`, `numbering.ts`, `archive-blocks.ts`, `consolidate-text.ts`, `consolidate-marks.ts`, `duplicate-tickets.ts`, `ticket-boxes.ts`, `ticket-lookup.ts`.
+- Todo text: `todo-markdown.ts`, `markdown-blocks.ts`, `html-blocks.ts`, `example-end.ts`, `todo-read.ts`, `unread-files.ts`, `unread-folders.ts`, `ticket-ids.ts`, `numbering.ts`, `archive-blocks.ts`, `consolidate-text.ts`, `consolidate-marks.ts`, `duplicate-tickets.ts`, `ticket-boxes.ts`, `ticket-lookup.ts`, `stop-queue.ts`.
 - ID claims: `id-blocks.ts`, `block-claim.ts`, `git-file.ts`.
 - Folders, paths and limits: `repo-folders.ts`, `path-forms.ts`, `platform-commands.ts`, `write-lock.ts`, `time-limit.ts`, `backoff.ts`, `key-prune.ts`, `clock-elapsed.ts`.
 - Agents and links: `links.ts`, `claim-score.ts`, `claim-keeping.ts`, `agent-match.ts`, `agent-identity.ts`, `agent-respawn.ts`, `agent-ends.ts`, `row-equality.ts`, `progress-report.ts`, `tool-calls.ts`, `secrets.ts`.
-- Notes and prompts for Claude: `claude-notes.ts`, `note-quotes.ts`, `ticket-prompts.ts`, `rules.ts`.
+- Notes and prompts for Claude: `claude-notes.ts`, `note-quotes.ts`, `ticket-prompts.ts`, `rules.ts`, `deferred-tickets.ts`.
 - The view: `view-model.ts`, `categories.ts`, `sort-queue.ts`, `ticket-actions.ts`, `ticket-spaces.ts`, `orchestrator-history.ts`, `terminal-text.ts`, `item-keys.ts`, `normalize.ts`.
 - The store: `kept-records.ts`, `token-usage.ts`.
 - The cards: `card-types.ts`, `card-stage.ts`, `card-text.ts`, `card-format.ts`, `card-parts.ts`, `series.ts`, `card-end-labels.ts`, `card-end-dots.ts`, `hero-card.ts`, `todo-cards.ts`, `agent-cards.ts`.

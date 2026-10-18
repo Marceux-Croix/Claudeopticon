@@ -51,7 +51,7 @@ export function ticketSvg(item: ItemView, view: View, width: number, info: { id?
   }
   x += 16
   // Status badge, right
-  const status = info.isSent && item.status !== 'completed' ? { label: 'Sent', kind: 'neutral' as const } : item.status === 'completed' ? { label: 'Done', kind: 'ok' as const } : item.status === 'in_progress' ? { label: 'In progress', kind: 'live' as const } : { label: 'Open', kind: 'neutral' as const }
+  const status = info.isSent && item.status !== 'completed' ? { label: 'Sent', kind: 'neutral' as const } : item.status === 'completed' ? { label: 'Done', kind: 'ok' as const } : item.status === 'in_progress' ? { label: 'In progress', kind: 'live' as const } : item.status === 'queued' ? { label: 'Queued', kind: 'neutral' as const } : { label: 'Open', kind: 'neutral' as const }
   const badgeRight = w - pad
   parts.push(badge(badgeRight, top + 2, status.label, status.kind))
   const room = badgeRight - badgeWidth(status.label) - 8

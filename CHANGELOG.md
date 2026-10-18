@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0
+
+### Features
+
+- The board has a **Queued** column between In progress and Open, for the work slated next. A queued ticket is `- [>]`. `[>]` no longer reads as in progress.
+- A new button, `≡` Move to queued, is on open tickets and tickets in progress. Queued tickets have `↩` Move back to open, `◐` Mark in progress and `⋙` Send to Claude. `move_ticket` takes `queued`.
+- The rules tell Claude to mark a ticket queued when it decides the ticket comes next or waits for an event, and when it stops a ticket it still plans to do.
+- When the main conversation sets a ticket from `[~]` back to `[ ]`, the mod writes `[>]` instead and tells Claude. Setting a queued ticket to `[ ]` keeps it open.
+- When Claude's reply puts an open ticket off until later by its ID ("after X lands, #T0042"), the mod asks Claude once to mark it queued. It never moves a ticket on a reply.
+- Category groups and the list view sort queued after in progress and before open. Search finds queued tickets.
+
 ## 0.8.1
 
 ### Features

@@ -1,12 +1,12 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { AgentRow, TodoItem } from '../types'
-import { DATA_MARK, endedNote, labelNote, moveLine, movesNote, NEXT_IDS_SHOWN, nextIdsLine, noteName, NUDGE_REPEAT_MS, NUDGE_TICKETS, nudgeList, numberedLine, numberedNote, quoteTicket, removedNote, renameNote, stillOpenNote, withoutTold } from '../hooks/claude-notes'
+import { DATA_MARK, deferredNote, endedNote, labelNote, moveLine, movesNote, NEXT_IDS_SHOWN, nextIdsLine, noteName, NUDGE_REPEAT_MS, NUDGE_TICKETS, nudgeList, numberedLine, numberedNote, quoteTicket, removedNote, renameNote, stillOpenNote, stoppedNote, withoutTold } from '../hooks/claude-notes'
 import { statusPrompt, ticketPrompt } from '../hooks/ticket-prompts'
 import { FUZZ_CODE_POINTS, rawBreaks } from './fixtures/line-terminators'
 
 test('the one-time notes are undefined for no lines, and list each line after a header otherwise', async () => {
-  for (const note of [removedNote, numberedNote, renameNote, movesNote]) {
+  for (const note of [removedNote, numberedNote, renameNote, movesNote, stoppedNote, deferredNote]) {
     expect(note([])).toBeUndefined()
     const text = note(['line one', 'line two'])!
     const rows = text.split('\n')
@@ -26,6 +26,17 @@ test('movesNote ends with the for-information line after the moves', async () =>
   expect(rows[3]).toContain('for your information only')
   expect(rows[3]).toContain('move_ticket')
   expect(rows[4]).toBe(DATA_MARK)
+})
+
+test('stoppedNote says the mod queued the tickets and how to drop one; deferredNote asks Claude to queue the work slated next', () => {
+  const stopped = stoppedNote(['- "a" in "x.md": in progress -> queued'])!.split('\n')
+  expect(stopped[0]).toContain('`- [>]`')
+  expect(stopped[2]).toContain('`- [ ]` again')
+  expect(stopped.at(-1)).toBe(DATA_MARK)
+  const deferred = deferredNote(['- "b" in "x.md"'])!.split('\n')
+  expect(deferred[0]).toContain('Queued column')
+  expect(deferred[2]).toContain('ignore this note')
+  expect(deferred.at(-1)).toBe(DATA_MARK)
 })
 
 // nextIdsLine names the IDs the offer picked; it is the one builder of the prompt line now.

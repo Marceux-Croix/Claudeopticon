@@ -1,4 +1,4 @@
-/** The notes the mod queues for Claude: renames, removals, new IDs, user moves, open tickets, agent labels and the next free IDs. */
+/** The notes the mod queues for Claude: renames, removals, new IDs, user moves, queued and deferred tickets, open tickets, agent labels and the next free IDs. */
 
 import type { AgentRow, TodoItem } from '../types'
 import { noteName, quoteName, quoteText } from './note-quotes'
@@ -70,6 +70,26 @@ export function movesNote(moves: readonly string[]): string | undefined {
   )
 }
 
+/** The note after the mod moved tickets that Claude took out of progress to queued. */
+export function stoppedNote(lines: readonly string[]): string | undefined {
+  return note(
+    'You set these todo items from in progress back to open. The Claudeopticon pane (the claudeopticon mod) wrote them as queued (`- [>]`) instead, because unfinished work is usually next work:',
+    lines,
+    'If you dropped one and will not do it next, set its box to `- [ ]` again: the mod only queues a ticket that leaves in progress.',
+    DATA_MARK,
+  )
+}
+
+/** The note after Claude's own text put open tickets off until later. */
+export function deferredNote(lines: readonly string[]): string | undefined {
+  return note(
+    'Your last reply put these open todo items off until later. If one is the work slated next, mark it queued (`- [>]`) so the Claudeopticon pane shows it in its Queued column:',
+    lines,
+    'If none is next, ignore this note.',
+    DATA_MARK,
+  )
+}
+
 /** The most tickets a close-the-work nudge names. */
 export const NUDGE_TICKETS = 5
 /** How long a ticket named in the next-prompt nudge stays unnamed: 30 minutes. */
@@ -101,7 +121,7 @@ export function stillOpenNote(items: readonly TodoItem[]): string | undefined {
 // ---------------------------------------------------------------- the waiting lines
 
 /** The lines of each note waiting for Claude, as the session keeps them. */
-export type PendingNotes = { moves: readonly string[]; renames: readonly string[]; numbered: readonly string[]; removed: readonly string[]; ended: readonly string[] }
+export type PendingNotes = { moves: readonly string[]; renames: readonly string[]; numbered: readonly string[]; removed: readonly string[]; ended: readonly string[]; stopped: readonly string[]; deferred: readonly string[] }
 
 /**
  * `lines` without one copy of each line `told` holds: what is left to tell once a note

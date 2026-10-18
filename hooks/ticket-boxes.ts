@@ -4,8 +4,8 @@ import type { ItemStatus } from './card-types'
 import { itemKey, storedKey } from './item-keys'
 import { bare, exampleMask, itemsAt } from './todo-markdown'
 
-const BOXES: Record<ItemStatus, string> = { pending: ' ', in_progress: '~', completed: 'x' }
-export const STATUS_WORDS: Record<ItemStatus, string> = { pending: 'open', in_progress: 'in progress', completed: 'done' }
+const BOXES: Record<ItemStatus, string> = { pending: ' ', queued: '>', in_progress: '~', completed: 'x' }
+export const STATUS_WORDS: Record<ItemStatus, string> = { pending: 'open', queued: 'queued', in_progress: 'in progress', completed: 'done' }
 
 /**
  * What the board drew for an item: its text, the status of its box in the file, and (when the scan
@@ -189,7 +189,7 @@ export function setBox(markdown: string, key: string, status: ItemStatus, drawn?
   return lines.join('\n')
 }
 
-const STATUS_NAMES: Readonly<Record<string, ItemStatus>> = { open: 'pending', in_progress: 'in_progress', done: 'completed' }
+const STATUS_NAMES: Readonly<Record<string, ItemStatus>> = { open: 'pending', queued: 'queued', in_progress: 'in_progress', done: 'completed' }
 
 /**
  * The status a move_ticket `to` names, or undefined for any other value. An own key only:

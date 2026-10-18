@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import { addToArchive, closedBlocks, removeBlocks } from '../hooks/archive-blocks'
 import { itemKey } from '../hooks/item-keys'
 import { setBox } from '../hooks/ticket-boxes'
-import { CHECKBOX, codeSpansOut, exampleMask, expandTabs, lineOwnIds, parseTodo, plainText } from '../hooks/todo-markdown'
+import { CHECKBOX, codeSpansOut, count, exampleMask, expandTabs, lineOwnIds, parseTodo, plainText } from '../hooks/todo-markdown'
 
 const PLAN = ['# Plan', '- [x] Write code', '- [~] #T2 Run the test suite', '- [ ] Ship the release build', 'prose', '  - [X] nested'].join('\n')
 
@@ -12,6 +12,12 @@ test('parseTodo reads states and item IDs', async () => {
   expect(items.map(item => item.status)).toEqual(['completed', 'in_progress', 'pending', 'completed'])
   expect(items[1]?.id).toBe('T2')
   expect(items[0]?.id).toBeUndefined()
+})
+
+test('parseTodo reads [>] as queued, and count counts it neither done nor active', () => {
+  const items = parseTodo('- [>] #T1 next\n- [~] #T2 now')
+  expect(items.map(item => item.status)).toEqual(['queued', 'in_progress'])
+  expect(count(items)).toEqual({ done: 0, active: 1, total: 2 })
 })
 
 test('item text drops Markdown bold and strike markers, and keeps the rest', async () => {

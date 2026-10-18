@@ -82,12 +82,13 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     const own = count(file.items)
     const inArchive = file.isArchived === true ? 0 : archiveDone(file)
     const indexed = file.items.map((item, index) => ({ file, item, owners: itemOwners.get(`${fileId(file)}:${index}`) ?? [] }))
-    // An open ticket that an agent holds shows in In progress (ticketColumns), so it counts there.
-    const held = indexed.filter(one => one.item.status === 'pending' && one.owners.length > 0).length
+    // An open or queued ticket that an agent holds shows in In progress (ticketColumns), so it counts there.
+    const held = indexed.filter(one => (one.item.status === 'pending' || one.item.status === 'queued') && one.owners.length > 0).length
     const [done, active, total] = [own.done + inArchive, own.active + held, own.total + inArchive]
     const linked = indexed.filter(one => one.owners.length > 0)
     const rest = [
       ...indexed.filter(one => one.item.status === 'in_progress'),
+      ...indexed.filter(one => one.item.status === 'queued'),
       ...indexed.filter(one => one.item.status === 'pending'),
       ...indexed.filter(one => one.item.status === 'completed'),
     ].filter(one => one.owners.length === 0)
@@ -237,14 +238,14 @@ export function boardTargets(entries: readonly { file: FileView; prefix: string 
 export type TicketColumn = { name: string; items: ItemView[] }
 
 /**
- * A file's tickets as board columns: In progress and Open; done tickets have no column (Show
- * completed opens them). An open ticket that a
- * live agent works on goes in In progress, and shows as in progress, though its box is still
- * `- [ ]`. Within a column, the tickets an agent works on come first, then by category in the
+ * A file's tickets as board columns: In progress, Queued (`- [>]`, the work slated next) and Open;
+ * done tickets have no column (Show completed opens them). An open or queued ticket that a live
+ * agent works on goes in In progress, and shows as in progress, though its box is still `- [ ]` or
+ * `- [>]`. Within a column, the tickets an agent works on come first, then by category in the
  * order the categories were made, then in file order.
  */
 export function ticketColumns(given: readonly ItemView[], current: CategoryBook): TicketColumn[] {
-  const items = given.map(item => (item.status === 'pending' && item.owners.length > 0 ? { ...item, status: 'in_progress' as const, isHeld: true as const } : item))
+  const items = given.map(item => ((item.status === 'pending' || item.status === 'queued') && item.owners.length > 0 ? { ...item, status: 'in_progress' as const, heldFrom: item.status } : item))
   const rank = (item: ItemView) => {
     const category = categoryOf(current, storedKey(item.key))
     const at = category === undefined ? current.categories.length : current.categories.indexOf(category)
@@ -260,5 +261,20 @@ export function ticketColumns(given: readonly ItemView[], current: CategoryBook)
       .map(({ item }) => item),
   })
 
-  return [column('In progress', 'in_progress'), column('Open', 'pending')]
+  return [column('In progress', 'in_progress'), column('Queued', 'queued'), column('Open', 'pending')]
+}
+
+/**
+ * How many board columns sit side by side in `width` px: the most, up to `columns`, that each keep
+ * `min` px for a ticket with `gap` px between them; 1 when none does. The columns past that count
+ * wrap to the next row.
+ */
+export function columnsThatFit(width: number, columns: number, gap: number, min: number): number {
+  for (let n = Math.max(1, columns); n > 1; n -= 1) {
+    if (Math.floor((width - (n - 1) * gap) / n) >= min) {
+      return n
+    }
+  }
+
+  return 1
 }

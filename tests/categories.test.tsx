@@ -272,6 +272,13 @@ test('VJ-127 bookKeptBy keeps the keys of folders left out, and drops stale keys
 const PROTO_TEXTS = ['Fix the parser', 'constructor', 'Constructor', '**constructor**', '__proto__', 'toString', 'hasOwnProperty', 'Ship it']
 const protoFiles = () => todoLedger(buildView([{ name: 'TODO.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo(PROTO_TEXTS.map(text => `- [ ] ${text}`).join('\n')) }], [], 0), true)
 
+test('categoryGroups orders each group linked, in progress, queued, open, done', () => {
+  const list: TodoFile[] = [{ name: 'A.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo('- [x] #T1 done\n- [ ] #T2 open\n- [>] #T3 queued\n- [~] #T4 working') }]
+  const view = buildView(list, [], 0)
+  const files = categoryGroups(todoLedger(view, true), { categories: [], items: {} })
+  expect(files[0]?.items.map(item => item.status)).toEqual(['in_progress', 'queued', 'pending', 'completed'])
+})
+
 test('categoryGroups draws every ticket named after a prototype member, sorted or not, and filterNames offers Not sorted yet', () => {
   for (const book of [emptyBook(), { categories: ['Parser'], items: { 'fix the parser': 'Parser' } }]) {
     const out = categoryGroups(protoFiles(), book)[0]!

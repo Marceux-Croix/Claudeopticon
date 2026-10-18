@@ -29,7 +29,7 @@ import { elapsedSince } from './clock-elapsed'
 import type { ClaimFolder } from './claim-keeping'
 import { bestMatches } from './claim-score'
 import type { PendingNotes } from './claude-notes'
-import { DATA_MARK, endedNote, hasLabel, labelNote, moveLine, movesNote, NEXT_IDS_SHOWN, nextIdsLine, noteName, NUDGE_REPEAT_MS, NUDGE_TICKETS, numberedLine, numberedNote, quoteName, quoteTicket, removedNote, renameNote, stillOpenNote, withoutTold } from './claude-notes'
+import { DATA_MARK, deferredNote, endedNote, hasLabel, labelNote, moveLine, movesNote, NEXT_IDS_SHOWN, nextIdsLine, noteName, NUDGE_REPEAT_MS, NUDGE_TICKETS, numberedLine, numberedNote, quoteName, quoteTicket, removedNote, renameNote, stillOpenNote, stoppedNote, withoutTold } from './claude-notes'
 import { mergeMarks, readKeptMarks, retryStep } from './consolidate-marks'
 import type { CopyMark } from './consolidate-marks'
 import { appendSections, copyLines, destOf, eolOf, isUnsafeHeadingName, itemLines, keepsEveryItem, renameLines, renumberLines, sectionCount, sectionText } from './consolidate-text'
@@ -63,7 +63,7 @@ import { addAloneTry, isItemsFailure, nextBatchSize, nextSortBatch, nextThrows, 
 import type { BatchThrows } from './sort-queue'
 import type { Axes, Series } from './series'
 import { bar, clip, textChildren } from './terminal-text'
-import { DONE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, TICKET_GLYPHS } from './ticket-actions'
+import { DONE_ACTION, QUEUE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, TICKET_GLYPHS } from './ticket-actions'
 import type { TicketAction } from './ticket-actions'
 import { drawnPlaces, isDrawnLine, setBox, statusNamed, STATUS_WORDS } from './ticket-boxes'
 import type { DrawnPlace } from './ticket-boxes'
@@ -82,10 +82,12 @@ import { isSkipped, nextStreak } from './unread-files'
 import type { UnreadStreak } from './unread-files'
 import { foldersWithUnread } from './unread-folders'
 import { callDetail, callSummary, describeCall } from './tool-calls'
-import { boardTargets, buildView, ledger, searchTodo, ticketColumns, todoLedger } from './view-model'
+import { boardTargets, buildView, columnsThatFit, ledger, searchTodo, ticketColumns, todoLedger } from './view-model'
 import type { OrchestratorState } from './view-model'
 import { failAfter, inTime, NoAnswer, RUN_LIMIT_MS, STORE_LIMIT_MS, TIMED_OUT } from './time-limit'
 import { tryWriteLock, withWriteLock } from './write-lock'
+import { deferredIds } from './deferred-tickets'
+import { stoppedKeys } from './stop-queue'
 
 const PANE = 'claudeopticon'
 const TITLE = 'Claudeopticon'
@@ -4160,7 +4162,7 @@ async function moveTicket($: EngineInterface, input: Record<string, unknown>): P
   const to = statusNamed(input.to)
   const reason = typeof input.reason === 'string' ? input.reason : ''
   if (to === undefined) {
-    return 'Not moved: "to" must be open, in_progress or done.'
+    return 'Not moved: "to" must be open, queued, in_progress or done.'
   }
   // A scan that throws read nothing new, so the unread places of an older pass say nothing about this one.
   const isScanned = await scan($).then(
@@ -4264,7 +4266,7 @@ async function moveTicket($: EngineInterface, input: Record<string, unknown>): P
 
 /** The lists of note lines waiting for Claude, as they are now: what queuedNotes builds from them now. */
 function pendingNotes(): PendingNotes {
-  return { moves: pendingMoves, renames: pendingRenames, numbered: pendingNumbered, removed: pendingRemoved, ended: pendingEnded }
+  return { moves: pendingMoves, renames: pendingRenames, numbered: pendingNumbered, removed: pendingRemoved, ended: pendingEnded, stopped: pendingStopped, deferred: pendingDeferred }
 }
 
 /**
@@ -4277,6 +4279,8 @@ function forgetTold(told: PendingNotes): void {
   pendingNumbered = withoutTold(pendingNumbered, told.numbered)
   pendingRemoved = withoutTold(pendingRemoved, told.removed)
   pendingEnded = withoutTold(pendingEnded, told.ended)
+  pendingStopped = withoutTold(pendingStopped, told.stopped)
+  pendingDeferred = withoutTold(pendingDeferred, told.deferred)
 }
 
 /** Puts the lines `told` held back in front of the waiting lists: their note never reached Claude. */
@@ -4286,11 +4290,13 @@ function restoreTold(told: PendingNotes): void {
   pendingNumbered = [...told.numbered, ...pendingNumbered]
   pendingRemoved = [...told.removed, ...pendingRemoved]
   pendingEnded = [...told.ended, ...pendingEnded]
+  pendingStopped = [...told.stopped, ...pendingStopped]
+  pendingDeferred = [...told.deferred, ...pendingDeferred]
 }
 
 /** The notes waiting for Claude: the moves made by hand, the IDs a consolidation renumbered, and the agents that ended with tickets left open. */
 function queuedNotes(): string[] {
-  return [movesNote(pendingMoves), renameNote(pendingRenames), removedNote(pendingRemoved), numberedNote(pendingNumbered), ...pendingEnded].filter((note): note is string => note !== undefined)
+  return [movesNote(pendingMoves), stoppedNote(pendingStopped), deferredNote(pendingDeferred), renameNote(pendingRenames), removedNote(pendingRemoved), numberedNote(pendingNumbered), ...pendingEnded].filter((note): note is string => note !== undefined)
 }
 
 /** Notes about ended agents, waiting for Claude. Cleared with the other pending notes. */
@@ -4364,7 +4370,7 @@ async function markTicket($: EngineInterface, item: ItemView, status: ItemStatus
       // The press writes only the line the board drew: the same text and box. A board that is out of
       // date (a line added or removed above identical lines moves their place numbers) is refused, never the neighbor written.
       // Identical lines in two sections differ by their place: the heading above and the rank under it.
-      if (!isDrawnLine(text, key, { text: item.text, status: item.isHeld === true ? 'pending' : item.status, ...placeOfLine(path, key) })) {
+      if (!isDrawnLine(text, key, { text: item.text, status: item.heldFrom ?? item.status, ...placeOfLine(path, key) })) {
         return 'moved' as const
       }
       const next = setBox(text, key, status)
@@ -4401,10 +4407,83 @@ async function markTicket($: EngineInterface, item: ItemView, status: ItemStatus
     return
   }
   userMoves.set(`${path}:${item.localKey ?? item.key}`, status)
-  pendingMoves = [...pendingMoves, moveLine(item.text, item.path ?? path, STATUS_WORDS[item.isHeld === true ? 'pending' : item.status], STATUS_WORDS[status])]
+  pendingMoves = [...pendingMoves, moveLine(item.text, item.path ?? path, STATUS_WORDS[item.heldFrom ?? item.status], STATUS_WORDS[status])]
   showToast($, `${toast}: ${ticketSummary(item.text, 60)}`)
   // The box is written: a scan that fails must not make the press read as failed.
   await scan($).catch(() => undefined)
+}
+
+// ---------------------------------------------------------------- queued tickets
+
+/** The tickets the mod queued after Claude took them out of progress, told with the next tool result or prompt. */
+let pendingStopped: string[] = []
+/** The open tickets Claude's text put off until later, told with the next tool result or prompt. */
+let pendingDeferred: string[] = []
+/** The most characters of one model step's text read for deferred tickets: a reply past it is read only to there. */
+const SAID_CHARS = 20_000
+/** The tickets already named in a deferred note this session, by item key: each is named once. */
+const deferredNamed = new Set<string>()
+
+/** The live files that hold the todo file at `path`. */
+function filesAt(path: string): TodoFile[] {
+  return todoFiles.filter(file => file.isArchived !== true && (path === `${file.folder}/${file.name}` || path.endsWith(`/${filePath(file)}`)))
+}
+
+/**
+ * Writes `- [>]` for the tickets of the file at `path` whose kept key is in `keys`: the ones the main
+ * conversation's edit took from in progress to open (stoppedKeys). Under the writer lock, from a fresh
+ * read; a box that changed since is left. Each queued ticket goes in the stopped note for Claude.
+ */
+async function queueStopped($: EngineInterface, path: string, keys: readonly string[]): Promise<void> {
+  const file = filesAt(path)[0]
+  if (file === undefined) {
+    return
+  }
+  const wanted = new Set(keys)
+  const items = file.items.filter(item => wanted.has(keptKey(file, item)))
+  const target = `${file.folder}/${file.name}`
+  const written = await withWriteLock(async () => {
+    if (!(await isTrustedDir($, file.folder)) || !(await isPlainFile($, target))) {
+      return []
+    }
+    const text = await readStrict($, target)
+    let next = text
+    const done: TodoItem[] = []
+    for (const item of items) {
+      const changed = setBox(next, itemKey(item), 'queued', { text: item.text, status: 'pending' })
+      if (changed !== undefined) {
+        next = changed
+        done.push(item)
+      }
+    }
+    if (done.length === 0) {
+      return []
+    }
+    const put = await writeIfUnchanged($, target, text, next, { folder: file.folder })
+
+    return put.kind === 'written' ? done : []
+  }).catch(() => [] as TodoItem[])
+  if (written.length > 0) {
+    pendingStopped = [...pendingStopped, ...written.map(item => moveLine(item.text, path, STATUS_WORDS.in_progress, STATUS_WORDS.queued))]
+    await scan($).catch(() => undefined)
+  }
+}
+
+/** Queues a deferred note for each open ticket that `text`, the main conversation's reply, puts off until later; each ticket once a session. */
+function noteDeferred(text: string): void {
+  const ids = new Set(deferredIds(text))
+  if (ids.size === 0) {
+    return
+  }
+  for (const file of todoFiles.filter(one => one.isArchived !== true)) {
+    for (const item of file.items) {
+      const key = keptKey(file, item)
+      if (item.status === 'pending' && item.id !== undefined && ids.has(item.id.toUpperCase()) && !deferredNamed.has(key)) {
+        deferredNamed.add(key)
+        pendingDeferred = [...pendingDeferred, `- ${quoteTicket(item.text, 160)} in ${quoteName(filePath(file))}`]
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------- orchestrator tickets
@@ -4417,8 +4496,8 @@ function ticketStatuses(path?: string): Map<string, ItemStatus> {
   for (const file of same.length > 0 ? same : files) {
     for (const item of file.items) {
       const key = keptKey(file, item)
-      // One key in two files: in progress wins over open over done.
-      const rank = (status?: ItemStatus) => (status === 'in_progress' ? 2 : status === 'pending' ? 1 : 0)
+      // One key in two files: in progress wins over queued over open over done.
+      const rank = (status?: ItemStatus) => (status === 'in_progress' ? 3 : status === 'queued' ? 2 : status === 'pending' ? 1 : 0)
       if (rank(item.status) >= rank(statuses.get(key))) {
         statuses.set(key, item.status)
       }
@@ -4489,7 +4568,7 @@ function pruneTickets(): boolean {
     } else {
       claimMissedAt.set(key, missedAt)
     }
-    if ((missedAt !== undefined && !keepsMissing(key, unreadFolders, scanFolders, missedAt, time)) || status === 'completed' || (status === 'pending' && seen)) {
+    if ((missedAt !== undefined && !keepsMissing(key, unreadFolders, scanFolders, missedAt, time)) || status === 'completed' || ((status === 'pending' || status === 'queued') && seen)) {
       orchTickets.delete(key)
       claimMissedAt.delete(key)
       isChanged = true
@@ -4813,13 +4892,13 @@ export const register: Register = (on, options) => {
       .register({
         name: 'move_ticket',
         description:
-          "Ask the user to approve moving a .claude_todo item to another column of the Claudeopticon pane board: open, in_progress or done. The user sees a dialog; the box is written only if they approve. Use it for any item the user moved by hand, instead of editing its box.",
+          "Ask the user to approve moving a .claude_todo item to another column of the Claudeopticon pane board: open, queued (slated next), in_progress or done. The user sees a dialog; the box is written only if they approve. Use it for any item the user moved by hand, instead of editing its box.",
         inputSchema: {
           type: 'object',
           properties: {
             item: { type: 'string', description: "The item's #T ID, or its text quoted from its line" },
             folder: { type: 'string', description: "Only when the item ID or text is in more than one file: the item's folder path as the prompts give it (mods/x/.claude_todo), or its file path (mods/x/.claude_todo/TODO.md)" },
-            to: { type: 'string', enum: ['open', 'in_progress', 'done'], description: 'Where to move it' },
+            to: { type: 'string', enum: ['open', 'queued', 'in_progress', 'done'], description: 'Where to move it' },
             reason: { type: 'string', description: 'Why, in one or two sentences, shown to the user' },
           },
           required: ['item', 'to', 'reason'],
@@ -4959,7 +5038,13 @@ export const register: Register = (on, options) => {
     if (typeof path === 'string' && path.includes(DIR)) {
       await scan($).catch(() => undefined)
       if (before !== undefined) {
-        claimTickets($, [...ticketStatuses(path)].filter(([key, status]) => status === 'in_progress' && before.get(key) !== 'in_progress').map(([key]) => key))
+        const after = ticketStatuses(path)
+        claimTickets($, [...after].filter(([key, status]) => status === 'in_progress' && before.get(key) !== 'in_progress').map(([key]) => key))
+        // Work Claude stopped but did not finish is next work: the box goes to queued, not open.
+        const stopped = stoppedKeys(before, after)
+        if (stopped.length > 0) {
+          await queueStopped($, path, stopped)
+        }
       }
     }
     // Moves made by hand reach the main conversation with its next tool result, mid-turn.
@@ -5048,6 +5133,8 @@ export const register: Register = (on, options) => {
       seenTurns.set(turnKey, e.index > 0 ? 0 : undefined)
     }
     const stream = next(e)
+    // The main conversation's text, read for tickets it puts off until later (deferredIds).
+    let said = ''
     let stopUsage: StepUsage | undefined
     const count = async (used: StepUsage | undefined) => {
       if (used) {
@@ -5079,11 +5166,17 @@ export const register: Register = (on, options) => {
         if (read.done) {
           isCounted = true
           await count(stepUsage(read.value?.usage, stopUsage))
+          if (agentId === undefined) {
+            noteDeferred(said)
+          }
 
           return read.value
         }
         if (read.value.kind === 'stop' && read.value.usage) {
           stopUsage = read.value.usage
+        }
+        if (agentId === undefined && read.value.kind === 'text' && said.length < SAID_CHARS) {
+          said += read.value.text
         }
         yield read.value
       }
@@ -5282,7 +5375,7 @@ export const register: Register = (on, options) => {
               {Input !== undefined && (
                 <Input
                   key="todo-search"
-                  placeholder="Search open and in-progress items"
+                  placeholder="Search open, queued and in-progress items"
                   value={controlFree(query)}
                   submitLabel="Search"
                   onInput={(value: string) => {
@@ -5351,7 +5444,7 @@ export const register: Register = (on, options) => {
           )}
           {query.trim() !== '' && (
             <Box key="search-head" flexDirection="row" justifyContent="space-between" alignItems="center">
-              <Text dimColor>{`${searchTodo(view.files, query).reduce((sum, file) => sum + file.items.length, 0)} matching items, open and in progress`}</Text>
+              <Text dimColor>{`${searchTodo(view.files, query).reduce((sum, file) => sum + file.items.length, 0)} matching items, open, queued and in progress`}</Text>
               <Button
                 key="search-clear"
                 label="Clear search"
@@ -5379,10 +5472,9 @@ export const register: Register = (on, options) => {
               name: group.name,
               columns: ticketColumns(file.items.slice(group.from, group.from + group.count), book),
             }))
-            // Side by side while each ticket has room for its text and buttons; else one under another.
-            const sideBy = 2
-            const isStacked = Math.floor((cardWidth() - (sideBy - 1) * CELL_PX) / sideBy) < MIN_TICKET_PX
-            const columnCount = isStacked ? 1 : sideBy
+            // Side by side while each ticket has room for its text and buttons; the rest wrap to the next row, or all stack.
+            const columnCount = columnsThatFit(cardWidth(), sections[0]?.columns.length ?? 1, CELL_PX, MIN_TICKET_PX)
+            const isStacked = columnCount === 1
             const ticketW = Math.floor((cardWidth() - (columnCount - 1) * CELL_PX) / columnCount)
             // What one ticket draws, worked out once per render: the slots need its height before it is placed.
             const prepared = new Map<ItemView, { sentKey: string; isSent: boolean; actions: TicketAction[]; drawn: ReturnType<typeof ticketSvg> }>()
@@ -5399,8 +5491,10 @@ export const register: Register = (on, options) => {
                 item.status === 'completed'
                   ? []
                   : item.status === 'pending'
-                    ? [START_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
-                    : [...(item.isHeld === true ? [] : [REOPEN_ACTION]), DONE_ACTION, STATUS_ACTION]
+                    ? [QUEUE_ACTION, START_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
+                    : item.status === 'queued'
+                      ? [REOPEN_ACTION, START_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
+                      : [...(item.heldFrom === 'queued' ? [] : [QUEUE_ACTION]), ...(item.heldFrom === 'pending' ? [] : [REOPEN_ACTION]), DONE_ACTION, STATUS_ACTION]
               const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, actions: actions.length })
               const one = { sentKey, isSent, actions, drawn }
               prepared.set(item, one)
@@ -5470,7 +5564,7 @@ export const register: Register = (on, options) => {
                           <Text dimColor>{String(section.columns.reduce((sum, column) => sum + column.items.length, 0))}</Text>
                         </Box>
                       )}
-                      <Box flexDirection={isStacked ? 'column' : 'row'} gap={1} alignItems="flex-start">
+                      <Box flexDirection={isStacked ? 'column' : 'row'} flexWrap="wrap" gap={1} alignItems="flex-start">
                         {section.columns.map(column => (
                           <Box key={keyText(`${prefix}-${file.id}-col-${section.name}-${column.name}`)} flexDirection="column" gap={1} width={columnCount === 3 ? '32%' : columnCount === 2 ? '49%' : '100%'}>
                             <Box flexDirection="row" gap={1}>
@@ -5656,7 +5750,7 @@ export const register: Register = (on, options) => {
               // Keyed by the ticket, not its place, so an insert does not remount every row below it.
               <Box key={keyText(`${file.id}:${item.key}`)}>
                 <Text dimColor={item.status !== 'completed'}>
-                  {item.status === 'in_progress' ? ' • ' : item.status === 'completed' ? ' ✓ ' : ' ○ '}
+                  {item.status === 'in_progress' ? ' • ' : item.status === 'completed' ? ' ✓ ' : item.status === 'queued' ? ' ≡ ' : ' ○ '}
                 </Text>
                 <Text bold={item.owners.length > 0} color={item.owners[0] === undefined ? undefined : agentColor(item.owners[0])} dimColor={item.owners.length === 0 && item.status === 'pending'}>{clip(item.text, columns - 8 - item.owners.length * 5)}</Text>
                 {item.owners.map(i => (

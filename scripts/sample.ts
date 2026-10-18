@@ -114,6 +114,9 @@ const t = (k: number) => items[k]!
 export const progressTickets = [
   [t(24), '#T25', 'Config'], [t(25), '#T26', 'Docs'], [t(26), '#T27', 'Parser'],
 ] as const
+export const queuedTickets = [
+  [{ ...t(29), status: 'queued' as const }, '#T30', 'Docs'], [{ ...t(34), status: 'queued' as const }, '#T35', 'Release'],
+] as const
 export const openTickets = [
   [t(28), '#T29', 'Release'], [t(30), '#T31', 'Docs'], [t(35), '#T36', 'Release'],
 ] as const

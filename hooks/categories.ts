@@ -296,11 +296,11 @@ export function isSubstantialChange(old: CategoryBook, next: CategoryBook, keys:
 /**
  * Each file with its items grouped by category under headings: the categories in the order they
  * were made, then the items not sorted yet. Within a category the usual order holds: linked, in
- * progress, open, done.
+ * progress, queued, open, done.
  */
 export function categoryGroups(files: readonly FileView[], current: CategoryBook): FileView[] {
   const rank = (item: { status: ItemStatus; owners: number[] }) =>
-    item.owners.length > 0 ? 0 : item.status === 'in_progress' ? 1 : item.status === 'pending' ? 2 : 3
+    item.owners.length > 0 ? 0 : item.status === 'in_progress' ? 1 : item.status === 'queued' ? 2 : item.status === 'pending' ? 3 : 4
   const names = [...current.categories, UNSORTED]
 
   return files.map(file => {

@@ -6,7 +6,7 @@ import type { View } from '../hooks/card-types'
 import { readTitle } from '../hooks/progress-report'
 import { fileCards } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
-import { buildView, ledger, orchestratorTitle, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
+import { buildView, columnsThatFit, ledger, orchestratorTitle, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
 import { readBook } from '../hooks/categories'
 import { storedKey } from '../hooks/item-keys'
 import type { AgentRow, TodoFile } from '../types'
@@ -62,22 +62,22 @@ test('the ledger keeps checked items, complete files and the archive; the counts
   expect(fileCards(all[2]!, view, 12)[0]?.source).toContain('<g opacity=".55">')
 })
 
-// search covers open and in-progress tickets only; done and archived ones are left to Show completed.
-test('search finds open and in-progress items by every word, never done or archived ones, and nothing for an empty query', async () => {
+// search covers open, queued and in-progress tickets only; done and archived ones are left to Show completed.
+test('search finds open, queued and in-progress items by every word, never done or archived ones, and nothing for an empty query', async () => {
   const list: TodoFile[] = [
-    { name: 'OPEN.md', folder: '.claude_todo', mtimeMs: 2, items: parseTodo('- [ ] Ship the new parser\n- [x] Parser test fixtures updated\n- [~] Parser speed work') },
+    { name: 'OPEN.md', folder: '.claude_todo', mtimeMs: 2, items: parseTodo('- [ ] Ship the new parser\n- [x] Parser test fixtures updated\n- [~] Parser speed work\n- [>] Parser error codes') },
     { name: 'archive/OLD.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo('- [x] Parser fuzz run verified'), isArchived: true },
   ]
   const view = buildView(list, [], 0)
   const hits = searchTodo(view.files, 'parser')
-  expect(hits.flatMap(file => file.items.map(item => item.text)).sort()).toEqual(['Parser speed work', 'Ship the new parser'])
+  expect(hits.flatMap(file => file.items.map(item => item.text)).sort()).toEqual(['Parser error codes', 'Parser speed work', 'Ship the new parser'])
   expect(hits.map(file => file.name)).toEqual(['OPEN.md'])
   expect(searchTodo(view.files, 'parser ship').flatMap(file => file.items.map(item => item.text))).toEqual(['Ship the new parser'])
   expect(searchTodo(view.files, '   ')).toEqual([])
 })
 
 // the board has no Done column in any state.
-test('ticket columns: In progress (with open tickets a live agent works on) and Open, never Done; linked first, then by category, then file order', async () => {
+test('ticket columns: In progress (with open and queued tickets a live agent works on), Queued and Open, never Done; linked first, then by category, then file order', async () => {
   const list: TodoFile[] = [{ name: 'A.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo([
     '- [ ] #T1 plain open',
     '- [ ] #T2 billing open',
@@ -85,14 +85,18 @@ test('ticket columns: In progress (with open tickets a live agent works on) and 
     '- [ ] #T4 legal open',
     '- [x] #T5 done one',
     '- [ ] #T6 linked open',
+    '- [>] #T7 queued',
+    '- [>] #T8 legal queued',
+    '- [>] #T9 linked queued',
   ].join('\n')) }]
-  const view = buildView(list, [row({ id: 'a', brief: '#t6' })], 0)
-  const book = { categories: ['Legal', 'Billing'], items: { '#t2': 'Billing', '#t4': 'Legal' } }
+  const view = buildView(list, [row({ id: 'a', brief: '#t6 #t9' })], 0)
+  const book = { categories: ['Legal', 'Billing'], items: { '#t2': 'Billing', '#t4': 'Legal', '#t8': 'Legal' } }
   const items = todoLedger(view, true)[0]!.items
   const columns = ticketColumns(items, book)
-  expect(columns.map(column => column.name)).toEqual(['In progress', 'Open'])
-  expect(columns[0]?.items.map(item => [item.key, item.status])).toEqual([['#t6', 'in_progress'], ['#t3', 'in_progress']])
-  expect(columns[1]?.items.map(item => item.key)).toEqual(['#t4', '#t2', '#t1'])
+  expect(columns.map(column => column.name)).toEqual(['In progress', 'Queued', 'Open'])
+  expect(columns[0]?.items.map(item => [item.key, item.status, item.heldFrom])).toEqual([['#t6', 'in_progress', 'pending'], ['#t9', 'in_progress', 'queued'], ['#t3', 'in_progress', undefined]])
+  expect(columns[1]?.items.map(item => item.key)).toEqual(['#t8', '#t7'])
+  expect(columns[2]?.items.map(item => item.key)).toEqual(['#t4', '#t2', '#t1'])
   expect(columns.flatMap(column => column.items).some(item => item.status === 'completed')).toBe(false)
 })
 
@@ -251,9 +255,18 @@ test('ticketColumns ranks a ticket named after a prototype member as unsorted, a
   expect(items.map(item => storedKey(item.key))).toEqual(['constructor', 'fix the parser', 'proto', 'tostring'])
   const book = { categories: ['Work'], items: { 'fix the parser': 'Work', tostring: 'Work' } }
   // Sorted first in category order, then the unsorted in file order: "constructor" reads no category, never Object.
-  expect(ticketColumns(items as never, book)[1]!.items.map(item => item.text)).toEqual(['Fix the parser', 'toString', 'constructor', 'proto'])
+  expect(ticketColumns(items as never, book)[2]!.items.map(item => item.text)).toEqual(['Fix the parser', 'toString', 'constructor', 'proto'])
   // A JSON book with a "constructor" entry ranks it by that entry.
   const read = readBook('{"categories":["Work","Later"],"items":{"constructor":"Work","fix the parser":"Later"}}')!
-  expect(ticketColumns(items as never, read)[1]!.items.map(item => item.text)).toEqual(['constructor', 'Fix the parser', 'proto', 'toString'])
+  expect(ticketColumns(items as never, read)[2]!.items.map(item => item.text)).toEqual(['constructor', 'Fix the parser', 'proto', 'toString'])
 })
 
+
+test('columnsThatFit puts as many columns side by side as keep the minimum ticket width, else one', () => {
+  expect(columnsThatFit(1000, 3, 10, 300)).toBe(3)
+  expect(columnsThatFit(900, 3, 10, 300)).toBe(2)
+  expect(columnsThatFit(610, 3, 10, 300)).toBe(2)
+  expect(columnsThatFit(609, 3, 10, 300)).toBe(1)
+  expect(columnsThatFit(5000, 1, 10, 300)).toBe(1)
+  expect(columnsThatFit(5000, 0, 10, 300)).toBe(1)
+})

@@ -57,6 +57,8 @@ Each file in `hooks/` has one responsibility. `hooks.json` loads only `register.
 | `ticket-boxes.ts` | The box per status, and the edit of one box in a file |
 | `ticket-lookup.ts` | Finding a ticket by ID or quoted text |
 | `ticket-actions.ts` | The ticket buttons: glyph, tip, toast, prompt or box |
+| `stop-queue.ts` | The tickets an edit took from in progress back to open, which the mod queues |
+| `deferred-tickets.ts` | The ticket IDs Claude's text puts off until later |
 | `ticket-spaces.ts` | The spaces that keep the place of a ticket that left |
 | `secrets.ts` | Secret patterns, and text with secrets hidden |
 | `tool-calls.ts` | The words, summary and detail of a tool call on the pane |
@@ -128,7 +130,7 @@ The archive step moves each top-level `- [x]` line, with the indented lines unde
 
 Strongest first: the ID in the agent's description or prompt (a whole ID: `#T1` does not match `#T12`); a `report_progress` claim; a Haiku match of the task against open items (at most three); a quote of the item's text. Only running agents link.
 
-The main conversation (the orchestrator) claims a ticket when, in this session, an Edit or Write of a todo file by the main conversation moves its box to `[~]`, when a main-conversation `report_progress` names it, or when the Send or status button sends it. A helper agent's edit or report never claims for it. A claim ends when the ticket is done or gone, or when its box goes back to `[ ]` after it was seen in progress. Claims are stored per session (`orchestrator:<session id>`), so a reload keeps them. Its card shows Running between `prompt.submit` and the main `turn.complete`, and its O tag blinks only then. Its title is the `title` the main conversation last sent with `report_progress` (helper agents' titles are ignored; at most 80 characters; stored per session as `orchestrator-title:<session id>`, cleared when it owns no tickets), else the first claimed ticket's text plus " and N more". A Bash edit of a todo file does not claim.
+The main conversation (the orchestrator) claims a ticket when, in this session, an Edit or Write of a todo file by the main conversation moves its box to `[~]`, when a main-conversation `report_progress` names it, or when the Send or status button sends it. A helper agent's edit or report never claims for it. A claim ends when the ticket is done or gone, or when its box goes back to `[ ]` or `[>]` after it was seen in progress. Claims are stored per session (`orchestrator:<session id>`), so a reload keeps them. Its card shows Running between `prompt.submit` and the main `turn.complete`, and its O tag blinks only then. Its title is the `title` the main conversation last sent with `report_progress` (helper agents' titles are ignored; at most 80 characters; stored per session as `orchestrator-title:<session id>`, cleared when it owns no tickets), else the first claimed ticket's text plus " and N more". A Bash edit of a todo file does not claim.
 
 ## Categories
 
@@ -138,7 +140,7 @@ Haiku sorts open items into at most five categories, kept in `.claude_todo/categ
 
 ## Search
 
-The search box keeps the open and in-progress tickets whose text holds every word of the query, without regard to case (`searchTodo` in `view-model.ts`). It does not read the archive. Done tickets leave the board, so **Show completed** is the way to the archive.
+The search box keeps the open, queued and in-progress tickets whose text holds every word of the query, without regard to case (`searchTodo` in `view-model.ts`). It does not read the archive. Done tickets leave the board, so **Show completed** is the way to the archive.
 
 ## Secrets
 
@@ -146,7 +148,13 @@ Text that looks like it holds a secret is replaced with "(hidden)" before it is 
 
 ## Ticket buttons
 
-`⋙` and `?` send a prompt to Claude. The manual moves rewrite one checkbox. Each move is queued as a note that goes to Claude with its next tool result or your next message. To change a move, Claude calls `move_ticket`, which asks you and writes only on a yes.
+`⋙` and `?` send a prompt to Claude. The manual moves (`≡` queued, `◐` in progress, `✓` done, `↩` open) rewrite one checkbox. Each move is queued as a note that goes to Claude with its next tool result or your next message. To change a move, Claude calls `move_ticket`, which asks you and writes only on a yes.
+
+## Queued tickets
+
+`- [>]` is queued: the work slated next. The board shows it in the Queued column, between In progress and Open; an agent on it moves it to In progress, as for an open ticket. Where tickets of all states share one list (a category group, the list view), queued sorts after in progress and before open. When one ticket is in two files, in progress wins over queued, queued over open, and open over done.
+
+Two hooks make Claude use the column. In `tool.call`, an Edit or Write of a todo file by the main conversation that takes a ticket from `[~]` to `[ ]` (`stoppedKeys` in `stop-queue.ts`) has its box set to `[>]` under the writer lock, and the tool result carries a note. In `turn.step`, the main conversation's text (up to 20,000 characters a step) is read for ticket IDs in a sentence with a word that puts work off (`deferredIds` in `deferred-tickets.ts`); each open ticket it names gets a note once a session. The note only asks: a reply never moves a ticket.
 
 ## The top graph
 

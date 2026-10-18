@@ -1,4 +1,4 @@
-export type TodoStatus = 'pending' | 'in_progress' | 'completed'
+export type TodoStatus = 'pending' | 'queued' | 'in_progress' | 'completed'
 
 export type TodoItem = {
   text: string

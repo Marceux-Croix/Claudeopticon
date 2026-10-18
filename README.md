@@ -12,7 +12,7 @@ Claudeopticon is a mod for Claude Code. It adds a work pane next to your convers
 
 ![The whole Claudeopticon pane: the graph of agents and tokens, then Orchestrator, Agents and the Todo board, top to bottom](docs/images/pane.svg)
 
-At its core is a ticket system that lives in your repo. Each line in `.claude_todo/` is a ticket with an ID such as `#T002A`. From the board you can send a ticket to Claude, ask for a status update, or move it between Open, In progress and done. A ticket that is done leaves the board for the archive. Claude keeps each ticket's state up to date as it works, and every helper agent is linked to the tickets it works on.
+At its core is a ticket system that lives in your repo. Each line in `.claude_todo/` is a ticket with an ID such as `#T002A`. From the board you can send a ticket to Claude, ask for a status update, or move it between Open, Queued, In progress and done. A ticket that is done leaves the board for the archive. Claude keeps each ticket's state up to date as it works, and every helper agent is linked to the tickets it works on.
 
 ## Contents
 
@@ -99,17 +99,18 @@ Finished agents are hidden. **Show finished agents** brings them back, grayed ou
 
 ![The ticket board](docs/images/board.svg)
 
-The pane draws one board for all your todo files, with the columns **In progress** and **Open**. There is no Done column: a ticket that is done leaves the board and goes to the archive. Above it, one header card has a row for each file: its name, its progress bar, and its own "done of total" count, which includes the file's closed items in the archive. If two files have the same name, the row also shows the folder in dim text. A ticket shows its number, its group, its status, and the tags of the agents working on it. The tags blink in the agent's color while it works, and the **O** tag blinks while Claude works on the ticket itself. When an agent starts on a ticket, the ticket moves to In progress by itself.
+The pane draws one board for all your todo files, with the columns **In progress**, **Queued** and **Open**. Queued (`- [>]`) holds the work slated next: tickets nobody works on yet, but that come before the rest of Open. There is no Done column: a ticket that is done leaves the board and goes to the archive. Above it, one header card has a row for each file: its name, its progress bar, and its own "done of total" count, which includes the file's closed items in the archive. If two files have the same name, the row also shows the folder in dim text. A ticket shows its number, its group, its status, and the tags of the agents working on it. The tags blink in the agent's color while it works, and the **O** tag blinks while Claude works on the ticket itself. When an agent starts on an open or queued ticket, the ticket moves to In progress by itself.
 
 Tickets have buttons on the bottom edge:
 
 | Button | On | What it does |
 | --- | --- | --- |
-| `⋙` Send to Claude | Open tickets | Sends the item to Claude as a prompt, to build it. |
+| `⋙` Send to Claude | Open and queued tickets | Sends the item to Claude as a prompt, to build it. |
 | `?` Ask Claude for a status update | Tickets in progress, or already sent | Asks Claude for a short report in the chat. It starts no new work. |
-| `◐` Mark in progress | Open tickets | Moves the ticket by hand. |
+| `≡` Move to queued | Open tickets, and tickets in progress | Moves the ticket by hand. |
+| `◐` Mark in progress | Open and queued tickets | Moves the ticket by hand. |
 | `✓` Mark done | Tickets in progress | Moves the ticket by hand. The mod then archives it. |
-| `↩` Move back to open | Tickets in progress | Moves the ticket by hand. |
+| `↩` Move back to open | Queued tickets, and tickets in progress | Moves the ticket by hand. |
 
 The move buttons are for work you do yourself, such as a human review. They change the checkbox in your todo file and nothing else. Claude is told at its next action, so it does not work on a ticket you closed. It is not asked to do anything.
 
@@ -128,7 +129,7 @@ Other controls:
 - The **group buttons** show or hide each group. Haiku makes the groups: it reads your open tickets, names up to five groups, and puts each ticket in one. A ticket keeps its group, and new tickets are sorted as they appear.
 - **Recategorize** asks Haiku to sort all open tickets into groups again, from scratch. The new groups replace the old ones only when the change is real: the number of groups changes, or at least a quarter of the open tickets would land in a different group. A rename alone does not count. Otherwise the current groups stay, and "The current categories are correct" shows next to the button for 4 seconds.
 - **Show completed (N)** opens the archive file, `.claude_todo/archive/TODO.md`, in your system's default app for Markdown files. N is the number of closed tickets in the archive. The mod makes the file if it does not exist yet.
-- The **search box** finds open and in-progress tickets with every word you type, and says how many match. It does not search the archive: **Show completed** opens that. **Clear search** empties the box.
+- The **search box** finds open, queued and in-progress tickets with every word you type, and says how many match. It does not search the archive: **Show completed** opens that. **Clear search** empties the box.
 
 ## The todo format
 
@@ -136,6 +137,7 @@ The mod reads checkbox lines in the Markdown files at the top level of `.claude_
 
 ```markdown
 - [ ] #T0004 Open item
+- [>] #T0007 Queued item, slated next
 - [~] #T0005 Item in progress
 - [x] #T0006 Done item
 ```
@@ -150,11 +152,12 @@ The mod reads checkbox lines in the Markdown files at the top level of `.claude_
 
 ## Rules for Claude
 
-At the start of each conversation, the mod gives Claude short instructions, about 3,400 characters (roughly 850 tokens). The text is `RULES` in `hooks/rules.ts`. The `rules` option turns it off. Claude is told to:
+At the start of each conversation, the mod gives Claude short instructions, about 3,850 characters (roughly 960 tokens). The text is `RULES` in `hooks/rules.ts`. The `rules` option turns it off. Claude is told to:
 
 - keep the items in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's), make the folder when the repo has none, and keep each item in the folder it is in;
 - never make or use the global todo folder, `~/.claude/.claude_todo/` (or `.claude_todo/` in `$CLAUDE_CONFIG_DIR`), because the board never reads it; when the repo root is that folder's parent, use the `.claude_todo/` of the project it works in;
-- write each item as one checkbox line in a top-level `.md` file (`- [ ]`, `- [~]`, `- [x]`) and update its box the moment the status changes;
+- write each item as one checkbox line in a top-level `.md` file (`- [ ]`, `- [>]`, `- [~]`, `- [x]`) and update its box the moment the status changes;
+- mark a ticket queued (`- [>]`) when it decides the ticket comes next or waits for an event, and when it stops a ticket it has not finished but still plans to do;
 - give each new item one of the free IDs the mod names (`#T` and 4 digits and capital letters, or 5 characters when the 4-character IDs run out; an item with no ID gets one from the mod), and put the item's ID in the description of each agent it starts for that item, marking the item `[~]`;
 - close an item (`- [x]`) in the same turn its work is done, before its final reply, never leave finished work open or in progress, and close an agent's item when the agent's work is done;
 - never delete a done item and never fold done items into a summary line; the mod moves a done ticket whose subtasks are all done to the archive, and Claude never moves it back;
@@ -163,7 +166,7 @@ At the start of each conversation, the mod gives Claude short instructions, abou
 - stop work on an item you moved to open or done;
 - never change the box of an item you moved. If it thinks your move was wrong, it calls the `move_ticket` tool. You get a dialog, and the box changes only if you say yes. If the item is in more than one file, the tool refuses and lists them, and Claude calls it again with `folder` set to the item's folder path.
 
-Claude also gets reminders. When an agent ends while its tickets are still open or in progress, the mod names them to Claude once and asks it to close each one whose work is done. At your next prompt, it names tickets Claude claimed that are still in progress, each at most once every 30 minutes. The mod never closes a ticket itself.
+Claude also gets reminders. When the main conversation sets a ticket from `[~]` back to `[ ]` with an Edit or Write, the mod writes `[>]` instead, because unfinished work is usually next work, and tells Claude at once. Claude drops the ticket by setting it to `[ ]` again: the mod only queues a ticket that leaves in progress. When a reply of the main conversation names an open ticket by its ID in a sentence that puts it off ("after X lands", "next", "once", "later"), the mod asks Claude at its next action to mark it queued if it is next. It names each ticket once a session and never moves a ticket on a reply. When an agent ends while its tickets are still open or in progress, the mod names them to Claude once and asks it to close each one whose work is done. At your next prompt, it names tickets Claude claimed that are still in progress, each at most once every 30 minutes. The mod never closes a ticket itself.
 
 ## Agents and progress
 

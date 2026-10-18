@@ -97,7 +97,7 @@ for (const to of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'val
     })
     await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
     const out = JSON.stringify(await $.tool.call({ tool: 'mcp__claudeopticon__move_ticket', item: '#T1', to, reason: 'Done.' } as never))
-    expect(out).toContain('Not moved: \\"to\\" must be open, in_progress or done.')
+    expect(out).toContain('Not moved: \\"to\\" must be open, queued, in_progress or done.')
     expect(asked).toEqual([])
     expect(files['/repo/.claude_todo/OPEN.md']).toBe('- [ ] #T1 Review the terms')
   })

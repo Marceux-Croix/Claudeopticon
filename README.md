@@ -109,7 +109,7 @@ Tickets have buttons on the bottom edge:
 | `?` Ask Claude for a status update | Tickets in progress, or already sent | Asks Claude for a short report in the chat. It starts no new work. |
 | `≡` Move to queued | Open tickets, and tickets in progress | Moves the ticket by hand. |
 | `◐` Mark in progress | Open and queued tickets | Moves the ticket by hand. |
-| `✓` Mark done | Tickets in progress | Moves the ticket by hand. The mod then archives it. |
+| `✓` Mark done | Open, queued and in-progress tickets | Moves the ticket by hand. The mod then archives it. |
 | `↩` Move back to open | Queued tickets, and tickets in progress | Moves the ticket by hand. |
 
 The move buttons are for work you do yourself, such as a human review. They change the checkbox in your todo file and nothing else. Claude is told at its next action, so it does not work on a ticket you closed. It is not asked to do anything.

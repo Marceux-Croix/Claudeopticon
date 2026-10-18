@@ -5491,9 +5491,9 @@ export const register: Register = (on, options) => {
                 item.status === 'completed'
                   ? []
                   : item.status === 'pending'
-                    ? [QUEUE_ACTION, START_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
+                    ? [QUEUE_ACTION, START_ACTION, DONE_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
                     : item.status === 'queued'
-                      ? [REOPEN_ACTION, START_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
+                      ? [REOPEN_ACTION, START_ACTION, DONE_ACTION, isSent ? STATUS_ACTION : SEND_ACTION]
                       : [...(item.heldFrom === 'queued' ? [] : [QUEUE_ACTION]), ...(item.heldFrom === 'pending' ? [] : [REOPEN_ACTION]), DONE_ACTION, STATUS_ACTION]
               const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, actions: actions.length })
               const one = { sentKey, isSent, actions, drawn }

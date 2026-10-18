@@ -183,11 +183,11 @@ test('the scan reads the archive folder as finished work', async ($, on) => {
   expect(board).not.toContain('old one')
   expect(await ui.find({ type: 'Text', text: /0 of 1 done/ })).toBeDefined()
   expect(await ui.find({ key: 'todo-toggle' })).toBeUndefined()
-  // #T003A: search covers open and in-progress tickets only, so the archive's done tickets are not found (Show completed opens them).
+  // #T003A: search covers open, queued and in-progress tickets only, so the archive's done tickets are not found (Show completed opens them).
   await ui.input({ key: 'todo-search', text: 'old', kind: 'change' })
   const found = JSON.stringify(await ui.findAll({ type: 'Svg' }))
   expect(found).not.toContain('old one')
-  expect(await ui.find({ type: 'Text', text: /^0 matching items, open and in progress$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^0 matching items, open, queued and in progress$/ })).toBeDefined()
 })
 
 test('searching replaces the todo cards with results, and Clear search brings them back', async ($, on) => {
@@ -208,7 +208,7 @@ test('searching replaces the todo cards with results, and Clear search brings th
   await ui.input({ key: 'todo-search', text: 'alpha', kind: 'change' })
   expect(await shown()).toContain('alpha task')
   expect(await shown()).not.toContain('gamma task')
-  expect(await ui.find({ type: 'Text', text: /1 matching items, open and in progress/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /1 matching items, open, queued and in progress/ })).toBeDefined()
   await ui.press({ key: 'search-clear' })
   expect(await shown()).toContain('gamma task')
 })

@@ -37,7 +37,7 @@ test('UCR-185 withRules adds the rules block once, and none when the option is o
 })
 
 test('UCR-190 the box forms the rules name are the ones the parser reads, and the forms they rule out are not items', () => {
-  for (const [box, status] of [[' ', 'pending'], ['~', 'in_progress'], ['x', 'completed'], ['X', 'completed'], ['>', 'in_progress']] as const) {
+  for (const [box, status] of [[' ', 'pending'], ['>', 'queued'], ['~', 'in_progress'], ['x', 'completed'], ['X', 'completed']] as const) {
     expect(RULES).toContain(`[${box}]`)
     expect(parseTodo(`- [${box}] a`)[0]?.status).toBe(status)
   }
@@ -60,6 +60,13 @@ test('UCR-209 the rules allow the 5-character IDs the mod offers past T9ZZZ', ()
 })
 
 /** Property (UCR-239): the rules forbid the global todo folder and send Claude to the nearest project folder when the repo root holds it. */
+test('the rules tell Claude what queued means, when to queue a ticket, and that the mod queues a stopped one', () => {
+  expect(RULES).toContain('`- [>]` queued')
+  expect(RULES).toContain('Queued column')
+  expect(RULES).toContain('set it to `[>]`, not `[ ]`')
+  expect(RULES).not.toContain('`[>]` as in progress')
+})
+
 test('UCR-239 the rules never send Claude to the global todo folder', () => {
   const lines = RULES.split('\n')
   const rule = lines.find(line => line.includes('global todo folder'))

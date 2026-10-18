@@ -175,7 +175,7 @@ export function itemsAt(rawLines: readonly string[]): { at: number; item: TodoIt
     }
     const box = match[1] ?? ' '
     const status: TodoStatus =
-      box === 'x' || box === 'X' ? 'completed' : box === '~' || box === '>' ? 'in_progress' : 'pending'
+      box === 'x' || box === 'X' ? 'completed' : box === '~' ? 'in_progress' : box === '>' ? 'queued' : 'pending'
     const text = plainText(match[2] ?? '')
     const id = ids[at]
     const item: TodoItem = id === undefined ? { text, status } : { text, status, id }

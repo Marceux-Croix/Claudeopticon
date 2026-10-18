@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DONE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, TICKET_GLYPHS } from '../hooks/ticket-actions'
+import { DONE_ACTION, QUEUE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, TICKET_GLYPHS } from '../hooks/ticket-actions'
 
 test('send and status actions build a prompt that names the path and the item text', async () => {
   const send = SEND_ACTION.prompt('/repo/.claude_todo/A.md', '- [ ] #T0001 Fix x')
@@ -15,16 +15,16 @@ test('send and status actions build a prompt that names the path and the item te
 })
 
 test('the manual moves write a box and ask Claude nothing', async () => {
-  expect([START_ACTION.mark, DONE_ACTION.mark, REOPEN_ACTION.mark]).toEqual(['in_progress', 'completed', 'pending'])
-  for (const action of [START_ACTION, DONE_ACTION, REOPEN_ACTION]) {
+  expect([QUEUE_ACTION.mark, START_ACTION.mark, DONE_ACTION.mark, REOPEN_ACTION.mark]).toEqual(['queued', 'in_progress', 'completed', 'pending'])
+  for (const action of [QUEUE_ACTION, START_ACTION, DONE_ACTION, REOPEN_ACTION]) {
     expect(action.prompt('/repo/x.md', 'text')).toBe('')
   }
 })
 
-test('every action has a distinct name and glyph, and TICKET_GLYPHS holds exactly the five glyphs', async () => {
-  const all = [SEND_ACTION, STATUS_ACTION, START_ACTION, DONE_ACTION, REOPEN_ACTION]
-  expect(new Set(all.map(a => a.name)).size).toBe(5)
-  expect(TICKET_GLYPHS.size).toBe(5)
+test('every action has a distinct name and glyph, and TICKET_GLYPHS holds exactly the six glyphs', async () => {
+  const all = [SEND_ACTION, STATUS_ACTION, QUEUE_ACTION, START_ACTION, DONE_ACTION, REOPEN_ACTION]
+  expect(new Set(all.map(a => a.name)).size).toBe(6)
+  expect(TICKET_GLYPHS.size).toBe(6)
   for (const a of all) {
     expect(TICKET_GLYPHS.has(a.glyph)).toBe(true)
     expect(a.tip).not.toBe('')

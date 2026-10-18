@@ -9,7 +9,8 @@ import { setWidth } from '../hooks/card-stage.ts'
 import type { Card } from '../hooks/card-types.ts'
 import { heroSvg } from '../hooks/hero-card.ts'
 import { boardHead, ticketSvg } from '../hooks/todo-cards.ts'
-import { agents, entries, heroView, orchestrator, openTickets, progressTickets, view } from './sample.ts'
+import { columnsThatFit } from '../hooks/view-model.ts'
+import { agents, entries, heroView, orchestrator, openTickets, progressTickets, queuedTickets, view } from './sample.ts'
 
 const WIDTH = 720
 const GAP = 12
@@ -40,19 +41,30 @@ function stack(cards: Card[]): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${h}" viewBox="0 0 ${WIDTH} ${h}">\n${inner.join('\n')}\n</svg>`
 }
 
-/** Two columns of tickets with a header each; the width follows the card width. */
+/** The narrowest ticket before the board columns wrap: MIN_TICKET_PX in register.tsx. */
+const MIN_TICKET_PX = 300
+/** The board's columns as the pane places them: side by side while they fit, the rest on the next row. */
+const SIDE_BY = columnsThatFit(WIDTH, 3, GAP, MIN_TICKET_PX)
+
+/** The three columns of tickets with a header each; the width follows the card width. */
 function board(): string {
-  const colW = (WIDTH - GAP) / 2
+  const colW = (WIDTH - (SIDE_BY - 1) * GAP) / SIDE_BY
   const header = boardHead(view.files)
-  const head = header.height + GAP + 28
   const columns = [
     { title: 'In progress', tickets: progressTickets },
+    { title: 'Queued', tickets: queuedTickets },
     { title: 'Open', tickets: openTickets },
   ]
   let height = 0
+  let rowTop = header.height + GAP
+  let rowBottom = rowTop
   const parts = columns.map((col, c) => {
-    const x = c * (colW + GAP)
-    let y = head
+    if (c > 0 && c % SIDE_BY === 0) {
+      rowTop = rowBottom + GAP
+    }
+    const x = (c % SIDE_BY) * (colW + GAP)
+    const titleY = rowTop + 18
+    let y = rowTop + 28
     const cards = col.tickets.map(([it, id, category]) => {
       const card = ticketSvg(it, view, colW, { id, category, isSent: false })
       const s = place(card, x, y)
@@ -60,7 +72,8 @@ function board(): string {
       return s
     })
     height = Math.max(height, y - GAP)
-    return `<text x="${x + 4}" y="${header.height + GAP + 18}" font-family='${FONT}' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">${col.title}</text>\n${cards.join('\n')}`
+    rowBottom = Math.max(rowBottom, y - GAP)
+    return `<text x="${x + 4}" y="${titleY}" font-family='${FONT}' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">${col.title}</text>\n${cards.join('\n')}`
   })
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}">\n<rect width="${WIDTH}" height="${height}" rx="12" fill="#07080F"/>\n${place(header, 0, 0)}\n${parts.join('\n')}\n</svg>`
 }
@@ -177,21 +190,25 @@ function pane(): string {
   add(withStop(agentSvg(agents[1]!, view), 'Running'))
   head('Todo', `${view.done} of ${view.total} done, ${view.active} in progress`, `Show completed (${view.archived})`)
   parts.push(`<rect x="${PANE_PAD}" y="${y}" width="220" height="30" rx="8" fill="none" stroke="rgba(255,255,255,.22)"/>
-<text x="${PANE_PAD + 12}" y="${y + 20}" font-family='${FONT}' font-size="13.5" fill="${DIM}">Search open and in-progress items</text>`)
+<text x="${PANE_PAD + 12}" y="${y + 20}" font-family='${FONT}' font-size="13.5" fill="${DIM}">Search open, queued and in-progress items</text>`)
   parts.push(buttonRow(PANE_PAD + 228, y, ['Search', 'Show as list', 'Recategorize']).svg)
   y += 30 + GAP
   parts.push(`<text x="${PANE_PAD}" y="${y + 20}" font-family='${FONT}' font-size="13.5" fill="${DIM}">Categories</text>`)
   parts.push(buttonRow(PANE_PAD + 84, y, ['Config', 'Docs', 'Parser', 'Release'], true).svg)
   y += 30 + GAP
   add(boardHead(view.files))
-  const colW = (WIDTH - GAP) / 2
+  const colW = (WIDTH - (SIDE_BY - 1) * GAP) / SIDE_BY
   const columns = [
-    { title: 'In progress', tickets: progressTickets, glyphs: ['✓', '↩', '?'] },
-    { title: 'Open', tickets: openTickets, glyphs: ['◐', '⋙'] },
+    { title: 'In progress', tickets: progressTickets, glyphs: ['≡', '↩', '✓', '?'] },
+    { title: 'Queued', tickets: queuedTickets, glyphs: ['↩', '◐', '⋙'] },
+    { title: 'Open', tickets: openTickets, glyphs: ['≡', '◐', '⋙'] },
   ]
   let bottom = y
   columns.forEach((column, c) => {
-    const x = PANE_PAD + c * (colW + GAP)
+    if (c > 0 && c % SIDE_BY === 0) {
+      y = bottom
+    }
+    const x = PANE_PAD + (c % SIDE_BY) * (colW + GAP)
     let cy = y
     parts.push(`<text x="${x}" y="${cy + 16}" font-family='${FONT}' font-size="13.5" font-weight="600" fill="${DIM}">${column.title}  ${column.tickets.length}</text>`)
     cy += 24 + GAP

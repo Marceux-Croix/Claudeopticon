@@ -538,3 +538,82 @@ test('UCR-234 L3R3-170X a source name with a bidi override and a zero-width join
   expect(files[`/repo/mods/x/.claude_todo/${name}`]).toBe('- [ ] #T2 Docs')
   expect(toasts.some(one => one.includes('Not copied, left as they are'))).toBe(true)
 })
+
+// ---------------------------------------------------------------- #T003F: the Queued column
+
+/** Property (#T003F): the queue button writes `- [>]`, and a queued ticket offers open, start and send. */
+test('#T003F the queue button writes [>], and a queued ticket offers back to open, start and send', async ($, on) => {
+  const clock = mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 Fix the parser' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  const ui = await open($)
+  await ui.press({ key: 'ticket-queue-TODO.md-#t1' })
+  expect(files['/repo/.claude_todo/TODO.md']).toBe('- [>] #T1 Fix the parser')
+  // The fake fs keeps mtimes by hand: a real write moves it, so the next scan reads the file again.
+  mtimes['/repo/.claude_todo/TODO.md'] = (mtimes['/repo/.claude_todo/TODO.md'] ?? 0) + 10
+  let drawn = ''
+  for (let i = 0; i < 20 && !drawn.includes('ticket-reopen-TODO.md-#t1'); i += 1) {
+    await clock.advance(3000).catch(() => undefined)
+    drawn = JSON.stringify(await ui.findAll({ type: 'Button' }))
+  }
+  // The send button's key has no action name.
+  for (const key of ['ticket-reopen-TODO.md-#t1', 'ticket-start-TODO.md-#t1', 'ticket-TODO.md-#t1']) {
+    expect(drawn).toContain(`"${key}"`)
+  }
+  expect(drawn).not.toContain('ticket-queue-TODO.md-#t1')
+})
+
+/**
+ * Property (#T003F): an edit of the main conversation that sets a ticket from in progress back to
+ * open leaves it queued, and the tool result tells Claude so; a later edit from queued to open stays open.
+ */
+test('#T003F a ticket Claude sets from [~] back to [ ] is queued, and told; from [>] to [ ] it stays open', async ($, on) => {
+  mock.clock(on)
+  const path = '/repo/.claude_todo/TODO.md'
+  const files: Record<string, string> = { [path]: '- [~] #T1 Fix the parser\n- [~] #T2 Ship it' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  let edit = (text: string) => text
+  on('tool.call', () => {
+    files[path] = edit(files[path]!)
+    mtimes[path] = (mtimes[path] ?? 0) + 10
+
+    return { result: 'ok' } as never
+  })
+  await open($)
+  edit = text => text.replace('- [~] #T1', '- [ ] #T1').replace('- [~] #T2', '- [x] #T2')
+  const ran = (await $.tool.call({ tool: 'Edit', file_path: path } as never)) as { context?: string[] }
+  expect(files[path]).toBe('- [>] #T1 Fix the parser\n- [x] #T2 Ship it')
+  expect((ran.context ?? []).join('\n')).toContain('wrote them as queued')
+  edit = text => text.replace('- [>] #T1', '- [ ] #T1')
+  await $.tool.call({ tool: 'Edit', file_path: path } as never)
+  expect(files[path]).toBe('- [ ] #T1 Fix the parser\n- [x] #T2 Ship it')
+})
+
+/** Property (#T003F): a reply of the main conversation that puts an open ticket off until later gets a note at the next tool result, once. */
+test('#T003F a reply that puts an open ticket off until later brings a deferred note, once', async ($, on) => {
+  mock.clock(on)
+  const files: Record<string, string> = { '/repo/.claude_todo/TODO.md': '- [ ] #T1 Fix the parser\n- [~] #T2 Ship it' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  on('turn.step', async function* (_$, e) {
+    yield { kind: 'text', index: 0, text: 'I will open #T1 up for work after #T2 lands. ' } as never
+    yield { kind: 'text', index: 0, text: 'Working on #T2 now.' } as never
+
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' } as never
+  })
+  on('tool.call', () => ({ result: 'ok' }) as never)
+  await open($)
+  const step = async () => {
+    for await (const _chunk of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: 1 } as never)) {
+      // Read to the end.
+    }
+  }
+  await step()
+  const first = (await $.tool.call({ tool: 'Read', file_path: '/repo/x.ts' } as never)) as { context?: string[] }
+  const note = (first.context ?? []).join('\n')
+  expect(note).toContain('put these open todo items off until later')
+  expect(note).toContain('#T1 Fix the parser')
+  expect(note).not.toContain('Ship it')
+  await step()
+  const second = (await $.tool.call({ tool: 'Read', file_path: '/repo/x.ts' } as never)) as { context?: string[] }
+  expect((second.context ?? []).join('\n')).not.toContain('off until later')
+})

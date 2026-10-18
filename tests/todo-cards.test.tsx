@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { agentSvg } from '../hooks/agent-cards'
 import { AGENT_COLORS } from '../hooks/agent-identity'
-import { setWidth } from '../hooks/card-stage'
+import { ACCENT, setWidth } from '../hooks/card-stage'
 import type { FileView, ItemView } from '../hooks/card-types'
 import { heroSvg } from '../hooks/hero-card'
 import { boardHead, fileCards, listRowPx, spaceSvg, ticketSvg } from '../hooks/todo-cards'
@@ -51,6 +51,17 @@ test('a ticket with buttons keeps a bottom row of its own for them', async () =>
   const plain = ticketSvg(item, view, 300, { isSent: false })
   const sendable = ticketSvg(item, view, 300, { isSent: false, actions: 1 })
   expect(sendable.height).toBe(plain.height + 60)
+})
+
+test('a queued ticket shows a Queued badge and no accent bar, as an open one shows none', async () => {
+  const view = buildView([], [], 0)
+  const open = ticketSvg({ text: 'Fix the parser', status: 'pending' as const, owners: [], key: 'a' }, view, 300, { isSent: false }).source
+  const queued = ticketSvg({ text: 'Fix the parser', status: 'queued' as const, owners: [], key: 'a' }, view, 300, { isSent: false }).source
+  expect(queued).toContain('>Queued<')
+  const working = ticketSvg({ text: 'Fix the parser', status: 'in_progress' as const, owners: [], key: 'a' }, view, 300, { isSent: false }).source
+  expect(working).toContain(ACCENT)
+  expect(open).not.toContain(ACCENT)
+  expect(queued).not.toContain(ACCENT)
 })
 
 test('the board header has one row per file with its own count, and shows a place only for a repeated name', async () => {

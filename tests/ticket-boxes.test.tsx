@@ -76,8 +76,8 @@ test('UCR-025 a stale press on identical lines in two sections is refused by the
   expect(isDrawnLine(after, frontend.key, { text: frontend.drawn.text, status: frontend.drawn.status })).toBe(true)
 })
 
-test('UCR-179 statusNamed takes only open, in_progress and done, never an Object prototype key', () => {
-  expect([statusNamed('open'), statusNamed('in_progress'), statusNamed('done')]).toEqual(['pending', 'in_progress', 'completed'])
+test('UCR-179 statusNamed takes only open, queued, in_progress and done, never an Object prototype key', () => {
+  expect([statusNamed('open'), statusNamed('queued'), statusNamed('in_progress'), statusNamed('done')]).toEqual(['pending', 'queued', 'in_progress', 'completed'])
   // State 1: the keys every plain object inherits.
   for (const key of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf', 'isPrototypeOf']) {
     expect([key, statusNamed(key)]).toEqual([key, undefined])
@@ -90,6 +90,16 @@ test('UCR-179 statusNamed takes only open, in_progress and done, never an Object
   for (const key of [undefined, null, 1, {}, ['done']]) {
     expect(statusNamed(key)).toBeUndefined()
   }
+})
+
+test('setBox writes the queued box [>], and from it any other box', () => {
+  const text = '- [ ] #T1 a\n- [~] #T2 b'
+  const queued = setBox(text, '#t1', 'queued')
+  expect(queued).toBe('- [>] #T1 a\n- [~] #T2 b')
+  expect(parseTodo(queued!)[0]?.status).toBe('queued')
+  expect(setBox(queued!, '#t1', 'queued')).toBeUndefined()
+  expect(setBox(queued!, '#t1', 'in_progress')).toBe('- [~] #T1 a\n- [~] #T2 b')
+  expect(setBox(setBox(text, '#t2', 'queued')!, '#t2', 'pending')).toBe('- [ ] #T1 a\n- [ ] #T2 b')
 })
 
 // ---------------------------------------------------------------- batch K3: UCR-025 remainder (same heading text, prose labels)

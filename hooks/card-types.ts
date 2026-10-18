@@ -2,7 +2,7 @@
 
 import type { Axes, Series } from './series'
 
-export type ItemStatus = 'pending' | 'in_progress' | 'completed'
+export type ItemStatus = 'pending' | 'queued' | 'in_progress' | 'completed'
 
 export type ItemView = {
   text: string
@@ -16,8 +16,8 @@ export type ItemView = {
   folder?: string
   file?: string
   path?: string
-  /** Shown in progress only because a live agent works on it: its box is still `- [ ]`. */
-  isHeld?: true
+  /** Shown in progress only because a live agent works on it: the status its box still holds, open (`- [ ]`) or queued (`- [>]`). */
+  heldFrom?: 'pending' | 'queued'
 }
 
 export type FileView = {

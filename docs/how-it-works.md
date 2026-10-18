@@ -1,28 +1,112 @@
 # How Claudeopticon works
 
-Claudeopticon is one hooks module, `hooks/register.tsx`, plus the card drawings in `hooks/cards.ts`. It has no server and no database. Each Claude Code session runs its own copy, so a pane shows only its own project and agents.
+Claudeopticon is one hooks module, `hooks/register.tsx`, plus the modules it imports in `hooks/` (see Module layout). It has no server and no database. Each Claude Code session runs its own copy, so a pane shows only its own project and agents.
+
+## Module layout
+
+Each file in `hooks/` has one responsibility. `hooks.json` loads only `register.tsx`.
+
+`register.tsx` registers the hooks and the tools. It also holds each function that calls the engine through `$`, and the session state that those functions write. `claude plugin validate` follows `$` only into functions in the same file, never across an import. It also reads a hook filter, such as a tool name, only from a constant in that file. An imported `let` cannot get a new value in the module that imports it. So the engine calls and the state they assign stay in `register.tsx`, and the other modules hold pure logic, types and constants. A constant lives in the module of the code that uses it.
+
+| File | Responsibility |
+| --- | --- |
+| `register.tsx` | The hooks and tools, the engine calls, and the session state they write |
+| `todo-markdown.ts` | The todo Markdown grammar: item IDs, inline code, the items of a file |
+| `markdown-blocks.ts` | The CommonMark block structure of a todo file: checkbox lines, fences, quotes, indented code, which lines are examples |
+| `html-blocks.ts` | The CommonMark HTML block start and end rules |
+| `example-end.ts` | The open example at the end of a todo text, which a blank line does not close |
+| `todo-read.ts` | The result of one todo file read: text, no file there, or a failed read and why |
+| `unread-files.ts` | The streak of a file that keeps failing to read when new IDs are chosen |
+| `unread-folders.ts` | The scan folders that hold a place the last scan could not read |
+| `ticket-ids.ts` | Ticket ID values, the next free IDs, the reservation lifetime |
+| `id-blocks.ts` | The ID blocks a session claims: block of a value, claim names, takeover, pruning, claim folder paths |
+| `block-claim.ts` | The claim of one ID block across the two claim folders, over a file port |
+| `git-file.ts` | The git common directory read from a `.git` entry when `git` fails |
+| `numbering.ts` | The ID of a line, and IDs written into lines that have none |
+| `archive-blocks.ts` | Closed blocks, their removal, and their place in the archive file |
+| `consolidate-text.ts` | The text work of Consolidate todos |
+| `consolidate-marks.ts` | The Consolidate retry record: sources copied but not emptied |
+| `duplicate-tickets.ts` | The text work of Delete duplicate tickets |
+| `repo-folders.ts` | The todo folder lookup, the global folders, the folder list |
+| `path-forms.ts` | Windows paths, PowerShell quoting, path comparison, relative paths |
+| `platform-commands.ts` | The opener per platform, and the reason a trash command failed |
+| `write-lock.ts` | The lock that makes todo writes run one after another |
+| `time-limit.ts` | The time limit of an outside call, a write job and a store call |
+| `backoff.ts` | The wait after a run of failures in a row |
+| `key-prune.ts` | Pruning of in-memory maps and sets to the keys still in use |
+| `clock-elapsed.ts` | Elapsed time that survives a clock set back |
+| `item-keys.ts` | The keys of todo files and items |
+| `normalize.ts` | The normalized text that matches and keys compare |
+| `categories.ts` | The category book: sort prompt, reply, change test, backups, grouping and filter |
+| `sort-queue.ts` | Which open items the next sort call carries, and how a reply that does not parse narrows later calls |
+| `agent-match.ts` | The Haiku match of a new agent to open items: prompt and reply |
+| `agent-identity.ts` | An agent's label, label size and color |
+| `agent-respawn.ts` | The row of an agent spawned again under an ID that has a row |
+| `claim-score.ts` | How well a claim names an item, and the best item per claim |
+| `claim-keeping.ts` | Which ticket claims stay when a scan did not find them |
+| `links.ts` | The links of agents to todo items |
+| `agent-ends.ts` | The ended states, the unlisted timeout, the end in a task notification |
+| `row-equality.ts` | Value equality of agent rows |
+| `kept-records.ts` | The store limits, session list and pruning steps, and the readers that check each stored value |
+| `token-usage.ts` | The tokens of one model request, and the stored session total |
+| `progress-report.ts` | How a `report_progress` call is read, and its reply |
+| `rules.ts` | The todo rules context block |
+| `claude-notes.ts` | The notes the mod queues for Claude |
+| `note-quotes.ts` | Names and text as the notes quote them: one line, data inside quotes |
+| `ticket-prompts.ts` | The texts about one ticket that the mod gives Claude |
+| `ticket-boxes.ts` | The box per status, and the edit of one box in a file |
+| `ticket-lookup.ts` | Finding a ticket by ID or quoted text |
+| `ticket-actions.ts` | The ticket buttons: glyph, tip, toast, prompt or box |
+| `ticket-spaces.ts` | The spaces that keep the place of a ticket that left |
+| `secrets.ts` | Secret patterns, and text with secrets hidden |
+| `tool-calls.ts` | The words, summary and detail of a tool call on the pane |
+| `orchestrator-history.ts` | The Orchestrator history entries and pages |
+| `view-model.ts` | The view the pane draws, from the todo and the agent rows, and the search |
+| `terminal-text.ts` | The progress bar, the clipped line and the control-free text of the terminal pane |
+| `card-types.ts` | The view types that the cards draw |
+| `card-stage.ts` | The Stage UI palette, the card width, the blink classes, the SVG frame |
+| `card-text.ts` | XML-safe text, escaping, cutting, fitting and wrapping |
+| `card-format.ts` | Token counts, durations, plurals and clock times |
+| `card-parts.ts` | The SVG parts that more than one card draws |
+| `series.ts` | The top card's series and axes |
+| `card-end-labels.ts` | Where each trace's end label goes on the top card, clear of the traces and dots |
+| `card-end-dots.ts` | The end dots of the traces, and the shared split dot for equal ends |
+| `hero-card.ts` | The top card: totals line, key, plot, axes |
+| `todo-cards.ts` | The ticket cards, file cards, board header and spaces |
+| `agent-cards.ts` | The agent card, the timeline and the Orchestrator history card |
+
+The tests follow the same layout: `tests/<module>.test.tsx` holds the cases of `hooks/<module>.ts`. The `tests/register*.test.tsx` files hold the cases that run the mod through the fake engine. Its fakes come from older suites in blocks of their own, because their names repeat.
 
 ## The hooks
 
 | Hook | What the mod does |
 | --- | --- |
-| `session.start` | Registers `/claudeopticon` and the two tools, reads the todo, opens the pane. |
+| `session.start` | Registers `/claudeopticon` and the two tools (`report_progress`, `move_ticket`), prunes old sessions, reads the todo, opens the pane. |
+| `command.run` | Runs `/claudeopticon`: scans the todo and opens the pane. |
 | `prompt.context` | Adds the todo rules as a context block, unless the `rules` option is off. |
 | `ui.render` | Draws the pane: SVG cards on the desktop app and VS Code, text on a terminal. |
 | `tool.call` | Counts each agent's tool calls, records Claude's call summaries and each call's detail (Bash command, file path relative to the repo, Grep or Glob pattern, URL, search query, agent type and model; nothing for MCP tools; at most 300 characters; a command that matches a secret pattern is stored as "(hidden)"), rereads the todo after an edit in `.claude_todo/`, and answers `report_progress` and `move_ticket`. |
 | `agent.spawn` | Adds a line to each agent's prompt that asks for progress reports, and starts the agent's row. |
 | `prompt.submit` | Attaches notes for Claude: agents you named by label, moves you made by hand, IDs the mod gave or changed, the next three free ticket IDs, and claimed tickets still in progress (each at most once every 30 minutes). |
-| `turn.step`, `turn.complete`, `session.compact` | Add up tokens per agent and per session, and record the count at a compaction. |
+| `turn.step` | Counts the tokens of each model request, the main conversation's and each agent's, once, at the step that used them. It takes them from the step result, or from the stop chunk when the result is missing or counts nothing, and never adds both. The count goes to the session total, both token traces and, for an agent, its card. |
+| `turn.complete` | Counts no tokens. For an agent it marks the end of its turn (the agent is then idle if nothing follows) and folds in its last counts. For the main conversation it ends Running on the Orchestrator card. |
+| `session.compact` | Records the token count at a compaction, so the graph can start "since compact" from there. |
 
-A clock tick each second refreshes running agents. An agent missing from the agent list for 15 seconds ends with the status `ended`. Agent rows (the last 200) are saved per session, so a reload keeps start times, counts, links and progress. The mod also stores how many agents came before the first kept row (`agents-base:<session id>`), so labels and colors count from there and A201 stays A201 after a reload. A label's font size shrinks with its length so it fits its 28 px circle with room to spare (at most 17 px of text, measured for Instrument Sans, the widest of the fallback fonts). Chat names are read up to six digits.
+A clock tick each second refreshes running agents. A request that counts tokens is awaited before the step returns, so the count is drawn and stored in order, except while the store does not answer: then the model request does not wait for it. An agent missing from the agent list for 15 seconds ends with the status `ended`. Agent rows (the last 200) are saved per session, so a reload keeps start times, counts, links and progress. The mod also stores how many agents came before the first kept row (`agents-base:<session id>`), so labels and colors count from there and A201 stays A201 after a reload. A label's font size shrinks with its length so it fits its 28 px circle with room to spare (at most 17 px of text, measured for Instrument Sans, the widest of the fallback fonts). Chat names are read up to six digits.
 
 An agent is idle when its turn ends (`turn.complete` with its ID) and no tool call or model request of its own follows. Claude Code keeps such an agent open until something stops it. The card shows it as Idle, out of the live count, its time and timeline bar stopped at the end of the turn, and its last command as "Last:". Its next call or request ends the idle time.
 
 When an agent leaves the live state (completed, failed, killed or ended) and tickets linked to it are still open or in progress, the mod queues one note for Claude, once per agent, naming up to five of them and asking Claude to close each one whose work is done. It goes with the next tool result or prompt. The mod never changes a box for this.
 
+Time limits keep one stuck call from holding the mod. One outside call (a trash command, `osascript`, `rmdir`, `mkdir`, `git`, `printenv`, `open`) or one job under the write lock waits at most 20 seconds (`RUN_LIMIT_MS`). One store call waits at most 5 seconds (`STORE_LIMIT_MS`). A call that runs over counts as failed. The call itself is not stopped, because the engine gives no way to; its late result is dropped. A failed store read is never taken for an absent key, and a failed store write is tried again, with a wait that doubles up to 5 minutes (`backoff.ts`).
+
+The store holds the data per session (`agents`, `agents-base`, `agents-cut`, `series`, `tokens`, `orchestrator`, `orchestrator-title`, `archive-wrote`, each followed by `:<session id>`) and `reserved:<repo root>`. The list `sessions-recent` holds the last 20 sessions, each with the time it last noted itself. A running session notes itself every 10 minutes. A session falls off the list when it is older than the last 20 and has not noted itself for an hour. Its keys are then cleared in two steps: it waits in `sessions-dropping` for 20 more minutes, so a live session whose note was lost in a race can note itself again first. The key `archived:<session id>` is no longer written (the board has no Done column); pruning still clears old ones.
+
 **Stop** runs the `TaskStop` tool with the agent's ID. That aborts the agent's loop: no more turns, no summary.
 
 The todo folder is scanned every 3 seconds, and fully reread once a minute.
+
+Every todo read goes through `readTodo` and every todo write through `writeIfUnchanged`, both in `register.tsx`. `readTodo` never takes a failed read for an empty or absent file: a read that throws is "missing" only when the disk says nothing stands at the path. `writeIfUnchanged` checks the folder's trust and the file's place, then reads the file again, compares it with the text the caller worked from, and writes with no `await` between that read and the write, so an edit made meanwhile is never written over. A file that changed is skipped, and the next scan works from the new text. A file that fails to read three passes in a row is left out when new IDs are chosen (`unread-files.ts`). Two gates enforce the layers on the source: `scripts/check-reads.ts` and `scripts/check-writes.ts` fail on any todo read or write that goes around them, and on any way around the `fs.read(` and `fs.write(` text (an alias, a destructured call). The few allowed calls on files that are no todo file are listed with their reasons in `tests/read-scan.ts` and `tests/write-scan.ts`.
 
 ## Reading the todo
 
@@ -30,11 +114,13 @@ The mod shows the tickets of every `.claude_todo/` folder in the repo together, 
 
 ## IDs, numbering and the archive
 
-A ticket ID is `#T` followed by a digit and then digits or letters, read without regard to case and ending at a word boundary, so `#T12` and `#T002A` are IDs and `#TODO` is not. Other prefixes keep the older form, letters then digits. The part after `#T` is a base-36 number (`25` is 77, `0026` is 78), so old and new IDs share one number line. The next free ID is one more than the highest value in every live and archive file of every known folder, written as 4 characters with leading zeros, and a form that starts with a letter is skipped. After `#T9ZZZ` the IDs grow to 5 characters. Suffixes longer than 10 characters are not read as numbers.
+A ticket ID is `#T` followed by a digit and then digits or letters, read without regard to case and ending at a word boundary, so `#T12` and `#T002A` are IDs and `#TODO` is not. Other prefixes keep the older form, letters then digits. The part after `#T` is a base-36 number (`25` is 77, `0026` is 78), so old and new IDs share one number line. The next free ID is one more than the highest value in every live and archive file of every known folder, written as 4 characters with leading zeros, and a form that starts with a letter is skipped. After `#T9ZZZ` the IDs grow to 5 characters. The number line ends at `#T20000`: a `#T` word at or past it, or with more than 6 characters after the `T`, is a plain word, so a stray tag such as `#T20241005` never moves the next IDs.
+
+Two sessions in one repo must not give the same ID, and the engine store has only get and set, so the mod claims IDs in blocks on disk. A block is 8 ID values. A session claims a block by making an entry named for the block in a claim folder, with a create that fails when the name is taken (`mkdir` without `-p`; on Windows a file opened with CreateNew). The operating system makes that atomic, so one block has one holder. The main claim folder is `claudeopticon/id-claims` in the git common directory, the same for every worktree of the repo. When that folder cannot be made and the common directory is `<root>/.git`, the fallback is `<root>/.claude_work/claudeopticon-id-claims`. With no git at all, the primary todo folder's parent keys one folder. A session lists both folders before it claims and again after: if the other folder now holds a claim on the same block, it deletes its own claim and tries the next block. Both may give up, so a block can become a gap in the numbers, never a duplicate. A holder gives out new IDs from its block for 2 hours (`CLAIM_USE_MS`); a claim is stale after 4 hours (`CLAIM_MS`), and then another session may take the block over with the next generation's name (`<block>.<generation>`), which is just as atomic. A named ID stays reserved for 2 hours. Once an hour the mod deletes stale claim entries below the next free block, and always keeps the newest entry of each block. When no folder works, the claim fails, or 64 blocks are all held, no ID is given and a toast says so.
 
 Each scan first numbers, then archives, in each top-level todo file of a trusted folder (inside the main checkout, not the global one, no symlink). Numbering gives each checkbox line that has no ID the next free one, right after the box, once the line has been seen without an ID for 5 seconds. Archive files are never numbered. A line that already names an ID anywhere in its text, such as a reference, keeps that as its ID and is not numbered. If numbering wrote a file, the scan starts again before the archive step, so the archive step never works from old text.
 
-The archive step moves each top-level `- [x]` line, with the indented lines under it, to `archive/<same name>`, once every box in that block has been checked for 5 seconds. A block with an open subtask stays. Each block goes under the heading it had, the nearest heading above it outside code fences: at the end of that heading's section in the archive, or under a new copy of the heading at the end. Headings, notes and prose stay in the live file. The order is the same as Consolidate's: write the archive, read it back to confirm the blocks, read the source again, and write it without the blocks only if it did not change. A retry skips a block whose lines are already in the archive in that order. Tickets archived this session are kept in the store per session (the last 200), and the Done column lists them, newest first. A file's header row counts its same-named archive file, and the Todo heading counts every archive file.
+The archive step moves each top-level `- [x]` line, with the indented lines under it, to `archive/<same name>`, once every box in that block has been checked for 5 seconds. A block with an open subtask stays. Each block goes under the heading it had, the nearest heading above it outside code fences: at the end of that heading's section in the archive, or under a new copy of the heading at the end. Headings, notes and prose stay in the live file. The order is the same as Consolidate's: write the archive, read it back to confirm the blocks, read the source again, and write it without the blocks only if it did not change. A retry skips a block whose lines are already in the archive in that order. The board has no Done column and the store keeps no list of archived tickets. A file's header row counts its same-named archive file, and the Todo heading counts every archive file.
 
 **Show completed (N)** opens the archive file of the central folder (else the primary folder) with the system's opener: `open` on macOS, `xdg-open` on Linux, `explorer.exe` on Windows, with no shell. It makes the file if it is missing, and N counts the closed tickets in every archive file. The desktop app draws a link only for `https://` addresses, so this is a button and not a link.
 
@@ -50,13 +136,25 @@ Haiku sorts open items into at most five categories, kept in `.claude_todo/categ
 
 **Recategorize** sends every open ticket to the same sorting prompt, ignoring the current groups. Each new group is matched to the old group it shares the most tickets with. The new groups are written only when the number of groups differs, or when at least a quarter of the open tickets would land in a group that does not match their old one. Otherwise the old groups stay, and a note shows next to the button for 4 seconds: "The current categories are correct", or "Could not recategorize" on a failure. A press while a request runs is ignored.
 
+## Search
+
+The search box keeps the open and in-progress tickets whose text holds every word of the query, without regard to case (`searchTodo` in `view-model.ts`). It does not read the archive. Done tickets leave the board, so **Show completed** is the way to the archive.
+
+## Secrets
+
+Text that looks like it holds a secret is replaced with "(hidden)" before it is drawn or stored (`secrets.ts`). The surfaces are the Orchestrator summaries and details, an agent's current command and description, the stored brief of an agent's prompt, the Orchestrator title, and rows read back from an older store. A hidden line keeps the ticket IDs it names, so linking still works. The patterns are long options with a secret word, the short options of listed tools, assignments to names with a secret word, and the PowerShell forms. The rule works on the form of the text only. A secret with none of these forms is not hidden.
+
 ## Ticket buttons
 
 `⋙` and `?` send a prompt to Claude. The manual moves rewrite one checkbox. Each move is queued as a note that goes to Claude with its next tool result or your next message. To change a move, Claude calls `move_ticket`, which asks you and writes only on a yes.
 
 ## The top graph
 
-The top card plots two series over the last 30 minutes: the live agent count, recorded each time it changes, and tokens since the last compaction, recorded at each usage report. A compaction adds a marker and a point at zero, and the token line breaks there. The series are stored per session (`series:<session id>`, at most 2000 points each), so a reload keeps them. Each axis grows only when a value would leave it, to the next step (agents 4, 6, 8, 12, 16, 24, 32 and so on; tokens 150k, 300k, 600k, 900k, 1.5M, 3M and so on, with 4 grid intervals), and shrinks only after every visible value has stayed below half for 5 minutes. Token reports redraw it at most every 5 s, and an idle redraw every 30 s scrolls the time axis. X positions snap to 30 s, so redraws in between send the same markup. Agents are yellow (`#FACC15`, `#CA8A04` in the light theme) and tokens lime (`#A3E635`, `#65A30D`). The axis numbers use the card's text color, and the key sits in the top row after the totals; on a narrow card it moves to its own row.
+The top card plots three series over the last 30 minutes: the live agent count, recorded each time it changes; all tokens since the last compaction, recorded at each model request; and tokens per minute, worked out from the token series. A request is counted once, at its own step, for the main conversation and for every agent. Within one 30 s step (`QUANT_MS`), a request that follows a rise moves that point up instead of adding one, so the rises in a step still sum to its tokens. Tokens per minute at each step is the sum of the rises in the minute before it (`RATE_MS`, 60 s); a count read back after a load is a seed and counts as no usage. A compaction adds a marker and a point at zero, and the token line breaks there. The series are stored per session (`series:<session id>`, at most 2000 points each), so a reload keeps them. A clock that once read far ahead is corrected: later points are re-timed to the clock, and a smaller step back puts the new point at the last point's time.
+
+The agent line and the token lines have their own vertical axes, each with a title. The rate line has no axis of its own: it uses the token axis, whose top holds both token lines. Each axis grows only when a value would leave it, to the next step (agents 4, 6, 8, 12, 16, 24, 32 and so on; tokens 150k, 300k, 600k, 900k, 1.5M, 3M and so on, with 4 grid intervals, in k, M and B), and shrinks only after every visible value has stayed below half for 5 minutes. The token axis shows "0" at its bottom. Token reports redraw the card at most every 5 s (`CLOCK_MS`), and an idle redraw every 30 s scrolls the time axis. X positions snap to 30 s, so redraws in between send the same markup.
+
+Each line ends in a dot. Ends less than 8 px apart (`MERGE_PX`), which includes equal values, are drawn as one larger dot split in wedges, one per line (`card-end-dots.ts`). Each end value is a label with a halo. `card-end-labels.ts` places the labels so that they keep clear of the traces, the dots, each other and the Compacted label. A label starts in its home column, just left of the dots, and may move left by up to 3 columns of 24 px. If no place there is clear, the search runs again over the whole plot width to its left edge, and a far place wins only over a place on a trace. The labels keep the vertical order of their dots, unless that would put one on a trace. The search is greedy first, top label first and bottom label first, then a bounded branch-and-bound that stops after 100,000 tries (`JOINT_TRIES`), so one draw takes tens of milliseconds in every state (it took up to 5 s before the bound). A label more than 24 px (`LEADER_PX`) from its dot gets a leader line. The placer avoids a leader through another label, and leaders are drawn under the Compacted label and the label halos. Agents are yellow (`#FACC15`, `#CA8A04` in the light theme), tokens lime (`#A3E635`, `#65A30D`) and tokens per minute blue (`#60A5FA`, `#2563EB`). The axis numbers use the card's text color. The totals line reads "total session tokens", then the agents finished, and drops words when the card is narrow. The key sits in the top row after the totals; on a narrow card it moves to its own row.
 
 When a ticket leaves a column or a list, a transparent card of the same height takes its place, so the cards below keep their position. The spaces clear at the next press of any control in the pane, or after 60 s, and at most 10 are kept.
 

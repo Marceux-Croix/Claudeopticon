@@ -1,8 +1,7 @@
 {
   "name": "claudeopticon",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "A ticket system for Claude Code: your todo as a live ticket board you can hand to Claude, with each step Claude takes and each helper agent linked to the tickets it works on.",
-  "types": "./types/index.d.ts",
   "author": {
     "name": "Marceux-Croix",
     "url": "https://github.com/Marceux-Croix"
@@ -21,7 +20,7 @@
     "rules": {
       "type": "boolean",
       "title": "Todo rules",
-      "description": "Give Claude the mod's todo and ticket rules as context. Turn off if your CLAUDE.md has its own.",
+      "description": "Give Claude the mod's todo and ticket rules as context, and with each prompt the next free ticket IDs and the tickets still in progress. Turning it off stops all three. Turn off if your CLAUDE.md has its own.",
       "default": true
     }
   }

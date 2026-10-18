@@ -627,3 +627,22 @@ test('#T003I an open ticket closes with its done button', async ($, on) => {
   await ui.press({ key: 'ticket-done-TODO.md-#t1' })
   expect(files['/repo/.claude_todo/TODO.md']).toBe('- [x] #T1 Fix the parser')
 })
+
+/** Property (#T003M): back moves a ticket one column, in progress to queued and queued to open; a card in progress has no queue button. */
+test('#T003M back moves a ticket in progress to queued, then to open', async ($, on) => {
+  const clock = mock.clock(on)
+  const path = '/repo/.claude_todo/TODO.md'
+  const files: Record<string, string> = { [path]: '- [~] #T1 Fix the parser' }
+  repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
+  const ui = await open($)
+  const buttons = async () => JSON.stringify(await ui.findAll({ type: 'Button' }))
+  expect(await buttons()).not.toContain('ticket-queue-TODO.md-#t1')
+  await ui.press({ key: 'ticket-unstart-TODO.md-#t1' })
+  expect(files[path]).toBe('- [>] #T1 Fix the parser')
+  mtimes[path] = (mtimes[path] ?? 0) + 10
+  for (let i = 0; i < 20 && !(await buttons()).includes('ticket-reopen-TODO.md-#t1'); i += 1) {
+    await clock.advance(3000).catch(() => undefined)
+  }
+  await ui.press({ key: 'ticket-reopen-TODO.md-#t1' })
+  expect(files[path]).toBe('- [ ] #T1 Fix the parser')
+})

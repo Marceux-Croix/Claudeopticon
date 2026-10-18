@@ -199,7 +199,7 @@ function pane(): string {
   add(boardHead(view.files))
   const colW = (WIDTH - (SIDE_BY - 1) * GAP) / SIDE_BY
   const columns = [
-    { title: 'In progress', tickets: progressTickets, glyphs: ['≡', '↩', '✓', '?'] },
+    { title: 'In progress', tickets: progressTickets, glyphs: ['↩', '✓', '?'] },
     { title: 'Queued', tickets: queuedTickets, glyphs: ['↩', '◐', '✓', '⋙'] },
     { title: 'Open', tickets: openTickets, glyphs: ['≡', '◐', '✓', '⋙'] },
   ]

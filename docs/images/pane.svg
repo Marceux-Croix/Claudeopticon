@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="1991" viewBox="0 0 760 1991">
 <rect width="760" height="1991" rx="14" fill="#1C1C1E"/>
-<svg x="20" y="20" xmlns="http://www.w3.org/2000/svg" width="720" height="300" viewBox="0 0 720 300" role="img" aria-label="Last 30 minutes: live agents and tokens since compact. Agents: 2 live, 33 of 35 finished. Tokens: 44.81M since compact, 623.59M total.">
+<svg x="20" y="20" xmlns="http://www.w3.org/2000/svg" width="720" height="300" viewBox="0 0 720 300" role="img" aria-label="Last 30 minutes: live agents, all tokens since compact, and tokens per minute. Agents: 2 live, 33 of 35 finished. Tokens: 44.81M since compact, 623.59M total session tokens. Tokens per minute: 2.43M.">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -11,46 +11,53 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 @keyframes pulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
 @media (prefers-reduced-motion:reduce){.blink,.pulse{animation:none}.pulse{opacity:0}}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
-@media (prefers-color-scheme:light){.fa{fill:#CA8A04}.sa{stroke:#CA8A04}.ft{fill:#65A30D}.st{stroke:#65A30D}.pt{stop-color:#65A30D}}
+@media (prefers-color-scheme:light){.fa{fill:#CA8A04}.sa{stroke:#CA8A04}.ft{fill:#65A30D}.st{stroke:#65A30D}.pt{stop-color:#65A30D}.fr{fill:#2563EB}.sr{stroke:#2563EB}}
 </style>
 <rect width="720" height="300" rx="12" fill="#07080F"/>
-<text x="24" y="30" font-size="13"><tspan fill="rgba(255,255,255,.88)" font-weight="600">623.59M</tspan><tspan fill="rgba(255,255,255,.62)"> tokens total</tspan><tspan fill="rgba(255,255,255,.38)">  ·  </tspan><tspan fill="rgba(255,255,255,.88)" font-weight="600">33 of 35</tspan><tspan fill="rgba(255,255,255,.62)"> agents finished</tspan></text>
+<text x="24" y="30" font-size="13"><tspan fill="rgba(255,255,255,.88)" font-weight="600">623.59M</tspan><tspan fill="rgba(255,255,255,.62)"> total session tokens</tspan><tspan fill="rgba(255,255,255,.38)">  ·  </tspan><tspan fill="rgba(255,255,255,.88)" font-weight="600">33 of 35</tspan><tspan fill="rgba(255,255,255,.62)"> agents finished</tspan></text>
 <circle cx="700" cy="20" r="4" fill="#8B5CF6" class="pulse"/>
 <circle cx="700" cy="20" r="4" fill="#8B5CF6"/>
 <text x="690" y="24" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">Live</text>
-<line x1="372" y1="25.5" x2="386" y2="25.5" stroke="#FACC15" class="sa" stroke-width="2" stroke-linecap="round"/><text x="391" y="30" fill="rgba(255,255,255,.62)" font-size="12">Live agents</text>
-<line x1="466" y1="25.5" x2="480" y2="25.5" stroke="#A3E635" class="st" stroke-width="2" stroke-linecap="round"/><text x="485" y="30" fill="rgba(255,255,255,.62)" font-size="12">Tokens since compact</text>
-<line x1="64" y1="250" x2="656" y2="250" stroke="rgba(255,255,255,.08)"/>
-<text x="54" y="254" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">0</text>
-<text x="666" y="254" fill="rgba(255,255,255,.88)" font-size="11.5">0M</text>
-<line x1="64" y1="201.5" x2="656" y2="201.5" stroke="rgba(255,255,255,.08)"/>
-<text x="54" y="205.5" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">1</text>
-<text x="666" y="205.5" fill="rgba(255,255,255,.88)" font-size="11.5">15M</text>
-<line x1="64" y1="153" x2="656" y2="153" stroke="rgba(255,255,255,.08)"/>
-<text x="54" y="157" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">2</text>
-<text x="666" y="157" fill="rgba(255,255,255,.88)" font-size="11.5">30M</text>
-<line x1="64" y1="104.5" x2="656" y2="104.5" stroke="rgba(255,255,255,.08)"/>
-<text x="54" y="108.5" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">3</text>
-<text x="666" y="108.5" fill="rgba(255,255,255,.88)" font-size="11.5">45M</text>
-<line x1="64" y1="56" x2="656" y2="56" stroke="rgba(255,255,255,.08)"/>
-<text x="54" y="60" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">4</text>
-<text x="666" y="60" fill="rgba(255,255,255,.88)" font-size="11.5">60M</text>
-<text x="64" y="270" text-anchor="start" fill="rgba(255,255,255,.38)" font-size="11.5">30m ago</text>
-<text x="261.3" y="270" text-anchor="middle" fill="rgba(255,255,255,.38)" font-size="11.5">20m ago</text>
-<text x="458.7" y="270" text-anchor="middle" fill="rgba(255,255,255,.38)" font-size="11.5">10m ago</text>
-<text x="656" y="270" text-anchor="end" fill="rgba(255,255,255,.38)" font-size="11.5">Now</text>
-<line x1="300.8" y1="56" x2="300.8" y2="250" stroke="rgba(255,255,255,.38)" stroke-dasharray="3 4"/>
-<text x="305.8" y="68" text-anchor="start" fill="rgba(255,255,255,.38)" font-size="11">Compacted</text>
+<line x1="24" y1="47" x2="38" y2="47" stroke="#FACC15" class="sa" stroke-width="2" stroke-linecap="round"/><text x="43" y="51.5" fill="rgba(255,255,255,.62)" font-size="12">Live agents</text>
+<line x1="125" y1="47" x2="139" y2="47" stroke="#A3E635" class="st" stroke-width="2" stroke-linecap="round"/><text x="144" y="51.5" fill="rgba(255,255,255,.62)" font-size="12">All tokens since compact</text>
+<line x1="310" y1="47" x2="324" y2="47" stroke="#60A5FA" class="sr" stroke-width="2" stroke-linecap="round"/><text x="329" y="51.5" fill="rgba(255,255,255,.62)" font-size="12">Tokens per minute</text>
+<line x1="96" y1="250" x2="624" y2="250" stroke="rgba(255,255,255,.08)"/>
+<text x="86" y="254" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">0</text>
+<text x="634" y="254" fill="rgba(255,255,255,.88)" font-size="11.5">0</text>
+<line x1="96" y1="203" x2="624" y2="203" stroke="rgba(255,255,255,.08)"/>
+<text x="86" y="207" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">1</text>
+<text x="634" y="207" fill="rgba(255,255,255,.88)" font-size="11.5">15M</text>
+<line x1="96" y1="156" x2="624" y2="156" stroke="rgba(255,255,255,.08)"/>
+<text x="86" y="160" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">2</text>
+<text x="634" y="160" fill="rgba(255,255,255,.88)" font-size="11.5">30M</text>
+<line x1="96" y1="109" x2="624" y2="109" stroke="rgba(255,255,255,.08)"/>
+<text x="86" y="113" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">3</text>
+<text x="634" y="113" fill="rgba(255,255,255,.88)" font-size="11.5">45M</text>
+<line x1="96" y1="62" x2="624" y2="62" stroke="rgba(255,255,255,.08)"/>
+<text x="86" y="66" text-anchor="end" fill="rgba(255,255,255,.88)" font-size="11.5">4</text>
+<text x="634" y="66" fill="rgba(255,255,255,.88)" font-size="11.5">60M</text>
+<text transform="translate(50 156) rotate(-90)" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">Live agents</text>
+<text transform="translate(687 156) rotate(90)" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="12">Tokens</text>
+<text x="96" y="270" text-anchor="start" fill="rgba(255,255,255,.38)" font-size="11.5">30m ago</text>
+<text x="272" y="270" text-anchor="middle" fill="rgba(255,255,255,.38)" font-size="11.5">20m ago</text>
+<text x="448" y="270" text-anchor="middle" fill="rgba(255,255,255,.38)" font-size="11.5">10m ago</text>
+<text x="624" y="270" text-anchor="end" fill="rgba(255,255,255,.38)" font-size="11.5">Now</text>
+<line x1="307.2" y1="62" x2="307.2" y2="250" stroke="rgba(255,255,255,.38)" stroke-dasharray="3 4"/>
 <defs><linearGradient id="tk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A3E635" class="pt" stop-opacity=".18"/><stop offset="1" stop-color="#A3E635" class="pt" stop-opacity="0"/></linearGradient></defs>
-<polygon points="64,250 64,149.8 83.7,144.1 103.5,138.5 123.2,132.8 142.9,127.2 162.7,121.5 182.4,115.8 202.1,110.2 221.9,104.6 241.6,98.9 261.3,93.2 281.1,87.6 300.8,87.6 300.8,250" fill="url(#tk)"/>
-<polyline points="64,149.8 83.7,144.1 103.5,138.5 123.2,132.8 142.9,127.2 162.7,121.5 182.4,115.8 202.1,110.2 221.9,104.6 241.6,98.9 261.3,93.2 281.1,87.6 300.8,87.6" fill="none" stroke="#A3E635" class="st" stroke-width="1.25" stroke-linejoin="round"/>
-<polygon points="300.8,250 300.8,246.9 320.5,239 340.3,231.1 360,223.2 379.7,215.4 399.5,207.5 419.2,199.6 438.9,191.7 458.7,183.9 478.4,176 498.1,168.1 517.9,160.2 537.6,152.4 557.3,144.5 577.1,136.6 596.8,128.8 616.5,120.9 636.3,113 656,105.1 656,250" fill="url(#tk)"/>
-<polyline points="300.8,246.9 320.5,239 340.3,231.1 360,223.2 379.7,215.4 399.5,207.5 419.2,199.6 438.9,191.7 458.7,183.9 478.4,176 498.1,168.1 517.9,160.2 537.6,152.4 557.3,144.5 577.1,136.6 596.8,128.8 616.5,120.9 636.3,113 656,105.1" fill="none" stroke="#A3E635" class="st" stroke-width="1.25" stroke-linejoin="round"/>
-<path d="M 64 201.5 H 123.2 V 153 H 202.1 V 104.5 H 281.1 V 153 H 379.7 V 201.5 H 438.9 V 153 H 517.9 V 104.5 H 577.1 V 153 H 656" fill="none" stroke="#FACC15" class="sa" stroke-width="1.5" stroke-linejoin="round"/>
-<circle cx="656" cy="153" r="3.5" fill="#FACC15" class="fa" stroke="#07080F" stroke-width="2"/>
-<text x="646" y="144" text-anchor="end" font-size="12"><tspan fill="#FACC15" class="fa" font-weight="600">2</tspan><tspan fill="rgba(255,255,255,.62)"> live</tspan></text>
-<circle cx="656" cy="105.1" r="3.5" fill="#A3E635" class="ft" stroke="#07080F" stroke-width="2"/>
-<text x="646" y="96.1" text-anchor="end" font-size="12"><tspan fill="#A3E635" class="ft" font-weight="600">44.81M</tspan></text></svg>
+<polygon points="96,250 96,152.9 113.6,147.4 131.2,141.9 148.8,136.4 166.4,131 184,125.5 201.6,120 219.2,114.5 236.8,109.1 254.4,103.6 272,98.1 289.6,92.6 307.2,92.6 307.2,250" fill="url(#tk)"/>
+<polyline points="96,152.9 113.6,147.4 131.2,141.9 148.8,136.4 166.4,131 184,125.5 201.6,120 219.2,114.5 236.8,109.1 254.4,103.6 272,98.1 289.6,92.6 307.2,92.6" fill="none" stroke="#A3E635" class="st" stroke-width="1.25" stroke-linejoin="round"/>
+<polygon points="307.2,250 307.2,247 324.8,239.3 342.4,231.7 360,224.1 377.6,216.4 395.2,208.8 412.8,201.2 430.4,193.5 448,185.9 465.6,178.3 483.2,170.6 500.8,163 518.4,155.4 536,147.8 553.6,140.1 571.2,132.5 588.8,124.9 606.4,117.2 624,109.6 624,250" fill="url(#tk)"/>
+<polyline points="307.2,247 324.8,239.3 342.4,231.7 360,224.1 377.6,216.4 395.2,208.8 412.8,201.2 430.4,193.5 448,185.9 465.6,178.3 483.2,170.6 500.8,163 518.4,155.4 536,147.8 553.6,140.1 571.2,132.5 588.8,124.9 606.4,117.2 624,109.6" fill="none" stroke="#A3E635" class="st" stroke-width="1.25" stroke-linejoin="round"/>
+<polyline points="96,250 104.8,250 113.6,250 122.4,244.5 131.2,244.5 140,244.5 148.8,244.5 157.6,244.5 166.4,244.5 175.2,244.5 184,244.5 192.8,244.5 201.6,244.5 210.4,244.5 219.2,244.5 228,244.5 236.8,244.5 245.6,244.5 254.4,244.5 263.2,244.5 272,244.5 280.8,244.5 289.6,244.5 298.4,244.5 307.2,244.5 316,250 324.8,250 333.6,242.4 342.4,242.4 351.2,242.4 360,242.4 368.8,242.4 377.6,242.4 386.4,242.4 395.2,242.4 404,242.4 412.8,242.4 421.6,242.4 430.4,242.4 439.2,242.4 448,242.4 456.8,242.4 465.6,242.4 474.4,242.4 483.2,242.4 492,242.4 500.8,242.4 509.6,242.4 518.4,242.4 527.2,242.4 536,242.4 544.8,242.4 553.6,242.4 562.4,242.4 571.2,242.4 580,242.4 588.8,242.4 597.6,242.4 606.4,242.4 615.2,242.4 624,242.4" fill="none" stroke="#60A5FA" class="sr" stroke-width="1.25" stroke-linejoin="round"/>
+<path d="M 96 203 H 148.8 V 156 H 219.2 V 109 H 289.6 V 156 H 377.6 V 203 H 430.4 V 156 H 500.8 V 109 H 553.6 V 156 H 624" fill="none" stroke="#FACC15" class="sa" stroke-width="1.5" stroke-linejoin="round"/>
+<text x="312.2" y="74" text-anchor="start" fill="none" stroke="#07080F" stroke-width="3" stroke-linejoin="round" font-size="11" aria-hidden="true">Compacted</text>
+<text x="312.2" y="74" text-anchor="start" fill="rgba(255,255,255,.38)" font-size="11">Compacted</text>
+<circle cx="624" cy="109.6" r="3.5" fill="#A3E635" class="ft" stroke="#07080F" stroke-width="2"/>
+<circle cx="624" cy="156" r="3.5" fill="#FACC15" class="fa" stroke="#07080F" stroke-width="2"/>
+<circle cx="624" cy="242.4" r="3.5" fill="#60A5FA" class="fr" stroke="#07080F" stroke-width="2"/>
+<text x="614" y="147" text-anchor="end" font-size="12" stroke="#07080F" stroke-width="3" stroke-linejoin="round" paint-order="stroke"><tspan fill="#FACC15" class="fa" font-weight="600">2</tspan><tspan fill="rgba(255,255,255,.62)"> live</tspan></text>
+<text x="614" y="101" text-anchor="end" font-size="12" stroke="#07080F" stroke-width="3" stroke-linejoin="round" paint-order="stroke"><tspan fill="#A3E635" class="ft" font-weight="600">44.81M</tspan></text>
+<text x="614" y="233" text-anchor="end" font-size="12" stroke="#07080F" stroke-width="3" stroke-linejoin="round" paint-order="stroke"><tspan fill="#60A5FA" class="fr" font-weight="600">2.43M</tspan><tspan fill="rgba(255,255,255,.62)">/min</tspan></text></svg>
 <text x="20" y="352" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="15" font-weight="600" fill="rgba(255,255,255,.88)">Orchestrator</text>
 <text x="137" y="352" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" fill="rgba(255,255,255,.55)">Working</text>
 
@@ -220,7 +227,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="575" y="1213" width="165" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
 <text x="657.5" y="1233" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Show completed (24)</text>
 <rect x="20" y="1255" width="220" height="30" rx="8" fill="none" stroke="rgba(255,255,255,.22)"/>
-<text x="32" y="1275" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" fill="rgba(255,255,255,.55)">Search open and done items</text>
+<text x="32" y="1275" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" fill="rgba(255,255,255,.55)">Search open and in-progress items</text>
 <rect x="248" y="1255" width="68" height="30" rx="8" fill="rgba(255,255,255,.1)"/>
 <text x="282" y="1275" text-anchor="middle" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="13.5" font-weight="500" fill="rgba(255,255,255,.88)">Search</text>
 <rect x="324" y="1255" width="113" height="30" rx="8" fill="rgba(255,255,255,.1)"/>

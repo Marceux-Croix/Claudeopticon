@@ -1,4 +1,4 @@
-![Claudeopticon: see everything Claude Code is doing, in one live pane](docs/images/social-preview.png)
+![Claudeopticon: a ticket system for Claude Code, with the live pane of agents, tokens and tickets](docs/images/social-preview.png)
 
 # Claudeopticon
 
@@ -8,7 +8,7 @@ Claudeopticon is a mod for Claude Code. It adds a work pane next to your convers
 
 ![The whole Claudeopticon pane: the graph of agents and tokens, then Orchestrator, Agents and the Todo board, top to bottom](docs/images/pane.svg)
 
-At its core is a ticket system that lives in your repo. Each line in `.claude_todo/` is a ticket with an ID such as `#T002A`. From the board you can send a ticket to Claude, ask for a status update, or move it between Open, In progress and Done. Claude keeps each ticket's state up to date as it works, and every helper agent is linked to the tickets it works on.
+At its core is a ticket system that lives in your repo. Each line in `.claude_todo/` is a ticket with an ID such as `#T002A`. From the board you can send a ticket to Claude, ask for a status update, or move it between Open, In progress and done. A ticket that is done leaves the board for the archive. Claude keeps each ticket's state up to date as it works, and every helper agent is linked to the tickets it works on.
 
 ## Contents
 
@@ -57,14 +57,17 @@ The pane opens at the start of each session. To open it again, run `/claudeoptic
 
 ### Top card
 
-![The top card: a graph of live agents and tokens since the last compaction over the last 30 minutes](docs/images/top.svg)
+![The top card: a graph of live agents, tokens since the last compaction and tokens per minute over the last 30 minutes](docs/images/top.svg)
 
-The top card is a live graph of the last 30 minutes, with two lines:
+The top card is a live graph of the last 30 minutes, with three lines:
 
 - **Live agents** (yellow, left axis): how many helper agents run at each moment.
-- **Tokens since compact** (lime green, right axis): how much text Claude has processed since the last compaction, when Claude Code shrinks a long conversation to free up room. A token is the unit of Claude's usage. At a compaction the line drops to zero, and a dashed line marks it.
+- **All tokens since compact** (lime green, right axis): every token that Claude and its agents used since the last compaction, when Claude Code shrinks a long conversation to free up room. A token is the unit of Claude's usage. At a compaction the line drops to zero, and a dashed line marks it.
+- **Tokens per minute** (blue, on the token axis): the tokens used in each minute. Its scale is the token axis, whose top holds both token lines.
 
-The top row gives the totals, all tokens this session and how many agents have finished, followed by the key for the two lines. Each line ends in a dot with its current value. The axis numbers are in plain text color. The axes grow when a line would leave the graph, and shrink only after the values stay below half for 5 minutes, so they rarely move. The graph redraws at most every 5 seconds while numbers change, and every 30 seconds otherwise. A reload keeps the last 30 minutes. Todo progress is in the Todo section's header.
+Each vertical axis has a title ("Live agents", "Tokens"). The top row gives the totals, "total session tokens" and how many agents have finished, followed by the key for the three lines. Each line ends in a dot with its current value. The end value is a label with a halo, placed clear of the lines where the plot has a clear place, with a leader line to its dot when it must sit far away. Lines that end at equal values share one dot, split into wedges of their colors. The token axis shows "0" at the bottom and counts up in k, M and B (thousand, million, billion). The axis numbers are in plain text color. The axes grow when a line would leave the graph, and shrink only after the values stay below half for 5 minutes, so they rarely move. The graph redraws at most every 5 seconds while numbers change, and every 30 seconds otherwise. A reload keeps the last 30 minutes. Todo progress is in the Todo section's header.
+
+The mod counts every model request once, at the step that used it: the main conversation's and each agent's. It never counts a whole run at its end, so a compaction splits the tokens at the right place.
 
 ### Orchestrator: what Claude is doing
 
@@ -92,16 +95,16 @@ Finished agents are hidden. **Show finished agents** brings them back, grayed ou
 
 ![The ticket board](docs/images/board.svg)
 
-The pane draws one board for all your todo files, with the columns **In progress**, **Open** and **Done**. Above it, one header card has a row for each file: its name, its progress bar, and its own "done of total" count, which includes the file's closed items in the archive. If two files have the same name, the row also shows the folder in dim text. A ticket shows its number, its group, its status, and the tags of the agents working on it. The tags blink in the agent's color while it works, and the **O** tag blinks while Claude works on the ticket itself. When an agent starts on a ticket, the ticket moves to In progress by itself. The **Done** column shows the tickets closed and archived in this session, newest first; older closed tickets are in the archive file.
+The pane draws one board for all your todo files, with the columns **In progress** and **Open**. There is no Done column: a ticket that is done leaves the board and goes to the archive. Above it, one header card has a row for each file: its name, its progress bar, and its own "done of total" count, which includes the file's closed items in the archive. If two files have the same name, the row also shows the folder in dim text. A ticket shows its number, its group, its status, and the tags of the agents working on it. The tags blink in the agent's color while it works, and the **O** tag blinks while Claude works on the ticket itself. When an agent starts on a ticket, the ticket moves to In progress by itself.
 
-Tickets that are not done have buttons on the bottom edge:
+Tickets have buttons on the bottom edge:
 
 | Button | On | What it does |
 | --- | --- | --- |
 | `⋙` Send to Claude | Open tickets | Sends the item to Claude as a prompt, to build it. |
 | `?` Ask Claude for a status update | Tickets in progress, or already sent | Asks Claude for a short report in the chat. It starts no new work. |
 | `◐` Mark in progress | Open tickets | Moves the ticket by hand. |
-| `✓` Mark done | Tickets in progress | Moves the ticket by hand. |
+| `✓` Mark done | Tickets in progress | Moves the ticket by hand. The mod then archives it. |
 | `↩` Move back to open | Tickets in progress | Moves the ticket by hand. |
 
 The move buttons are for work you do yourself, such as a human review. They change the checkbox in your todo file and nothing else. Claude is told at its next action, so it does not work on a ticket you closed. It is not asked to do anything.
@@ -121,7 +124,7 @@ Other controls:
 - The **group buttons** show or hide each group. Haiku makes the groups: it reads your open tickets, names up to five groups, and puts each ticket in one. A ticket keeps its group, and new tickets are sorted as they appear.
 - **Recategorize** asks Haiku to sort all open tickets into groups again, from scratch. The new groups replace the old ones only when the change is real: the number of groups changes, or at least a quarter of the open tickets would land in a different group. A rename alone does not count. Otherwise the current groups stay, and "The current categories are correct" shows next to the button for 4 seconds.
 - **Show completed (N)** opens the archive file, `.claude_todo/archive/TODO.md`, in your system's default app for Markdown files. N is the number of closed tickets in the archive. The mod makes the file if it does not exist yet.
-- The **search box** finds tickets, open, done and archived, with every word you type, and says how many match. **Clear search** empties it.
+- The **search box** finds open and in-progress tickets with every word you type, and says how many match. It does not search the archive: **Show completed** opens that. **Clear search** empties the box.
 
 ## The todo format
 
@@ -133,7 +136,7 @@ The mod reads checkbox lines in the Markdown files at the top level of `.claude_
 - [x] #T0006 Done item
 ```
 
-- **IDs:** each item has an ID, unique in the project: `#T` plus 4 characters, digits and capital letters, the first one a digit. They count in base 36: `#T0009`, then `#T000A`, up to `#T9ZZZ`, which gives 466,560 IDs. Older short IDs such as `#T12` stay valid and are never renamed. A new ID always comes after the highest one in use, old or new.
+- **IDs:** each item has an ID, unique in the project: `#T` plus 4 characters, digits and capital letters, the first one a digit. They count in base 36: `#T0009`, then `#T000A`, up to `#T9ZZZ`, which gives 466,560 IDs. After that the IDs have 5 characters, from `#T10000`. Older short IDs such as `#T12` stay valid and are never renamed. A new ID always comes after the highest one in use, old or new.
 - **Numbering:** an item with no ID gets the next free one from the mod, about 5 seconds after it appears. The mod also gives Claude the next three free IDs with each prompt.
 - Prose, tables and headings may surround the items. Only checkbox lines count.
 - **Closed items go to the archive:** when an item is checked off (`- [x]`), the mod moves it, about 5 seconds later, to the file of the same name in `.claude_todo/archive/` (`TODO.md` to `archive/TODO.md`). It makes the archive file if it is missing, and puts the item under the same heading it had. So the live file holds only open and in-progress items, and the archive is the record of finished work. Nothing is deleted. A closed item with subtasks moves only when all of its subtasks are done, and they move with it. Headings and notes stay in the live file.
@@ -143,18 +146,20 @@ The mod reads checkbox lines in the Markdown files at the top level of `.claude_
 
 ## Rules for Claude
 
-At the start of each conversation, the mod gives Claude short instructions, about 650 tokens. The `rules` option turns them off. Claude:
+At the start of each conversation, the mod gives Claude short instructions, about 3,400 characters (roughly 850 tokens). The text is `RULES` in `hooks/rules.ts`. The `rules` option turns it off. Claude is told to:
 
-- keeps the items in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's), makes the folder when the repo has none, and keeps each item in the folder it is in;
-- writes each item as one checkbox line in a top-level `.md` file and updates its box the moment the status changes;
-- gives each new item one of the free IDs the mod names (an item with no ID gets one from the mod), and puts the item's ID in the description of each agent it starts for that item, marking the item `[~]`;
-- closes an item (`- [x]`) in the same turn its work is done, before its final reply, never leaves finished work open or in progress, and closes an agent's item when the agent's work is done;
-- never deletes a done item and never folds done items into a summary line; it leaves the move to the archive to the mod and never moves an item back;
-- when it works on tickets itself, sends a headline for that work with `report_progress` (`title` and `items`), and again when the work changes;
-- finds or adds an item before it starts any work, and does no work that has no item;
-- stops work on an item you moved to open or done;
-- gets a reminder when it may have missed one. When an agent ends while its tickets are still open or in progress, the mod names them to Claude once and asks it to close each one whose work is done. At your next prompt, it names tickets Claude claimed that are still in progress, each at most once every 30 minutes. The mod never closes a ticket itself;
-- never changes the box of an item you moved. If it thinks your move was wrong, it calls the `move_ticket` tool. You get a dialog, and the box changes only if you say yes. If the item is in more than one file, the tool asks Claude for its folder.
+- keep the items in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's), make the folder when the repo has none, and keep each item in the folder it is in;
+- never make or use the global todo folder, `~/.claude/.claude_todo/` (or `.claude_todo/` in `$CLAUDE_CONFIG_DIR`), because the board never reads it; when the repo root is that folder's parent, use the `.claude_todo/` of the project it works in;
+- write each item as one checkbox line in a top-level `.md` file (`- [ ]`, `- [~]`, `- [x]`) and update its box the moment the status changes;
+- give each new item one of the free IDs the mod names (`#T` and 4 digits and capital letters, or 5 characters when the 4-character IDs run out; an item with no ID gets one from the mod), and put the item's ID in the description of each agent it starts for that item, marking the item `[~]`;
+- close an item (`- [x]`) in the same turn its work is done, before its final reply, never leave finished work open or in progress, and close an agent's item when the agent's work is done;
+- never delete a done item and never fold done items into a summary line; the mod moves a done ticket whose subtasks are all done to the archive, and Claude never moves it back;
+- when it works on tickets itself, send a headline for that work with `report_progress` (`title` and `items`), and again when the work changes;
+- find or add an item before it starts any work, and do no work that has no item;
+- stop work on an item you moved to open or done;
+- never change the box of an item you moved. If it thinks your move was wrong, it calls the `move_ticket` tool. You get a dialog, and the box changes only if you say yes. If the item is in more than one file, the tool refuses and lists them, and Claude calls it again with `folder` set to the item's folder path.
+
+Claude also gets reminders. When an agent ends while its tickets are still open or in progress, the mod names them to Claude once and asks it to close each one whose work is done. At your next prompt, it names tickets Claude claimed that are still in progress, each at most once every 30 minutes. The mod never closes a ticket itself.
 
 ## Agents and progress
 
@@ -178,44 +183,47 @@ Set options in the `/config` menu, under the plugin. The desktop app does not sh
 
 ### Values set in the code
 
-Other values are constants in `hooks/register.tsx`. To change one, edit the file and run `/reload-plugins`. The values in seconds count clock ticks of one second (`TICK_MS`, 1000).
+Other values are constants in the module that uses them. To change one, edit that file and run `/reload-plugins`. The values in seconds count clock ticks of one second (`TICK_MS`, 1000, in `hooks/register.tsx`).
 
-| Constant | Default | What it sets |
-| --- | --- | --- |
-| `SCAN_EVERY` | 3 | Seconds between todo scans |
-| `RESYNC_EVERY` | 60 | Seconds between full rereads of the todo |
-| `ITEMS_SHOWN` | 12 | Tickets in a list before "Show all N items" |
-| `MAX_FOLDERS` | 20 | Most `.claude_todo/` folders the pane finds in a repo |
-| `MAX_CATEGORIES` | 5 | Most category groups |
-| `SORT_MODEL` | `haiku` | The model that sorts tickets, matches agents to tickets, and recategorizes |
-| `SORT_BATCH` | 60 | Tickets per sorting request |
-| `SORT_BATCHES` | 5 | Sorting requests per round |
-| `SORT_EVERY_MS` | 30000 | Milliseconds between sorting rounds |
-| `MATCH_MAX` | 3 | Most tickets the model links to one agent |
-| `UNLISTED_MS` | 15000 | Milliseconds before an agent that left Claude Code's list shows Ended |
-| `KEPT_AGENTS` | 200 | Agent rows kept per session |
-| `ORCHESTRATOR_PAGE` | 5 | Orchestrator lines per page |
-| `ARCHIVE_AFTER_MS` | 5000 | Milliseconds an item stays checked off before it moves to the archive |
-| `NUMBER_AFTER_MS` | 5000 | Milliseconds an item stays without an ID before the mod numbers it |
-| `NEXT_IDS_SHOWN` | 3 | Free IDs given to Claude with each prompt |
-| `NOTE_MS` | 4000 | Milliseconds the Recategorize message stays up |
-| `KEPT_ARCHIVED` | 200 | Tickets archived this session that the Done column remembers |
-| `NUDGE_TICKETS` | 5 | Most tickets named in one reminder to close finished work |
-| `NUDGE_REPEAT_MS` | 1800000 | Milliseconds before the same in-progress ticket is named again |
-| `ORCHESTRATOR_KEPT` | 1000 | Orchestrator history entries kept in memory |
-| `MATCH_ITEMS` | 80 | Most open tickets offered to the model when it matches an agent |
-| `LINK_MIN_CHARS` | 12 | Shortest ticket quote in an agent's prompt that links the agent |
-| `CLAIM_MIN_CHARS`, `CLAIM_MIN_WORDS`, `CLAIM_MIN_SHARE` | 12, 3, 0.7 | How closely a progress report must match a ticket's text to claim it |
-| `CLAIM_CHECK_MS` | 600000 | Milliseconds a ticket claim stands before the next progress reply asks the agent to confirm it |
-| `MIN_TICKET_PX` | 300 | Narrowest ticket before the board columns stack |
-| `WINDOW_MS` | 1800000 | Milliseconds of history the top graph shows |
-| `SHRINK_MS` | 300000 | Milliseconds a graph axis waits below half before it shrinks |
-| `IDLE_DRAW_MS` | 30000 | Milliseconds between graph redraws when nothing changes |
-| `SERIES_CAP` | 2000 | Points kept per graph line |
-| `SPACE_MS` | 60000 | Milliseconds the space of a removed ticket stays |
-| `MAX_SPACES` | 10 | Most such spaces at once |
-| `TITLE_MAX` | 80 | Longest Orchestrator headline kept, in characters |
-| `DETAIL_MAX` | 300 | Longest action detail kept on the Orchestrator card, in characters |
+| Constant | Default | Module in `hooks/` | What it sets |
+| --- | --- | --- | --- |
+| `SCAN_EVERY` | 3 | `register.tsx` | Seconds between todo scans |
+| `RESYNC_EVERY` | 60 | `register.tsx` | Seconds between full rereads of the todo |
+| `ITEMS_SHOWN` | 12 | `register.tsx` | Tickets in a list before "Show all N items" |
+| `CLOCK_MS` | 5000 | `register.tsx` | Most often, in milliseconds, that the pane redraws for a token report |
+| `IDLE_DRAW_MS` | 30000 | `register.tsx` | Milliseconds between graph redraws when nothing changes |
+| `NOTE_MS` | 4000 | `register.tsx` | Milliseconds the Recategorize message stays up |
+| `MIN_TICKET_PX` | 300 | `register.tsx` | Narrowest ticket before the board columns stack |
+| `MAX_FOLDERS` | 20 | `repo-folders.ts` | Most `.claude_todo/` folders the pane finds in a repo |
+| `MAX_CATEGORIES` | 5 | `categories.ts` | Most category groups |
+| `SORT_MODEL` | `haiku` | `categories.ts` | The model that sorts tickets, matches agents to tickets, and recategorizes |
+| `SORT_BATCH` | 60 | `categories.ts` | Tickets per sorting request |
+| `SORT_BATCHES` | 5 | `categories.ts` | Sorting requests per round |
+| `SORT_EVERY_MS` | 30000 | `categories.ts` | Milliseconds between sorting rounds |
+| `MATCH_MAX` | 3 | `agent-match.ts` | Most tickets the model links to one agent |
+| `MATCH_ITEMS` | 80 | `agent-match.ts` | Most open tickets offered to the model when it matches an agent |
+| `UNLISTED_MS` | 15000 | `agent-ends.ts` | Milliseconds before an agent that left Claude Code's list shows Ended |
+| `KEPT_AGENTS` | 200 | `kept-records.ts` | Agent rows kept per session |
+| `KEPT_SESSIONS` | 20 | `kept-records.ts` | Sessions whose data the store keeps |
+| `ORCHESTRATOR_PAGE` | 5 | `orchestrator-history.ts` | Orchestrator lines per page |
+| `ORCHESTRATOR_KEPT` | 1000 | `orchestrator-history.ts` | Orchestrator history entries kept in memory |
+| `ARCHIVE_AFTER_MS` | 5000 | `archive-blocks.ts` | Milliseconds an item stays checked off before it moves to the archive |
+| `NUMBER_AFTER_MS` | 5000 | `numbering.ts` | Milliseconds an item stays without an ID before the mod numbers it |
+| `NEXT_IDS_SHOWN` | 3 | `claude-notes.ts` | Free IDs given to Claude with each prompt |
+| `NUDGE_TICKETS` | 5 | `claude-notes.ts` | Most tickets named in one reminder to close finished work |
+| `NUDGE_REPEAT_MS` | 1800000 | `claude-notes.ts` | Milliseconds before the same in-progress ticket is named again |
+| `LINK_MIN_CHARS` | 12 | `links.ts` | Shortest ticket quote in an agent's prompt that links the agent |
+| `CLAIM_MIN_CHARS`, `CLAIM_MIN_WORDS`, `CLAIM_MIN_SHARE` | 12, 3, 0.7 | `claim-score.ts` | How closely a progress report must match a ticket's text to claim it |
+| `CLAIM_CHECK_MS` | 600000 | `progress-report.ts` | Milliseconds a ticket claim stands before the next progress reply asks the agent to confirm it |
+| `TITLE_MAX` | 80 | `progress-report.ts` | Longest Orchestrator headline kept, in characters |
+| `DETAIL_MAX` | 300 | `tool-calls.ts` | Longest action detail kept on the Orchestrator card, in characters |
+| `WINDOW_MS` | 1800000 | `series.ts` | Milliseconds of history the top graph shows |
+| `SHRINK_MS` | 300000 | `series.ts` | Milliseconds a graph axis waits below half before it shrinks |
+| `SERIES_CAP` | 2000 | `series.ts` | Points kept per graph line |
+| `SPACE_MS` | 60000 | `ticket-spaces.ts` | Milliseconds the space of a removed ticket stays |
+| `MAX_SPACES` | 10 | `ticket-spaces.ts` | Most such spaces at once |
+| `RUN_LIMIT_MS` | 20000 | `time-limit.ts` | Milliseconds the mod waits for one outside call (trash command, git, mkdir, open) or one write job before it counts it as failed |
+| `STORE_LIMIT_MS` | 5000 | `time-limit.ts` | Milliseconds the mod waits for one store read or write before it counts it as failed |
 
 ## Cost and privacy
 
@@ -224,13 +232,43 @@ The mod uses Haiku for two small jobs:
 - **Sorting tickets into groups:** once per new ticket, up to 60 per request. Sorting a large todo the first time costs a few thousand tokens. **Recategorize** sorts all open tickets again, the same way, once per press.
 - **Matching a new agent to its tickets:** one request per agent.
 
-Everything else is free or nearly free: the Orchestrator card makes no requests, the instructions to Claude are about 650 tokens per conversation, a progress report is about 40 tokens, and card token counts come from usage Claude Code already reports.
+Everything else is free or nearly free: the Orchestrator card makes no requests, the instructions to Claude are about 850 tokens per conversation, a progress report is about 40 tokens, and card token counts come from usage Claude Code already reports.
 
-All requests go through your own Claude Code session. The mod sends nothing anywhere else. On disk, it reads `.claude_todo/` and writes the checkbox of a ticket you move, the checkbox of a ticket you allow Claude to move, and `.claude_todo/categories.json`, which remembers each ticket's group. On its own, it also adds an ID to each item that has none, and moves closed items to the archive. Each of those writes reads the file again first and skips it if the file changed. The three todo buttons change todo files only when you click them: Consolidate writes and empties them, Delete duplicate tickets edits the central file, and Delete empty todos moves empty files to the Trash.
+All requests go through your own Claude Code session. The mod sends nothing anywhere else.
+
+### What the mod writes
+
+- **Todo files.** It writes the checkbox of a ticket you move, the checkbox of a ticket you allow Claude to move, an ID into each item that has none, and the move of closed items to the archive. Every todo write goes through one function that reads the file again first and writes only if the file did not change. A file that changed is skipped. The three todo buttons change todo files only when you click them: Consolidate writes and empties them, Delete duplicate tickets edits the central file, and Delete empty todos moves empty files to the Trash.
+- **`.claude_todo/categories.json`.** It remembers each ticket's group. A copy of a damaged file is kept as `categories.json.bak`, then `.bak.2` up to `.bak.10`.
+- **ID claim folders.** To give two sessions in one repo different IDs, a session claims blocks of 8 ID values by making an empty entry for the block. The entries are in `claudeopticon/id-claims` inside the git common directory (`.git` of the main checkout, shared by every worktree). Only when that folder cannot be made, and the common directory is `<root>/.git`, the entries go in `<root>/.claude_work/claudeopticon-id-claims`. A claim is stale after 4 hours, and the mod deletes stale entries below the next free block at most once an hour, keeping the newest entry of each block. A block a session leaves half used leaves a gap in the numbers. Two sessions never keep the same block.
+- **Nothing else on disk.** The mod never writes the global `~/.claude/.claude_todo`.
+
+### What the store keeps
+
+The mod keeps these keys in the engine's store, each per session ID unless noted:
+
+| Key | Holds |
+| --- | --- |
+| `agents:<session id>` | The last 200 agent rows: description, a brief of at most 600 characters, model, status, times, tool calls, progress, claims |
+| `agents-base:<session id>`, `agents-cut:<session id>` | How many agents came before the first kept row, and the IDs of up to 5000 rows cut from it, so labels stay fixed |
+| `series:<session id>` | The graph points, at most 2000 per line, and the compaction marks |
+| `tokens:<session id>` | The session token total and the count at the last compaction |
+| `orchestrator:<session id>`, `orchestrator-title:<session id>` | The tickets Claude works on itself, and its headline |
+| `archive-wrote:<record>` | Marks that let a retry of the archive step skip blocks already written |
+| `reserved:<repo root>` | The IDs the mod named and has not yet seen in a file, for 2 hours |
+| `sessions-recent`, `sessions-dropping` | The list of the last 20 sessions, and sessions waiting to be cleared |
+
+The store keeps the last 20 sessions. A session older than that is cleared only if it has not noted itself in the last hour; a running session notes itself every 10 minutes. A session found clearable waits 20 more minutes before its keys go.
+
+### What the mod hides
+
+A text that looks like it holds a secret shows as "(hidden)" and is stored that way. This covers a Bash command and any other tool detail on the Orchestrator card, an agent's current command, an agent's description, the brief the mod keeps of an agent's prompt, the title Claude gives its work, and rows loaded from an older store. The rule is in `hooks/secrets.ts`. It hides a long option with a secret word in its name (`--password`, `--api-key`), the short options of listed tools (`mysql -p`), an assignment to a name with a secret word (`TOKEN=abc`, `"password": "x"`), and the same forms in PowerShell. A line that is hidden keeps the ticket IDs it names. The rule works on the text form of the line and can miss a secret that has no such form.
 
 ## Limits
 
 - The token count starts the first time the mod sees a session.
+- Every outside call (a trash command, `git`, `mkdir`, `open`) and every write job has a time limit of 20 seconds, and every store call 5 seconds. A call that runs over counts as failed and is told once. The call itself is not stopped; its late result is dropped.
+- An ID block a session leaves unused is a gap in the numbers. Gaps are normal. IDs are unique, not consecutive.
 - The Orchestrator history is kept in memory, so a reload clears it.
 - Agent data is saved per session, so `/reload-plugins` keeps it. An agent that started while the mod was off shows its model after its next request, and its run time counts from the load.
 - An agent's progress bar comes from the agent's own reports, not from a measurement. It works well for work with clear steps, such as editing a set of files or running tests. For open-ended work, such as research, debugging or review, the agent cannot know its steps in advance, so the total may grow as it goes (step 3 of 5 can become step 4 of 9), or the reports may stop. Some agents skip the reports, and a custom agent without `report_progress` in its tool list shows no bar at all.
@@ -239,18 +277,21 @@ All requests go through your own Claude Code session. The mod sends nothing anyw
 - The pane finds the `.claude_todo/` folders once, when it starts. A new `.claude_todo/` in the session's folder or a folder above it shows at once. One made elsewhere needs `/reload-plugins` (or a new session).
 - **Consolidate todos**, **Delete empty todos** and **Delete duplicate tickets** are off in a repo whose root folder is the home `.claude` folder (`~/.claude`), because there the repo's root `.claude_todo/` is Claude Code's global todo folder, which the mod never writes to. They are also off in a git worktree. In every other repo the central todo is the repo's own root `.claude_todo/`.
 - Delete empty todos uses the system's own trash command: `trash` or Finder on macOS, `gio trash`, `trash-put` or `kioclient5` on Linux, and PowerShell on Windows. A Linux system with none of these keeps the files. On Windows it works only on a local fixed drive whose Recycle Bin is on, because elsewhere Windows deletes the file outright; on any other drive it keeps the file. Only the macOS command has been run on a real system. The Linux and Windows commands are covered by the mod's own tests only.
+- The mod reads a todo file only through one read function and writes it only through one write function. `check-reads.ts` and `check-writes.ts` (see Development) fail on any read or write that goes around them. A read that fails is never taken for an empty file.
 - The files in the known folders stay live: new items, edits, checkbox changes, new files and archived files show within a few seconds, with no restart.
 
 [How it works](docs/how-it-works.md) explains the hooks, the linking and the drawing.
 
 ## Development
 
-Load the repo from its folder, run the checks, and see [CONTRIBUTING.md](CONTRIBUTING.md).
+Load the repo from its folder, run the four gates, and see [CONTRIBUTING.md](CONTRIBUTING.md). The gates run by hand. There is no CI. The two scripts run on plain Node 22.18 or later, with no `npx` and no downloads.
 
 ```bash
 claude --plugin-dir .
-claude plugin validate .
 claude plugin test .
+claude plugin validate .
+node --import ./scripts/ts-resolve.mjs scripts/check-reads.ts
+node --import ./scripts/ts-resolve.mjs scripts/check-writes.ts
 ```
 
 The cards follow the [Stage UI](https://github.com/Marceux-Croix/Stage-UI) design system.

@@ -5,6 +5,8 @@ export type TodoItem = {
   status: TodoStatus
   /** The item's ID without its `#` (`T12`), when the line carries one. */
   id?: string
+  /** The line's place among the lines of its file with the same key, from 2; absent for the first (UCR-025): keeps every line's key unique. */
+  nth?: number
 }
 
 export type TodoFile = {

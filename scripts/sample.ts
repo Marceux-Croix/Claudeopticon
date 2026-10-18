@@ -1,7 +1,8 @@
 /** Sample data for the README images: a fictional CLI tool with a parser, docs and a release. */
-import { ORCH } from '../hooks/cards.ts'
-import { stepAxes } from '../hooks/cards.ts'
-import type { AgentView, ItemStatus, ItemView, Point, Series, View } from '../hooks/cards.ts'
+import { ORCH } from '../hooks/agent-identity.ts'
+import { stepAxes } from '../hooks/series.ts'
+import type { AgentView, ItemStatus, ItemView, View } from '../hooks/card-types.ts'
+import type { Point, Series } from '../hooks/series.ts'
 
 export const NOW = Date.UTC(2026, 9, 15, 14, 40, 0)
 const MIN = 60_000
@@ -116,3 +117,34 @@ export const progressTickets = [
 export const openTickets = [
   [t(28), '#T29', 'Release'], [t(30), '#T31', 'Docs'], [t(35), '#T36', 'Release'],
 ] as const
+
+/** A token series climbing by `perMin` a minute from `start` over the minutes `from` to `to` ago (one point a minute). */
+const climb = (from: number, to: number, start: number, perMin: number): Point[] =>
+  Array.from({ length: from - to + 1 }, (_, i) => [ago(from - i), start + i * perMin] as Point)
+
+/**
+ * Top-card states for the render check (scripts/render-hero.ts): the README sample; a compaction a
+ * minute ago, so the Compacted label sits at the right edge with the end labels; the owner's case of
+ * the agent and token traces crossing at the right edge; and every trace at zero.
+ */
+export function heroStates(): Record<string, View> {
+  const of = (series: Series, usage: View['usage'], live = 2): View => ({ ...heroView, series, axes: stepAxes(undefined, series, NOW), usage, live })
+  const lateCompact: Series = {
+    agents: [[ago(30), 2], [ago(12), 3], [ago(4), 4]],
+    tokens: [...climb(30, 2, 20_000_000, 900_000), [ago(1), 0], [ago(0.5), 400_000]],
+    compacts: [ago(1)],
+  }
+  const crossing: Series = {
+    agents: [[ago(30), 1], [ago(20), 3], [ago(2.5), 2]],
+    tokens: climb(30, 0, 3_330_000, 1_000_000),
+    compacts: [],
+  }
+  const zero: Series = { agents: [[ago(30), 0]], tokens: [[ago(20), 0]], compacts: [] }
+
+  return {
+    sample: heroView,
+    'late-compact': of(lateCompact, { tokens: 650_000_000, atCompact: 649_600_000, since: 0 }, 4),
+    crossing: of(crossing, { tokens: 659_630_000, atCompact: 626_300_000, since: 0 }),
+    zero: of(zero, { tokens: 1_000, atCompact: 1_000, since: 0 }, 0),
+  }
+}

@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.8.0
+
+### Features
+
+- The top card has three lines: live agents (yellow), all tokens since compact (lime green), and tokens per minute (blue, on the token axis). Each vertical axis has a title, the token axis shows "0" at the bottom and counts in k, M and B, and the totals line says "total session tokens".
+- Each line ends in a dot with its value as a label with a halo. The label sits clear of the lines where the plot has a clear place, keeps the vertical order of the dots where it can, and gets a leader line when it sits far from its dot. A leader runs under the Compacted text and never through another label. Lines that end at equal values share one split dot.
+- The board has no Done column. A ticket that is done goes to the archive and leaves the board. The search box finds open and in-progress tickets. **Show completed** opens the archive.
+- Every model request is counted once, at the step that used it, for the main conversation and for each agent. A whole run is never counted at its end, so tokens land on the right side of a compaction.
+- The rules for Claude say more: never use the global todo folder, which checkbox forms to write, 5-character IDs, that a done ticket with an open subtask stays until the subtask is done, and the `folder` argument of `move_ticket`.
+
+### Fixes
+
+- Placing end labels takes tens of milliseconds in every state. It took up to 5 seconds when no clear place existed.
+- A clock that reads far ahead once no longer trims the graph. Later points are re-timed to the clock, and a clock set back never stops redraws or session notes.
+- A kept graph and its compaction marks survive a reload. A count that is not a number draws as the base step, and a first request on a fresh graph counts as usage.
+- Blank lines, block quotes and HTML blocks in a todo file follow CommonMark, so checkbox lines in examples are never read as tickets.
+- An agent spawned again under an ID that has a row keeps its row. The Stop button works by agent ID.
+- A turn that was running when the mod loaded counts its earlier steps at its end, so an upgrade or a reload in the middle of a turn loses no tokens.
+- A todo file that keeps failing to read no longer blocks new IDs. A failed read is never taken for an empty file or an absent key.
+
+### Safety
+
+- IDs are claimed in blocks of 8 values in a claim folder, `claudeopticon/id-claims` in the git common directory, so two sessions in one repo never keep the same block. When that folder cannot be made, the fallback is `.claude_work/claudeopticon-id-claims` in the repo root. A block left half used is a gap in the numbers, never a duplicate. A claim is stale after 4 hours, and stale entries are pruned once an hour.
+- Every todo read goes through one read function, and every todo write goes through one function that reads the file again and writes only if it did not change. Two gates check this on the source.
+- An outside call or a write job that takes more than 20 seconds, and a store call that takes more than 5 seconds, counts as failed and is told once.
+- Many more secret forms are hidden: long and short options, assignments, PowerShell forms, here-strings, and values in an agent's description, brief and title, and in older stored rows. A hidden line keeps its ticket IDs, but not an ID that is the secret itself. Control and format characters (C1, bidi overrides, tag characters) in names and texts quoted to Claude are escaped.
+- The mod trusts only absolute folders inside the main checkout with no symlink, and never reads or writes the global todo folder, also when it is reached through a symlink or a case-spelled name.
+
+### Internals
+
+- `hooks/register.tsx` holds every function that uses `$`. Pure logic is in one-responsibility modules in `hooks/`, with a test file for each in `tests/<module>.test.tsx`. Engine tests are in `tests/register*.test.tsx`. The module table in `docs/how-it-works.md` lists every module.
+- Four gates, run by hand (there is no CI): `claude plugin test .`, `claude plugin validate .`, and `node --import ./scripts/ts-resolve.mjs scripts/check-reads.ts` and `scripts/check-writes.ts`.
+- The scripts run on plain Node 22.18 or later with `scripts/ts-resolve.mjs`: no `npx`, no downloads.
+- The images in `docs/images/` are rendered again from the current cards.
+
 ## 0.7.2
 
 - The top graph is restyled: live agents in yellow, tokens since compact in lime green, axis numbers in plain text color, and the key moved into the top row next to the totals.

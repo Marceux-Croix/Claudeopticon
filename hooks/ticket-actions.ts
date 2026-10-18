@@ -12,7 +12,7 @@ export type TicketAction = { name: string; glyph: string; tip: string; toast: st
 /** On an open or queued ticket: three chevrons, sending the item to Claude to build. */
 export const SEND_ACTION: TicketAction = { name: 'send', glyph: '\u22D9', tip: 'Send to Claude', toast: 'Sent to Claude', prompt: ticketPrompt }
 
-/** On a ticket in progress or already sent: a question mark, asking Claude for the item's status. */
+/** On every ticket, in every column: a question mark, asking Claude for the item's status. */
 export const STATUS_ACTION: TicketAction = { name: 'status', glyph: '?', tip: 'Ask Claude for a status update', toast: 'Asked for status', prompt: statusPrompt }
 
 /** The manual moves: they write the box and tell Claude at the next prompt, asking nothing of it. */
@@ -20,7 +20,7 @@ export const QUEUE_ACTION: TicketAction = { name: 'queue', glyph: '\u2261', tip:
 export const START_ACTION: TicketAction = { name: 'start', glyph: '\u25D0', tip: 'Mark in progress', toast: 'Marked in progress', prompt: () => '', mark: 'in_progress' }
 export const DONE_ACTION: TicketAction = { name: 'done', glyph: '\u2713', tip: 'Mark done', toast: 'Marked done', prompt: () => '', mark: 'completed' }
 /** The back buttons share one glyph: each moves its ticket back one column, queued to open and in progress to queued. */
-export const REOPEN_ACTION: TicketAction = { name: 'reopen', glyph: '\u21A9', tip: 'Move back to open', toast: 'Moved back to open', prompt: () => '', mark: 'pending' }
-export const UNSTART_ACTION: TicketAction = { name: 'unstart', glyph: '\u21A9', tip: 'Move back to queued', toast: 'Moved back to queued', prompt: () => '', mark: 'queued' }
+export const REOPEN_ACTION: TicketAction = { name: 'reopen', glyph: '\u21AA', tip: 'Move back to open', toast: 'Moved back to open', prompt: () => '', mark: 'pending' }
+export const UNSTART_ACTION: TicketAction = { name: 'unstart', glyph: '\u21AA', tip: 'Move back to queued', toast: 'Moved back to queued', prompt: () => '', mark: 'queued' }
 /** The labels of the ticket buttons: a press on one keeps the layout, so the ticket it moves leaves its space. */
 export const TICKET_GLYPHS = new Set([SEND_ACTION, STATUS_ACTION, QUEUE_ACTION, START_ACTION, DONE_ACTION, REOPEN_ACTION, UNSTART_ACTION].map(action => action.glyph))

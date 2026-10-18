@@ -11,7 +11,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 @media (prefers-reduced-motion:reduce){.blink,.pulse{animation:none}.pulse{opacity:0}}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
 .c1k0{animation:c1k0 1.2s steps(1,end) infinite}@keyframes c1k0{0.00%{fill:#3987e5;opacity:1}50.00%{fill:#3987e5;opacity:.25}}
-.c1k1{animation:c1k1 1.2s steps(1,end) infinite}@keyframes c1k1{0.00%{fill:#d95926;opacity:1}50.00%{fill:#d95926;opacity:.25}}
+.c1k1{animation:c1k1 1.2s steps(1,end) infinite}@keyframes c1k1{0.00%{fill:#a05001;opacity:1}50.00%{fill:#a05001;opacity:.25}}
 @media (prefers-reduced-motion:reduce){.c1k0,.c1k1{animation:none}}
 </style>
 <rect width="720" height="136" rx="12" fill="#07080F"/>
@@ -30,7 +30,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <text x="704" y="28" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">9m 00s</text></g>
 <g>
 <circle cx="28" cy="54" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="28" y="57.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="38.8" cy="64.8" r="4.5" fill="#d95926" stroke="#07080F" stroke-width="2" class="c1k1"/>
+<text x="28" y="57.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="38.8" cy="64.8" r="4.5" fill="#a05001" stroke="#07080F" stroke-width="2" class="c1k1"/>
 <rect x="394" y="52" width="258" height="4" rx="2" fill="url(#progress)"/>
 <circle cx="652" cy="54" r="4" fill="#8B5CF6" class="pulse"/>
 <circle cx="652" cy="54" r="3.5" fill="#8B5CF6"/>
@@ -109,18 +109,18 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 @keyframes pulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
 @media (prefers-reduced-motion:reduce){.blink,.pulse{animation:none}.pulse{opacity:0}}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
-.c4k0{animation:c4k0 1.2s steps(1,end) infinite}@keyframes c4k0{0.00%{fill:#d95926;opacity:1}50.00%{fill:#d95926;opacity:.25}}
+.c4k0{animation:c4k0 1.2s steps(1,end) infinite}@keyframes c4k0{0.00%{fill:#a05001;opacity:1}50.00%{fill:#a05001;opacity:.25}}
 @media (prefers-reduced-motion:reduce){.c4k0{animation:none}}
 </style>
 <rect width="720" height="133" rx="12" fill="#07080F"/>
-<rect x="1" y="1" width="718" height="131" rx="11" fill="none" stroke="#d95926" stroke-opacity=".55"/>
-<circle cx="28" cy="31" r="16.5" fill="none" stroke="#d95926" stroke-width="1.5"/><circle cx="28" cy="31" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-<text x="28" y="34.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="38.8" cy="41.8" r="4.5" fill="#d95926" stroke="#07080F" stroke-width="2" class="c4k0"/>
+<rect x="1" y="1" width="718" height="131" rx="11" fill="none" stroke="#a05001" stroke-opacity=".55"/>
+<circle cx="28" cy="31" r="16.5" fill="none" stroke="#a05001" stroke-width="1.5"/><circle cx="28" cy="31" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
+<text x="28" y="34.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="38.8" cy="41.8" r="4.5" fill="#a05001" stroke="#07080F" stroke-width="2" class="c4k0"/>
 <text x="52" y="36" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Draft the plugin API docs</text>
 <rect x="647" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
 <text x="675.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>
-<circle cx="56" cy="52" r="4" fill="#d95926" class="c4k0"/>
-<text x="66" y="56" fill="rgba(255,255,255,.62)" font-size="12">Working on <tspan fill="#d95926" font-weight="500">Document the plugin API</tspan></text>
+<circle cx="56" cy="52" r="4" fill="#a05001" class="c4k0"/>
+<text x="66" y="56" fill="rgba(255,255,255,.62)" font-size="12">Working on <tspan fill="#a05001" font-weight="500">Document the plugin API</tspan></text>
 <text x="52" y="76" fill="rgba(255,255,255,.88)" font-size="12" font-weight="500">Step 2 of 4: Outline the hooks</text>
 <text x="704" y="76" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">25%</text>
 <rect x="52" y="83" width="652" height="4" rx="2" fill="rgba(255,255,255,.22)"/>

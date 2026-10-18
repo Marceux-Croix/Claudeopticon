@@ -8,6 +8,7 @@ import { agentSvg, orchestratorSvg, timelineSvg } from '../hooks/agent-cards.ts'
 import { setWidth } from '../hooks/card-stage.ts'
 import type { Card } from '../hooks/card-types.ts'
 import { heroSvg } from '../hooks/hero-card.ts'
+import { DONE_ACTION, QUEUE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, UNSTART_ACTION } from '../hooks/ticket-actions.ts'
 import { boardHead, ticketSvg } from '../hooks/todo-cards.ts'
 import { columnsThatFit } from '../hooks/view-model.ts'
 import { agents, entries, heroView, orchestrator, openTickets, progressTickets, queuedTickets, view } from './sample.ts'
@@ -199,9 +200,10 @@ function pane(): string {
   add(boardHead(view.files))
   const colW = (WIDTH - (SIDE_BY - 1) * GAP) / SIDE_BY
   const columns = [
-    { title: 'In progress', tickets: progressTickets, glyphs: ['↩', '✓', '?'] },
-    { title: 'Queued', tickets: queuedTickets, glyphs: ['↩', '◐', '✓', '⋙'] },
-    { title: 'Open', tickets: openTickets, glyphs: ['≡', '◐', '✓', '⋙'] },
+    // The pane's own buttons for an unsent ticket in each column (register.tsx), from the action definitions.
+    { title: 'In progress', tickets: progressTickets, glyphs: [UNSTART_ACTION, DONE_ACTION, STATUS_ACTION].map(action => action.glyph) },
+    { title: 'Queued', tickets: queuedTickets, glyphs: [REOPEN_ACTION, START_ACTION, DONE_ACTION, SEND_ACTION, STATUS_ACTION].map(action => action.glyph) },
+    { title: 'Open', tickets: openTickets, glyphs: [QUEUE_ACTION, START_ACTION, DONE_ACTION, SEND_ACTION, STATUS_ACTION].map(action => action.glyph) },
   ]
   let bottom = y
   columns.forEach((column, c) => {

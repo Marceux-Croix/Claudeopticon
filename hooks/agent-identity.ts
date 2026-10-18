@@ -28,17 +28,30 @@ export function labelFontSize(label: string): number {
 
 /**
  * Agent colors, a deliberate exception to Stage UI COL-8: each live agent
- * blinks a color, and so does each todo item it works on. Six colors of a brand-neutral categorical
- * palette, at their dark steps, in fixed order, checked for color-vision deficiency; never cycled, so an
- * agent past the sixth is gray. The A1, A2 labels stay, so color is never the only cue (COL-9).
+ * blinks a color, and so does each todo item it works on. Sixteen colors, most distinct first: each is
+ * the OKLab color farthest from the ones before it, from the orchestrator teal, the progress violet and the
+ * stage gray, with at least 3:1 contrast to white chip text and to the dark card. An agent takes the first
+ * free color when it starts and keeps it; the color is free again once the agent finishes (agent-colors.ts).
+ * The A1, A2 labels stay, so color is never the only cue (COL-9).
  */
-export const AGENT_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#9085e9']
+export const AGENT_COLORS = [
+  '#3987e5', '#a05001', '#f55a79', '#207e27', '#da7e1e', '#79579b', '#d665cf', '#8e8227',
+  '#1870a1', '#d9471b', '#269573', '#2d5ed4', '#cc4394', '#8a87fd', '#ad52c8', '#0f9b23',
+]
 
-/** The orchestrator's color: a teal, apart from the six agent colors and from the violet progress. */
+/** The orchestrator's color: a teal, apart from the agent colors and from the violet progress. */
 export const ORCH_COLOR = '#1fa7b8'
 
-export function agentColor(index: number): string {
-  return index === ORCH ? ORCH_COLOR : (AGENT_COLORS[labelBase + index] ?? STAGE_GRAY_FALLBACK)
+/** Each agent's color slot by its index, set with each view. */
+let slots: readonly number[] = []
+export function setColorSlots(next: readonly number[]): void {
+  slots = next
 }
 
-const STAGE_GRAY_FALLBACK = '#9AA0B4'
+export function agentColor(index: number): string {
+  if (index === ORCH) {
+    return ORCH_COLOR
+  }
+
+  return AGENT_COLORS[slots[index] ?? index % AGENT_COLORS.length] ?? AGENT_COLORS[0]!
+}

@@ -299,7 +299,7 @@ test('the minute resync catches an edit that kept the file mtime', async ($, on)
   expect(await shown()).toContain('second version')
 })
 
-test('ticket view: an open ticket sends itself to Claude once, then asks for status; in progress asks for status; done has no button', async ($, on) => {
+test('ticket view: an open ticket sends itself to Claude once and asks for status at any time; in progress asks for status; done has no card', async ($, on) => {
   mock.clock(on)
   const sent: string[] = []
   on('fs.exists', (_$, e) => ({ value: e.path.endsWith('.claude_todo') }))
@@ -314,21 +314,25 @@ test('ticket view: an open ticket sends itself to Claude once, then asks for sta
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   const ticket = 'ticket-OPEN.md-ship the new parser'
+  const status = 'ticket-status-OPEN.md-ship the new parser'
   const svgs = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
   expect((await ui.find({ key: ticket }))?.text).toContain('\u22D9')
   expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).toContain('Send to Claude')
   expect(await svgs()).toContain('Ship the new parser')
+  // #T003R: the status button is on every ticket, before and after a send.
+  expect((await ui.find({ key: status }))?.text).toContain('?')
   expect(await ui.find({ key: 'ticket-OPEN.md-old finished thing' })).toBeUndefined()
   // #T003A: no Done column, so the done ticket draws no card either.
   expect(await svgs()).not.toContain('Old finished thing')
   await ui.press({ key: ticket })
   expect(sent.length).toBe(1)
   expect(sent[0]).toBe(ticketPrompt('.claude_todo/OPEN.md', 'Ship the new parser'))
-  expect((await ui.find({ key: ticket }))?.text).toContain('?')
+  expect(await ui.find({ key: ticket })).toBeUndefined()
+  expect((await ui.find({ key: status }))?.text).toContain('?')
   expect(await svgs()).toContain('>Sent<')
-  await ui.press({ key: ticket })
+  await ui.press({ key: status })
   expect(sent[1]).toBe(statusPrompt('.claude_todo/OPEN.md', 'Ship the new parser'))
-  const working = 'ticket-OPEN.md-build the release notes'
+  const working = 'ticket-status-OPEN.md-build the release notes'
   expect((await ui.find({ key: working }))?.text).toContain('?')
   expect(JSON.stringify(await ui.findAll({ type: 'Text' }))).toContain('Ask Claude for a status update')
   await ui.press({ key: working })
@@ -911,7 +915,7 @@ test('two todo folders show as one board, a button writes only its own file, and
   await ui.press({ key: 'ticket-start-TODO.md-#t1' })
   expect(files['/repo/.claude_todo/TODO.md']).toBe('- [~] #T1 Fix the parser')
   // The prompt to Claude names the real path, which the pane hides.
-  await ui.press({ key: 'ticket-TODO.md-mods/x/.claude_todo::#t1' })
+  await ui.press({ key: 'ticket-status-TODO.md-mods/x/.claude_todo::#t1' })
   expect(sent[0]).toContain('mods/x/.claude_todo/TODO.md')
   // Git runs once: a write inside a todo folder only rescans the known ones.
   const gitCalls = calls.length
@@ -1552,7 +1556,7 @@ test('Send to Claude makes the ticket the orchestrator\'s, held in progress whil
   expect(card).toContain('#T1 Ship the parser')
   expect(card).not.toContain('#T2 Review the copy')
   // The status button on a ticket already in progress claims it too.
-  await ui.press({ key: 'ticket-OPEN.md-#t3' })
+  await ui.press({ key: 'ticket-status-OPEN.md-#t3' })
   expect((await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard)).toContain('#T3 Check the invoice')
 })
 

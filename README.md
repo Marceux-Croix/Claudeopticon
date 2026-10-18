@@ -83,7 +83,7 @@ This card lists what Claude does itself, not its agents. Each line is the short 
 
 ![The agents timeline and two agent cards](docs/images/agents.svg)
 
-Each agent gets a card, labeled A1, A2, and so on, in start order. A label never changes during a session, also after `/reload-plugins`, and long labels such as A1000 shrink to fit their circle. Each agent has its own color; past the sixth agent, cards are gray. A card shows what the agent was asked to do, its tickets, its progress ("Step 3 of 7" with a bar), its run time, tool calls and tokens, and what it does now. A timeline above the cards shows one bar per agent.
+Each agent gets a card, labeled A1, A2, and so on, in start order. A label never changes during a session, also after `/reload-plugins`, and long labels such as A1000 shrink to fit their circle. Each agent gets a color when it starts and keeps it. There are 16 colors, the most distinct used first. A color is used again once its agent finishes. With 16 agents live, a new agent shares a color. A card shows what the agent was asked to do, its tickets, its progress ("Step 3 of 7" with a bar), its run time, tool calls and tokens, and what it does now. A timeline above the cards shows one bar per agent.
 
 Claude sometimes works on a ticket itself, with no helper agent. Then an **Orchestrator** card, tagged **O**, shows above the agent cards. Its title is a headline Claude writes for that work, through `report_progress`; until Claude sends one, the title is the text of its first ticket ("and 2 more" when it has several). It shows the tickets Claude works on, Running while Claude works and Idle between turns, and Claude's last action. A ticket counts as Claude's own when Claude moves it to in progress or names it in a progress report, or when you send it with `⋙`. It stops counting when it leaves In progress. The Orchestrator card has no Stop button and does not count in the top card.
 
@@ -105,12 +105,12 @@ Tickets have buttons on the bottom edge:
 
 | Button | On | What it does |
 | --- | --- | --- |
-| `⋙` Send to Claude | Open and queued tickets | Sends the item to Claude as a prompt, to build it. |
-| `?` Ask Claude for a status update | Tickets in progress, or already sent | Asks Claude for a short report in the chat. It starts no new work. |
+| `⋙` Send to Claude | Open and queued tickets not yet sent | Sends the item to Claude as a prompt, to build it. |
+| `?` Ask Claude for a status update | Every ticket, in every column | Asks Claude for a short report in the chat. It starts no new work. |
 | `≡` Move to queued | Open tickets | Moves the ticket by hand. |
 | `◐` Mark in progress | Open and queued tickets | Moves the ticket by hand. |
 | `✓` Mark done | Open, queued and in-progress tickets | Moves the ticket by hand. The mod then archives it. |
-| `↩` Move back | Queued tickets and tickets in progress | Moves the ticket back one column by hand: in progress to queued, queued to open. |
+| `↪` Move back | Queued tickets and tickets in progress | Moves the ticket back one column by hand: in progress to queued, queued to open. |
 
 The move buttons are for work you do yourself, such as a human review. They change the checkbox in your todo file and nothing else. Claude is told at its next action, so it does not work on a ticket you closed. It is not asked to do anything.
 

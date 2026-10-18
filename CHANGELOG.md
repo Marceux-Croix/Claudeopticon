@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- Agent colors are used again. An agent takes the first free color when it starts, and the color is free again when the agent finishes or goes idle. Before, only the first six agents of a session had a color, and every later agent was gray.
+- 16 agent colors, not 6, ordered so the most distinct are used first. With all 16 held, a new agent shares a color.
+- Every ticket has the `?` status button, in every column. Before, open and queued tickets had it only after a send.
+- The back button's glyph is `↪`, not `↩`. It still moves a ticket back one column: in progress to queued, queued to open.
+
 ## 0.9.0
 
 ### Features

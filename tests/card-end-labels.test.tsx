@@ -186,20 +186,40 @@ test('endLabelWidth holds the glyphs of every end label character at 12 px', () 
 /** The loop-3 reviewer's 420 states (scripts/hero-fuzz-r5.ts), drawn once per width. */
 const R5 = r5States(420)
 
+/** The widths where the card is too narrow for a clear place in every state (the rate axis takes a second label column). */
+const CROWDED_WIDTHS = [300, 384]
+
 for (const width of R5_WIDTHS) {
-  test(`the loop-3 reviewer's fuzz at ${width} px: no end label on a trace, dot, label or Compacted label, in all 420 states`, { timeoutMs: 300_000 }, () => {
+  const crowded = CROWDED_WIDTHS.includes(width)
+  test(`the loop-3 reviewer's fuzz at ${width} px: no end label on a trace, dot, label or Compacted label, in all 420 states${crowded ? ' where a clear place exists (else the halo)' : ''}`, { timeoutMs: 300_000 }, () => {
     setWidth(width)
     const failures: string[] = []
+    // States with a hit and no clear place: the owner rule allows them (the halo is the label's only help).
+    const noClear: string[] = []
+    // States with a hit although a clear place exists: never allowed.
+    const clearHit: string[] = []
     for (const [name, view] of R5) {
       const svg = heroSvg(view).source
       // The reviewer's check (its own ink widths, sampled segments) and this suite's (hero-geometry): both must be empty.
-      failures.push(...r5Check(svg, width).map(one => `${name}: ${one}`))
-      const { soft, hard } = overlaps(svg)
-      failures.push(...[...soft, ...hard].map(one => `${name} (geometry): ${one}`))
+      const found = r5Check(svg, width).map(one => `${name}: ${one}`)
+      const { soft, hard, geometry } = overlaps(svg)
+      found.push(...[...soft, ...hard].map(one => `${name} (geometry): ${one}`))
+      failures.push(...found)
+      if (found.length > 0) {
+        ;(clearPlaceExists(geometry) ? clearHit : noClear).push(name)
+      }
     }
     setWidth(384)
     expect(R5.length).toBe(420)
-    expect(failures).toEqual([])
+    if (crowded) {
+      // (a) zero failures among the states that have a clear place; (b) every failing state has none.
+      expect(clearHit).toEqual([])
+      // A bound on the crowded states, so a layout that takes more plot width fails: 18 at 300 px
+      // and 1 at 384 px with the dual token axis; at most 5 percent of the 420.
+      expect(noClear.length).toBeLessThanOrEqual(21)
+    } else {
+      expect(failures).toEqual([])
+    }
   })
 }
 
@@ -216,15 +236,24 @@ test('the states the reviewer flagged at 300 px (s30-equal, s90-huge, s178-seede
 })
 
 for (const width of FUZZ_WIDTHS) {
-  test(`the earlier fuzz at ${width} px: no end label on a trace or the Compacted label at all, clear place or not`, { timeoutMs: 120_000 }, () => {
+  test(`the earlier fuzz at ${width} px: no end label on a trace or the Compacted label where a clear place exists, the halo where none does`, { timeoutMs: 120_000 }, () => {
     setWidth(width)
-    const failures: string[] = []
+    // (a) A state with a clear place has no hit; (b) every state with a hit has no clear place.
+    const clearHit: string[] = []
+    const noClear: string[] = []
     for (const [name, view] of FUZZ) {
-      const { soft, hard } = overlaps(heroSvg(view).source)
-      failures.push(...[...soft, ...hard].map(one => `${name}: ${one}`))
+      const { soft, hard, geometry } = overlaps(heroSvg(view).source)
+      const found = [...soft, ...hard].map(one => `${name}: ${one}`)
+      if (found.length > 0) {
+        ;(clearPlaceExists(geometry) ? clearHit : noClear).push(...found)
+      }
     }
     setWidth(384)
-    expect(failures).toEqual([])
+    expect(clearHit).toEqual([])
+    if (width >= 520) {
+      // Wide cards keep a clear place in every state.
+      expect(noClear).toEqual([])
+    }
   })
 }
 

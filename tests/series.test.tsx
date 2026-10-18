@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { addAgentPoint, addAgents, addCompact, addPoint, addStep, addTokens, emptySeries, niceMax, onePerStep, QUANT_MS, readKeptSeries, retimeSeries, seedSeries, SERIES_CAP, SHRINK_MS, stepAxes, stepAxis, tokenRate, WINDOW_MS } from '../hooks/series'
+import { addAgentPoint, addAgents, addCompact, addPoint, addStep, addTokens, emptySeries, niceMax, onePerStep, QUANT_MS, RATE_RATIO, readKeptSeries, retimeSeries, seedSeries, SERIES_CAP, SHRINK_MS, stepAxes, stepAxis, tokenRate, WINDOW_MS } from '../hooks/series'
 import type { Point, Series } from '../hooks/series'
 
 const MIN = 60_000
@@ -148,7 +148,7 @@ test('tokenRate counts each rise in the minute it happened: never a fall, never 
   expect(tokenRate([], now)).toEqual([])
 })
 
-test('the token axis holds both token traces: its top is at least the highest tokens per minute', () => {
+test(' the token axis holds both token traces: its top is at least RATE_RATIO times the highest tokens per minute', () => {
   const now = 100 * QUANT_MS
   // A burst, a compaction a minute ago, and a quiet climb: the axis top fits every rate step.
   const states: Series[] = [
@@ -158,7 +158,7 @@ test('the token axis holds both token traces: its top is at least the highest to
   ]
   for (const series of states) {
     const top = stepAxes(undefined, series, now).tokens.max
-    expect(top).toBeGreaterThanOrEqual(Math.max(...tokenRate(series.tokens, now).map(point => point[1])))
+    expect(top).toBeGreaterThanOrEqual(Math.max(...tokenRate(series.tokens, now).map(point => point[1])) * RATE_RATIO)
   }
 })
 

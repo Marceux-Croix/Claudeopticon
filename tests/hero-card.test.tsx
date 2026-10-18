@@ -8,7 +8,7 @@ import type { View } from '../hooks/card-types'
 import { finishedCount, HERO_H, heroSvg, heroText, LEADER_PX, leaderLine, totalsLine } from '../hooks/hero-card'
 import { r5States } from '../scripts/hero-fuzz-r5'
 import { heroView as sampleHero } from '../scripts/sample'
-import { addCompact, addPoint, emptySeries, QUANT_MS, stepAxes } from '../hooks/series'
+import { addCompact, addPoint, emptySeries, QUANT_MS, RATE_RATIO, stepAxes, WINDOW_MS } from '../hooks/series'
 import type { Axes, Point, Series } from '../hooks/series'
 import { turnTokens } from '../hooks/token-usage'
 import { buildView } from '../hooks/view-model'
@@ -76,10 +76,13 @@ test('the top card has the token total and agents finished in one line, a legend
   expect(svg).toContain('>All tokens since compact<')
   expect(svg).toContain('>Tokens per minute<')
   expect(svg).not.toContain('(left axis)')
+  // the plot is narrower at 384 px (the rate axis takes a column), so the two middle time labels go there.
   expect(svg).toContain('30m ago')
-  expect(svg).toContain('>20m ago<')
-  expect(svg).toContain('>10m ago<')
   expect(svg).toContain('>Now<')
+  setWidth(720)
+  expect(heroSvg(view).source).toContain('>20m ago<')
+  expect(heroSvg(view).source).toContain('>10m ago<')
+  setWidth(384)
   expect(svg).toContain('>Live<')
   // The Todo ring is gone: no ring track, no Todo title, no percent.
   expect(svg).not.toContain('stroke-width="6"')
@@ -110,9 +113,11 @@ test('the trace colors: agents yellow and tokens lime, dark as drawn and light b
   expect(wide).toMatch(/y1="25.5"[^>]*stroke="#A3E635" class="st" stroke-width="2"/)
   expect(wide).toMatch(/y1="25.5"[^>]*stroke="#60A5FA" class="sr" stroke-width="2"/)
   expect(svg).not.toContain('#8B5CF6" class="sa"')
-  // Axis labels are neutral ink; end values take their trace's color.
-  expect(svg).toMatch(/fill="rgba\(255,255,255,.88\)" font-size="11.5">4</)
-  expect(svg).toMatch(/fill="rgba\(255,255,255,.88\)" font-size="11.5">1.5M</)
+  // each axis's numbers take their line's color (agents yellow, tokens lime, tokens per minute blue), as the end values do.
+  expect(svg).toMatch(/fill="#FACC15" class="fa" font-size="11.5">4</)
+  expect(svg).toMatch(/fill="#A3E635" class="ft" font-size="11.5">1.5M</)
+  expect(svg).toMatch(/fill="#60A5FA" class="fr" font-size="11.5">150k</)
+  expect(svg).not.toContain('fill="rgba(255,255,255,.88)" font-size="11.5"')
   expect(svg).toMatch(/<tspan fill="#FACC15" class="fa" font-weight="600">2<\/tspan><tspan fill="rgba\(255,255,255,.62\)"> live<\/tspan>/)
   expect(svg).toMatch(/<tspan fill="#A3E635" class="ft" font-weight="600">1.00M<\/tspan><\/text>/)
 })
@@ -120,9 +125,10 @@ test('the trace colors: agents yellow and tokens lime, dark as drawn and light b
 test('the plot starts the line at the left edge from the point before the window, and ignores older points', async () => {
   const series = { agents: [[HERO_NOW - 50 * MIN, 1], [HERO_NOW - 40 * MIN, 3], [HERO_NOW - 10 * MIN, 2]] as Point[], tokens: [], compacts: [] }
   const svg = heroSvg(graphView(series)).source
-  // The point 40 minutes ago (value 3) is the last one before the window: the path starts at the left edge, x=64, at 3 of 4
-  // (the key takes two rows of its own at 384 px, so the plot top is 78: 250 - 0.75 * 172 = 121).
-  expect(svg).toMatch(/<path d="M 64 121 H /)
+  // The point 40 minutes ago (value 3) is the last one before the window: the path starts at the left edge, x0, at 3 of 4
+  // (the key takes two rows of its own at 384 px, so the plot top is 88 with KEY_SPACE, 250 - 0.75 * 162 = 128.5).
+  const { x0 } = plotEdges(svg)
+  expect(svg).toContain(`<path d="M ${x0} 128.5 H `)
   expect(svg).not.toContain('>No activity yet<')
 })
 
@@ -140,14 +146,18 @@ test('a compaction drops the token line to zero and shows a dashed line labeled 
   // Two token segments: the line before the compaction and the one after it; and one tokens-per-minute line.
   expect(svg.match(/<polyline [^>]*class="st"/g)?.length).toBe(2)
   expect(svg.match(/<polyline [^>]*class="sr"/g)?.length).toBe(1)
-  // The axis tops out at 9M, so the first segment's peak sits on the top gridline, and the second segment starts at the bottom.
-  expect(svg).toContain('>9M<')
+  // the token axis holds 10 x the rate peak (6M a minute), so it tops out at 60M, and the rate axis at 6M; the first segment's peak (9M) sits below the top gridline.
+  expect(svg).toContain('>60M<')
+  expect(svg).toContain('>6M<')
+  expect(svg).not.toContain('>9M<')
 })
 
 test('with no data the card draws the empty axes and says no activity yet', async () => {
   const svg = heroSvg(graphView(emptySeries())).source
   expect(svg).toContain('>No activity yet<')
   expect(svg).toContain('>150k<')
+  // the rate axis is the token axis over RATE_RATIO.
+  expect(svg).toContain('>15k<')
   // zero reads a plain 0, as in the approved sample (it read 0k).
   expect(svg).toContain('>0<')
   expect(svg).not.toContain('>0k<')
@@ -161,11 +171,14 @@ test('the axis labels: 4 grid intervals, whole numbers on the left, M and k on t
   const series = { agents: [[HERO_NOW - 5 * MIN, 5]] as Point[], tokens: [[HERO_NOW - 5 * MIN, 44_810_000]] as Point[], compacts: [] }
   const svg = heroSvg(graphView(series, { tokens: 44_810_000 })).source
   // Left top is 6, labeled 0, 3 and 6 only (1.5 and 4.5 are not whole). Right top is 60M: 0, 15M, 30M, 45M, 60M (zero reads 0, not 0M).
-  expect((svg.match(/text-anchor="end" fill="rgba\(255,255,255,.88\)" font-size="11.5"/g) ?? []).length).toBe(3)
-  for (const label of ['0', '15M', '30M', '45M', '60M']) {
-    expect(svg).toContain(`>${label}<`)
-  }
-  expect(svg.match(/<line x1="64" /g)?.length).toBe(5)
+  // the agent labels are in the agent color (class fa); the rate axis next to the token axis reads the same numbers over 10.
+  const axis = axisLabels(svg)
+  expect(axis.fa.map(label => label.text)).toEqual(['0', '3', '6'])
+  expect(axis.ft.map(label => label.text)).toEqual(['0', '15M', '30M', '45M', '60M'])
+  expect(axis.fr.map(label => label.text)).toEqual(['0', '1.5M', '3M', '4.5M', '6M'])
+  expect((svg.match(/text-anchor="end" fill="#FACC15" class="fa" font-size="11.5"/g) ?? []).length).toBe(3)
+  // 4 grid intervals: 5 gridlines from the plot's left edge.
+  expect(svg.match(new RegExp(`<line x1="${plotEdges(svg).x0}" `, 'g'))?.length).toBe(5)
   expect(svg).toContain('>44.81M<')
   expect(svg).toContain('> live</tspan>')
   expect(svg).toContain('font-weight="600">5</tspan>')
@@ -192,6 +205,42 @@ function heroView(opts: HeroOpts = {}): View {
   const base = buildView([], opts.rows ?? [], NOW)
 
   return { ...base, series, axes: opts.axes ?? { agents: { max: 4 }, tokens: { max: 150_000 } }, usage: opts.usage === undefined ? undefined : { tokens: opts.usage, since: 0 } }
+}
+
+/** The plot's gridlines in a drawn top card: left and right edge, bottom (250) and top. */
+function plotEdges(svg: string): { x0: number; x1: number; bottom: number; plotTop: number } {
+  const grid = [...svg.matchAll(/<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="[\d.]+" stroke="rgba\(255,255,255,\.08\)"\/>/g)]
+  const ys = grid.map(match => Number(match[2]))
+
+  return { x0: Number(grid[0]![1]), x1: Number(grid[0]![3]), bottom: Math.max(...ys), plotTop: Math.min(...ys) }
+}
+
+/** The axis labels of a drawn top card by class (fa agents, ft tokens, fr tokens per minute), top gridline last. */
+function axisLabels(svg: string): Record<'fa' | 'ft' | 'fr', { x: number; y: number; text: string; anchor: string }[]> {
+  const out: Record<'fa' | 'ft' | 'fr', { x: number; y: number; text: string; anchor: string }[]> = { fa: [], ft: [], fr: [] }
+  for (const match of svg.matchAll(/<text x="([\d.]+)" y="([\d.]+)"( text-anchor="end")? fill="#[0-9A-F]+" class="(fa|ft|fr)" font-size="11\.5">([^<]+)<\/text>/g)) {
+    out[match[4] as 'fa' | 'ft' | 'fr'].push({ x: Number(match[1]), y: Number(match[2]), text: match[5]!, anchor: match[3] === undefined ? 'start' : 'end' })
+  }
+
+  return out
+}
+
+/** A column's width: its longest label at 6.3 px a character, as the card measures it. */
+const columnW = (labels: { text: string }[]) => Math.ceil(Math.max(...labels.map(label => label.text.length)) * 6.3)
+
+/** The right title's distance from x1 before TITLE_IN: 63, or 16 + the green column + 14 + the blue column + 15 where the labels are wider. */
+const titleDxOf = (axis: ReturnType<typeof axisLabels>): number => Math.max(63, 16 + columnW(axis.ft) + 14 + columnW(axis.fr) + 15)
+
+/** The centers of the two axis titles: "Live agents" (rotated -90) and "Tokens" (rotated 90). */
+function axisTitles(svg: string): { left: number; right: number } {
+  return { left: Number(/translate\(([\d.]+) [\d.]+\) rotate\(-90\)/.exec(svg)![1]), right: Number(/translate\(([\d.]+) [\d.]+\) rotate\(90\)/.exec(svg)![1]) }
+}
+
+/** An axis label's number: "0", "37.5k", "1.5M", "9B". */
+function parseAxis(text: string): number {
+  const unit: Record<string, number> = { k: 1e3, M: 1e6, B: 1e9 }
+
+  return Number.parseFloat(text) * (unit[text.slice(-1)] ?? 1)
 }
 
 /** The baselines of the end-value labels (text anchored end, font size 12, inside the plot). */
@@ -249,11 +298,12 @@ test('at narrow widths text is dropped or shortened instead of overlapping', () 
   for (const width of [300, 384, 500, 640, 699, 700, 960]) {
     setWidth(width)
     const source = heroSvg(heroView(opts)).source
-    // Each right axis label (about 6.3 px a character) ends inside the card with a margin.
-    const right = [...source.matchAll(/<text x="([\d.]+)" y="[\d.]+" fill="rgba\(255,255,255,\.88\)" font-size="11\.5">([0-9.]+[Mk])<\/text>/g)]
+    // Each right axis label, green and blue (about 6.3 px a character), ends inside the card with a margin.
+    const axis = axisLabels(source)
+    const right = [...axis.ft, ...axis.fr].filter(label => /[Mk]$/.test(label.text))
     expect(right.length).toBeGreaterThan(0)
-    for (const [, x, label] of right) {
-      expect(Number(x) + label!.length * 6.3).toBeLessThanOrEqual(width - 4)
+    for (const label of right) {
+      expect(label.x + label.text.length * 6.3).toBeLessThanOrEqual(width - 4)
     }
   }
   setWidth(384)
@@ -287,7 +337,7 @@ function endLabels(source: string): { x: number; y: number; text: string }[] {
   return [...source.matchAll(/<text x="([\d.]+)" y="([\d.]+)" text-anchor="end" font-size="12"[^>]*><tspan[^>]*>([^<]+)<\/tspan>(?:<tspan[^>]*>([^<]+)<\/tspan>)?<\/text>/g)].map(match => ({ x: Number(match[1]), y: Number(match[2]), text: `${match[3]}${match[4] ?? ''}` }))
 }
 
-test('a third trace, tokens per minute, in blue on the token axis, with its key entry, end dot and end label', () => {
+test(' a third trace, tokens per minute, in blue with its own axis at 1/10 of the token axis, with its key entry, end dot and end label', () => {
   setWidth(720)
   const series: Series = { agents: [[NOW - 20 * MIN, 1]], tokens: [[NOW - 20 * MIN, 0], [NOW - 3 * MIN, 900_000], [NOW - 45_000, 1_200_000]], compacts: [] }
   const svg = heroSvg(graphView(series, { tokens: 1_200_000 }, NOW)).source
@@ -298,9 +348,22 @@ test('a third trace, tokens per minute, in blue on the token axis, with its key 
   expect(svg).toMatch(/<circle cx="[\d.]+" cy="[\d.]+" r="3.5" fill="#60A5FA" class="fr"/)
   // The minute before now holds the last request, 300k: the label reads "300.0k/min".
   expect(endLabels(svg).map(label => label.text)).toContain('300.0k/min')
-  // Axis titles: "Live agents" bottom to top, 46 px left of the plot (x0 = 96 at 720 px); "Tokens" top to bottom.
-  expect(svg).toMatch(/<text transform="translate\(50 [\d.]+\) rotate\(-90\)" text-anchor="middle"[^>]*>Live agents</)
+  // Axis titles: "Tokens" top to bottom, TITLE_IN (10) px in from x1 + titleDx; "Live agents" bottom to top, mirrored: leftTitleX = W - rightTitleX.
+  const { x1 } = plotEdges(svg)
+  const titles = axisTitles(svg)
+  expect(titles.right).toBe(x1 + titleDxOf(axisLabels(svg)) - 10)
+  expect(titles.left).toBe(720 - titles.right)
+  expect(svg).toMatch(/<text transform="translate\([\d.]+ [\d.]+\) rotate\(-90\)" text-anchor="middle"[^>]*>Live agents</)
   expect(svg).toMatch(/<text transform="translate\([\d.]+ [\d.]+\) rotate\(90\)" text-anchor="middle"[^>]*>Tokens</)
+  // The rate axis reads the token axis over RATE_RATIO on every gridline.
+  const axis = axisLabels(svg)
+  expect(axis.fr.length).toBe(5)
+  axis.ft.forEach((label, i) => expect(Math.abs(parseAxis(axis.fr[i]!.text) * RATE_RATIO - parseAxis(label.text))).toBeLessThan(0.01))
+  // The rate line is drawn at 10 x its value on the token axis: its last point (300k a minute) ends where 3M sits on the token scale.
+  const top = graphView(series, { tokens: 1_200_000 }, NOW).axes.tokens.max
+  const rate = /<polyline points="([^"]+)" fill="none" stroke="#60A5FA" class="sr"/.exec(svg)![1]!.split(' ')
+  const { bottom, plotTop } = plotEdges(svg)
+  expect(Math.abs(Number(rate.at(-1)!.split(',')[1]) - (bottom - ((300_000 * RATE_RATIO) / top) * (bottom - plotTop)))).toBeLessThan(0.1)
   expect(heroSvg(graphView(series, { tokens: 1_200_000 }, NOW)).alt).toContain('Tokens per minute:')
 })
 
@@ -309,14 +372,15 @@ test('nothing clips from 300 to 960 px: axis titles and labels stay inside the c
   for (const width of [300, 384, 520, 700, 720, 960]) {
     setWidth(width)
     const svg = heroSvg(graphView(series, { tokens: 1_125_000 }, NOW)).source
-    const left = Number(/translate\(([\d.]+) [\d.]+\) rotate\(-90\)/.exec(svg)?.[1])
-    const right = Number(/translate\(([\d.]+) [\d.]+\) rotate\(90\)/.exec(svg)?.[1])
+    const { left, right } = axisTitles(svg)
     // A rotated 12 px title spans 9 px to the side of its tops and 3 px to the other.
     expect(left - 9).toBeGreaterThanOrEqual(4)
     expect(right + 9).toBeLessThanOrEqual(width - 4)
-    // The right axis labels end before the right title starts.
-    for (const [, x, label] of svg.matchAll(/<text x="([\d.]+)" y="[\d.]+" fill="rgba\(255,255,255,\.88\)" font-size="11\.5">([0-9.]+[Mk])<\/text>/g)) {
-      expect(Number(x) + label!.length * 6.3).toBeLessThan(right - 3)
+    // The right axis labels, green and blue, end before the right title starts.
+    const axis = axisLabels(svg)
+    expect(axis.ft.length + axis.fr.length).toBe(10)
+    for (const label of [...axis.ft, ...axis.fr]) {
+      expect(label.x + label.text.length * 6.3).toBeLessThan(right - 3)
     }
   }
   setWidth(384)
@@ -387,37 +451,50 @@ test('the totals line says total session tokens, and drops words to fit at narro
 
 // ---------------------------------------------------------------- and, loop-1 tail (H1)
 
-/** The grid's right end (x1), the right axis labels and the right title's center x. */
-function rightAxis(svg: string): { x1: number; labels: { x: number; text: string }[]; title: number } {
-  const x1 = Number(/<line x1="[\d.]+" y1="[\d.]+" x2="([\d.]+)" y2="[\d.]+" stroke="rgba\(255,255,255,\.08\)"\/>/.exec(svg)![1])
-  const labels = [...svg.matchAll(/<text x="([\d.]+)" y="[\d.]+" fill="rgba\(255,255,255,\.88\)" font-size="11\.5">([^<]+)<\/text>/g)].map(match => ({ x: Number(match[1]), text: match[2]! }))
-  const title = Number(/translate\(([\d.]+) [\d.]+\) rotate\(90\)/.exec(svg)![1])
-
-  return { x1, labels, title }
-}
-
-test('the zero axis label reads 0 on every token axis, as in the approved sample', () => {
+test(' the zero axis label reads 0 on every token axis and on the rate axis, as in the approved sample', () => {
   for (const top of [150_000, 4_500_000, 60_000_000, 9_000_000_000]) {
     const svg = heroSvg({ ...graphView({ agents: [[NOW - 5 * MIN, 1]], tokens: [[NOW - 5 * MIN, top / 2]], compacts: [] }, { tokens: top / 2 }, NOW), axes: { agents: { max: 4 }, tokens: { max: top } } }).source
-    const zero = rightAxis(svg).labels[0]!
-    expect(zero.text).toBe('0')
-    expect(svg).not.toMatch(/>0[Mk]</)
+    const axis = axisLabels(svg)
+    expect(axis.ft[0]!.text).toBe('0')
+    expect(axis.fr[0]!.text).toBe('0')
+    expect(axis.fa[0]!.text).toBe('0')
+    expect(svg).not.toMatch(/>0[MkB]</)
+    // The blue column reads the green one over RATE_RATIO on each gridline, at the same height.
+    expect(axis.fr.length).toBe(5)
+    axis.ft.forEach((label, i) => {
+      expect(Math.abs(parseAxis(axis.fr[i]!.text) * RATE_RATIO - parseAxis(label.text))).toBeLessThan(0.01)
+      expect(axis.fr[i]!.y).toBe(label.y)
+    })
   }
 })
 
-test('the right axis title sits at x1 + 63, as in the approved sample, clear of the widest axis label at every width', () => {
-  // The sample: 900 px wide, x1 = 790, the title at 853 (x1 + 63).
+test(' the right axis title sits TITLE_IN px in from x1 + 63 (more with wide labels), the left one mirrors it, both clear of the labels at every width', () => {
+  // The sample: 900 px wide, x1 = 790, the title was at 853 (x1 + 63); moves it 10 px in.
   for (const top of [150_000, 4_500_000, 60_000_000]) {
     for (const width of [300, 384, 520, 699, 700, 720, 900, 960]) {
       setWidth(width)
       const svg = heroSvg({ ...graphView({ agents: [[NOW - 5 * MIN, 1]], tokens: [[NOW - 5 * MIN, top / 2]], compacts: [] }, { tokens: top / 2 }, NOW), axes: { agents: { max: 4 }, tokens: { max: top } } }).source
-      const { x1, labels, title } = rightAxis(svg)
-      expect(title).toBe(x1 + 63)
-      // A rotated 12 px title spans 3 px left of its center and 9 px right; the widest label (6.3 px a character) ends before it.
-      for (const label of labels) {
-        expect(label.x + label.text.length * 6.3).toBeLessThan(title - 3)
+      const { x0, x1 } = plotEdges(svg)
+      const axis = axisLabels(svg)
+      const { left, right } = axisTitles(svg)
+      const titleDx = titleDxOf(axis)
+      expect(right).toBe(x1 + titleDx - 10)
+      expect(left).toBe(width - right)
+      // Green labels start 16 px right of the plot, blue ones 14 px after the green column; agent labels end 16 px left of it.
+      expect(axis.ft[0]!.x).toBe(x1 + 16)
+      expect(axis.fr[0]!.x).toBe(x1 + 16 + columnW(axis.ft) + 14)
+      expect(axis.fa[0]!.x).toBe(x0 - 16)
+      expect(axis.fa[0]!.anchor).toBe('end')
+      // A rotated 12 px title spans 3 px to the plot side of its center and 9 px to the edge side; every label of both columns ends before the right title starts.
+      for (const label of [...axis.ft, ...axis.fr]) {
+        expect(label.x + label.text.length * 6.3).toBeLessThan(right - 3)
       }
-      expect(title + 9).toBeLessThanOrEqual(width - 4)
+      // The agent labels start after the left title's glyphs.
+      for (const label of axis.fa) {
+        expect(label.x - label.text.length * 6.3).toBeGreaterThan(left + 3)
+      }
+      expect(right + 9).toBeLessThanOrEqual(width - 4)
+      expect(left - 9).toBeGreaterThanOrEqual(4)
     }
   }
   setWidth(384)
@@ -461,35 +538,46 @@ function compactedBoxes(svg: string): { x0: number; x1: number }[] {
   )
 }
 
+/** The plot's left and right edge of compactedAt's card at 384 px (the margins now depend on the axis labels). */
+function compactedPlot(): { x0: number; x1: number } {
+  setWidth(384)
+  const svg = heroSvg({ ...buildView([], [], HERO_NOW), series: { agents: [], tokens: [], compacts: [] }, axes: { agents: { max: 4 }, tokens: { max: 300_000 } } }).source
+
+  return plotEdges(svg)
+}
+
 /**
- * A top card at 384 px (plot x 64 to 304, 8 px a minute) with compactions at the given x positions,
+ * A top card at 384 px with compactions at the given x offsets from the plot's left edge,
  * each with its fall to zero; `isTokenTop` puts the token end at the top of the plot instead (its dot then sits where a Compacted label goes).
  */
-function compactedAt(xs: readonly number[], isTokenTop = false): string {
-  setWidth(384)
-  const from = HERO_NOW - 30 * MIN
-  const at = (x: number) => from + (x - 64) * 7500
-  const tokens: Point[] = isTokenTop ? [[from - MIN, 300_000]] : [[from - MIN, 1000], ...xs.map((x): Point => [at(x), 0])]
+function compactedAt(offsets: readonly number[], isTokenTop = false): string {
+  const { x0, x1 } = compactedPlot()
+  const from = HERO_NOW - WINDOW_MS
+  const at = (offset: number) => from + (offset / (x1 - x0)) * WINDOW_MS
+  const tokens: Point[] = isTokenTop ? [[from - MIN, 300_000]] : [[from - MIN, 1000], ...offsets.map((offset): Point => [at(offset), 0])]
 
-  return heroSvg({ ...buildView([], [], HERO_NOW), series: { agents: [], tokens, compacts: xs.map(at) }, axes: { agents: { max: 4 }, tokens: { max: 300_000 } } }).source
+  return heroSvg({ ...buildView([], [], HERO_NOW), series: { agents: [], tokens, compacts: offsets.map(at) }, axes: { agents: { max: 4 }, tokens: { max: 300_000 } } }).source
 }
 
 test('a Compacted label is drawn only where its box clears every earlier Compacted label by 4 px, in three constructed states', () => {
   const apart = (boxes: { x0: number; x1: number }[]) => boxes.every((one, i) => boxes.every((two, k) => k <= i || one.x1 + 4 <= two.x0 || two.x1 + 4 <= one.x0))
-  // State 1, the reported defect behind a valid first case: a label right of the line at x 200 (box 205 to 263), then a
-  // line at 280, 80 px on, whose label must flip left (217 to 275, on the first). The old rule (x - last x > 70) drew both.
-  expect(compactedBoxes(compactedAt([200, 280]))).toEqual([{ x0: 205, x1: 263 }])
-  // State 2, the limit: a second box 4.5 px clear is drawn (lines at 100 and 162.5: 105 to 163, 167.5 to 225.5); 3.5 px clear it is not.
-  expect(compactedBoxes(compactedAt([100, 162.5]))).toEqual([{ x0: 105, x1: 163 }, { x0: 167.5, x1: 225.5 }])
-  expect(compactedBoxes(compactedAt([100, 161.5]))).toEqual([{ x0: 105, x1: 163 }])
+  // The plot's edges move with the axis labels, so the states are offsets from its left edge x0, and the boxes are checked as offsets too.
+  const { x0, x1 } = compactedPlot()
+  const rel = (boxes: { x0: number; x1: number }[]) => boxes.map(box => ({ x0: Math.round((box.x0 - x0) * 10) / 10, x1: Math.round((box.x1 - x0) * 10) / 10 }))
+  // State 1, the reported defect behind a valid first case: a label right of the line at 100 (box 105 to 163), then a
+  // line at 180, 80 px on, whose label must flip left (117 to 175, on the first). The old rule (x - last x > 70) drew both.
+  expect(rel(compactedBoxes(compactedAt([100, 180])))).toEqual([{ x0: 105, x1: 163 }])
+  // State 2, the limit: a second box 4.5 px clear is drawn (lines at 36 and 98.5: 41 to 99, 103.5 to 161.5); 3.5 px clear it is not.
+  expect(rel(compactedBoxes(compactedAt([36, 98.5])))).toEqual([{ x0: 41, x1: 99 }, { x0: 103.5, x1: 161.5 }])
+  expect(rel(compactedBoxes(compactedAt([36, 97.5])))).toEqual([{ x0: 41, x1: 99 }])
   // State 3, the population the fix excludes: a line at the right edge whose left label would sit on the token end dot at
   // the top of the plot gets no label; with the dot at the bottom, it gets one, left of the line.
-  expect(compactedBoxes(compactedAt([304], true))).toEqual([])
-  expect(compactedBoxes(compactedAt([304]))).toEqual([{ x0: 241, x1: 299 }])
+  expect(compactedBoxes(compactedAt([x1 - x0], true))).toEqual([])
+  expect(rel(compactedBoxes(compactedAt([x1 - x0])))).toEqual([{ x0: x1 - x0 - 63, x1: x1 - x0 - 5 }])
   // Many compactions at every spacing: never two labels on each other.
   for (let step = 20; step <= 130; step += 3) {
-    const xs = Array.from({ length: 12 }, (_, k) => 64 + k * step).filter(x => x <= 304)
-    expect(apart(compactedBoxes(compactedAt(xs)))).toBe(true)
+    const offsets = Array.from({ length: 12 }, (_, k) => k * step).filter(offset => offset <= x1 - x0)
+    expect(apart(compactedBoxes(compactedAt(offsets)))).toBe(true)
   }
   setWidth(384)
 })

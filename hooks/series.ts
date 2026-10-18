@@ -371,13 +371,19 @@ export function onePerStep(points: readonly Point[]): Point[] {
   return out
 }
 
+/**
+ * The token axis's top over the tokens-per-minute axis's top: the rate axis is always the
+ * token axis divided by RATE_RATIO, so the two lines stay comparable at every scale.
+ */
+export const RATE_RATIO = 10
+
 /** Steps both axes for the series as of `now`. */
 export function stepAxes(prev: Axes | undefined, series: Series, now: number): Axes {
   const from = Math.floor(now / QUANT_MS) * QUANT_MS - WINDOW_MS
   const peak = (points: readonly Point[]) => windowed(points, from).reduce((top, point) => Math.max(top, point[1]), 0)
 
-  // The token axis holds both token traces: the count since compact and the tokens per minute.
-  const tokenPeak = Math.max(peak(series.tokens), peak(tokenRate(series.tokens, now, series.seeds)))
+  // The token axis holds both token traces: the count since compact, and the tokens per minute on its own axis, RATE_RATIO times smaller.
+  const tokenPeak = Math.max(peak(series.tokens), peak(tokenRate(series.tokens, now, series.seeds)) * RATE_RATIO)
 
   return { agents: stepAxis(prev?.agents, 'agents', peak(series.agents), now), tokens: stepAxis(prev?.tokens, 'tokens', tokenPeak, now) }
 }

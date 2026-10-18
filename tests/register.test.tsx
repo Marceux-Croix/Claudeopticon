@@ -2487,7 +2487,8 @@ test('an agent that ends with its tickets done queues no note', async ($, on) =>
   expect(contexts[0] ?? '').not.toContain('Its tickets are still open')
 })
 
-test('the next prompt names the in-progress tickets the orchestrator claimed, and not again within 30 minutes', async ($, on) => {
+// The 31 minutes on the mock clock run every scan the session would make: past 5 s on a busy machine (#T003G).
+test('the next prompt names the in-progress tickets the orchestrator claimed, and not again within 30 minutes', { timeoutMs: 60_000 } as never, async ($, on) => {
   const { clock, edit, contexts } = endSetup($, on, ORCH_FILE)
   await begin($)
   await edit('- [~] #T0026 Ship the parser\n- [ ] #T2 Review the copy\n- [~] #T3 Check the invoice')

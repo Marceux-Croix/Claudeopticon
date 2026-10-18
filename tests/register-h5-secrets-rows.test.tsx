@@ -355,7 +355,8 @@ for (const [name, rules] of [
   ['with the rules on (the control: the line is there)', true],
   ['with the rules off', false],
 ] as const) {
-  test(`UCR-067 the orchestrator owns #T0026 in progress, ${name}`, { options: { rules } }, async ($, on) => {
+  // The 31 minutes on the mock clock run every scan the session would make: past 5 s on a busy machine (#T003G).
+  test(`UCR-067 the orchestrator owns #T0026 in progress, ${name}`, { options: { rules }, timeoutMs: 60_000 } as never, async ($, on) => {
     const { clock, contexts, store } = orchOwner(on)
     await open($)
     await $.tool.call({ tool: PROGRESS, done: 0, total: 1, items: ['#T0026'] } as never)

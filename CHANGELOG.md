@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.7
+
+### Fixes
+
+- The board no longer moves while you read when agents come and go. The agent area keeps the height of three agent cards, with an empty gray card for each slot no agent fills and the timeline drawn empty before the first agent, and keeps the tallest height it reached. The Orchestrator history card is always as tall as a page of five entries. Before, each agent card or history line that came or went moved the board by its height. Past three agent cards the board still moves: see Limits in the README.
+
 ## 0.9.6
 
 ### Features

@@ -1,13 +1,12 @@
 import { expect, test } from 'claude-code/testing'
 
-import { orchestratorSvg, timelineSvg } from '../hooks/agent-cards'
+import { agentCardHeight, AGENT_CARD_MIN_PX, ORCHESTRATOR_HELD_PX, orchestratorSvg, timelineHeight, timelineSvg } from '../hooks/agent-cards'
 import { buildView } from '../hooks/view-model'
 import type { AgentRow } from '../types'
 
-test('the orchestrator card draws a dim mono detail line per entry, in a taller card, and none when there is no detail', () => {
+test('the orchestrator card draws a dim mono detail line per entry, and none when there is no detail', () => {
   const plain = orchestratorSvg([{ line: 'A', at: 0, isRunning: false }, { line: 'B', at: 0, isRunning: false }])
   const rich = orchestratorSvg([{ line: 'A', at: 0, isRunning: false, detail: 'npm test <all>' }, { line: 'B', at: 0, isRunning: false }])
-  expect(rich.height).toBe(plain.height + 16)
   expect(rich.source).toContain('npm test &lt;all&gt;')
   expect(rich.source).not.toContain('<all>')
   expect(rich.source).toMatch(/font-size="11" class="mono">npm test/)
@@ -34,4 +33,22 @@ test('the timeline of finished agents that are hidden says so instead of drawing
   }
   expect(timelineSvg(buildView([], [], 9000), []).source).toContain('No agents ran in this window')
   expect(timelineSvg(view, view.agents).source).not.toContain('All agents finished')
+})
+
+test('the orchestrator card holds the height of a full page of five entries with detail lines, however few or short its entries', () => {
+  const entry = (detail?: string) => ({ line: 'A', at: 0, isRunning: false, ...(detail === undefined ? {} : { detail }) })
+  expect(orchestratorSvg([entry()]).height).toBe(ORCHESTRATOR_HELD_PX)
+  expect(orchestratorSvg([entry('npm test')]).height).toBe(ORCHESTRATOR_HELD_PX)
+  const full = orchestratorSvg(Array.from({ length: 5 }, () => entry('npm test')))
+  expect(full.height).toBe(ORCHESTRATOR_HELD_PX)
+  expect(full.source).toContain(`height="${ORCHESTRATOR_HELD_PX}"`)
+})
+
+test('timelineHeight and agentCardHeight are the heights the cards draw at', () => {
+  const view = buildView([], [], 9000)
+  expect(timelineSvg(view, []).height).toBe(timelineHeight(0))
+  expect(timelineHeight(0)).toBe(timelineHeight(1))
+  expect(timelineHeight(3) - timelineHeight(2)).toBe(30)
+  expect(AGENT_CARD_MIN_PX).toBe(agentCardHeight(2, false))
+  expect(agentCardHeight(3, true) - agentCardHeight(2, false)).toBe(28)
 })

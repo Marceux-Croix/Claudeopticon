@@ -41,7 +41,7 @@ Each file in `hooks/` has one responsibility, which its first line states. Befor
 - Notes and prompts for Claude: `claude-notes.ts`, `note-quotes.ts`, `ticket-prompts.ts`, `rules.ts`, `deferred-tickets.ts`.
 - The view: `view-model.ts`, `categories.ts`, `sort-queue.ts`, `ticket-actions.ts`, `ticket-spaces.ts`, `orchestrator-history.ts`, `terminal-text.ts`, `item-keys.ts`, `normalize.ts`.
 - The store: `kept-records.ts`, `token-usage.ts`.
-- The cards: `card-types.ts`, `card-stage.ts`, `card-text.ts`, `card-format.ts`, `card-parts.ts`, `series.ts`, `card-end-labels.ts`, `card-end-dots.ts`, `hero-card.ts`, `todo-cards.ts`, `agent-cards.ts`.
+- The cards: `card-types.ts`, `card-stage.ts`, `card-text.ts`, `card-format.ts`, `card-parts.ts`, `series.ts`, `card-end-labels.ts`, `card-end-dots.ts`, `hero-card.ts`, `todo-cards.ts`, `agent-cards.ts`, `agent-room.ts`.
 
 The table in [How it works](docs/how-it-works.md#module-layout) gives the responsibility of each file.
 

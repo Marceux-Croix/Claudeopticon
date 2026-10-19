@@ -18,7 +18,7 @@ test('UCR-054 tokens picks the unit after rounding, and the axis labels keep thr
   expect(tokens(950)).toBe('950')
   expect(tokens(84_321)).toBe('84.3k')
   expect(tokens(17_380_000)).toBe('17.38M')
-  const view = heroView({ axes: { agents: { max: 4 }, tokens: { max: 4_500_000 } } })
+  const view = heroView({ axes: { agents: { max: 4 }, tokens: { max: 4_500_000 }, rate: { max: 4_500_000 } } })
   const labels = [...heroSvg(view).source.matchAll(/font-size="11\.5">([0-9.]+[Mk]?)<\/text>/g)].map(match => match[1])
   expect(labels).toContain('1.125M')
   expect(labels).toContain('3.375M')
@@ -35,7 +35,7 @@ function heroView(opts: HeroOpts = {}): View {
   const series: Series = { agents: opts.agents ?? [], tokens: opts.tokens ?? [], compacts: opts.compacts ?? [] }
   const base = buildView([], opts.rows ?? [], NOW)
 
-  return { ...base, series, axes: opts.axes ?? { agents: { max: 4 }, tokens: { max: 150_000 } }, usage: opts.usage === undefined ? undefined : { tokens: opts.usage, since: 0 } }
+  return { ...base, series, axes: opts.axes ?? { agents: { max: 4 }, tokens: { max: 150_000 }, rate: { max: 150_000 } }, usage: opts.usage === undefined ? undefined : { tokens: opts.usage, since: 0 } }
 }
 
 test('UCR-161 tokens has a B unit from a billion, and the axis labels too', () => {
@@ -47,7 +47,7 @@ test('UCR-161 tokens has a B unit from a billion, and the axis labels too', () =
   expect(tokens(999_994_999)).toBe('999.99M')
   // Under a billion nothing changes.
   expect(tokens(623_590_000)).toBe('623.59M')
-  const view = heroView({ axes: { agents: { max: 4 }, tokens: { max: 6_000_000_000 } } })
+  const view = heroView({ axes: { agents: { max: 4 }, tokens: { max: 6_000_000_000 }, rate: { max: 6_000_000_000 } } })
   const labels = [...heroSvg(view).source.matchAll(/font-size="11\.5">([0-9.]+[BMk]?)<\/text>/g)].map(match => match[1])
   expect(labels).toContain('6B')
   expect(labels).toContain('1.5B')

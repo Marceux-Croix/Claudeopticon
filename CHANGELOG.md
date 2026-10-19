@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.5
+
+### Fixes
+
+- The tokens per minute have their own scale, fitted to the highest rate in view, on the same gridlines as the token scale. Before, the rate scale was the token scale divided by 10, so when the count since compact grew to hundreds of millions, the rate line was flat along the bottom.
+- Two clipped segments close together no longer draw their peak labels on top of each other: the later label is left out, and its zigzag stays.
+
 ## 0.9.4
 
 ### Features

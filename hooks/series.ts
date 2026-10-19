@@ -296,7 +296,7 @@ export function readKeptSeries(stored: unknown, now = Infinity): Series {
 
 /** One axis: its top value. */
 export type AxisState = { max: number }
-export type Axes = { agents: AxisState; tokens: AxisState }
+export type Axes = { agents: AxisState; tokens: AxisState; rate: AxisState }
 type AxisKind = 'agents' | 'tokens'
 
 /** The nth nice top: agents 4, 6, 8, 12, 16, 24, 32...; tokens 150k, 300k, 600k, 900k, 1.5M, 3M, 6M, 9M, 15M... */
@@ -375,22 +375,22 @@ export function sinceCompact(series: Series, from: number): Point[] {
   return last === undefined ? series.tokens : series.tokens.filter(point => point[0] >= last)
 }
 
-/**
- * The token axis's top over the tokens-per-minute axis's top (#T003K): the rate axis is always the
- * token axis divided by RATE_RATIO, so the two lines stay comparable at every scale.
- */
-export const RATE_RATIO = 10
-
-/** Steps both axes for the series as of `now`. */
+/** Steps the three axes for the series as of `now`. */
 export function stepAxes(prev: Axes | undefined, series: Series, now: number): Axes {
   const from = Math.floor(now / QUANT_MS) * QUANT_MS - WINDOW_MS
   const peak = (points: readonly Point[]) => windowed(points, from).reduce((top, point) => Math.max(top, point[1]), 0)
 
-  // The token axis holds both token traces: the count since compact, and the tokens per minute on its own axis, RATE_RATIO times smaller.
-  // The count is taken from the last compaction in the window on (#T004A): the count before it is
-  // drawn clipped at the top, so it never flattens the count since. The rate does not reset at a
-  // compaction, so the whole window of it is held: clipped, it would draw as noise along the top.
-  const tokenPeak = Math.max(peak(sinceCompact(series, from)), peak(tokenRate(series.tokens, now, series.seeds)) * RATE_RATIO)
+  // The token axis holds the count from the last compaction in the window on (#T004A): the count
+  // before it is drawn clipped at the top, so it never flattens the count since.
+  // The tokens per minute have their own axis, on the same gridlines (#T004E): tied to the count,
+  // the rate drew flat along the bottom once the count reached hundreds of millions. The rate does
+  // not reset at a compaction, so the whole window of it is held.
+  const tokenPeak = peak(sinceCompact(series, from))
+  const ratePeak = peak(tokenRate(series.tokens, now, series.seeds))
 
-  return { agents: stepAxis(prev?.agents, 'agents', peak(series.agents)), tokens: stepAxis(prev?.tokens, 'tokens', tokenPeak) }
+  return {
+    agents: stepAxis(prev?.agents, 'agents', peak(series.agents)),
+    tokens: stepAxis(prev?.tokens, 'tokens', tokenPeak),
+    rate: stepAxis(prev?.rate, 'tokens', ratePeak),
+  }
 }

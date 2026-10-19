@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { addAgentPoint, addAgents, addCompact, addPoint, addStep, addTokens, emptySeries, niceMax, onePerStep, QUANT_MS, RATE_RATIO, readKeptSeries, retimeSeries, seedSeries, SERIES_CAP, sinceCompact, stepAxes, stepAxis, tokenRate, WINDOW_MS } from '../hooks/series'
+import { addAgentPoint, addAgents, addCompact, addPoint, addStep, addTokens, emptySeries, niceMax, onePerStep, QUANT_MS, readKeptSeries, retimeSeries, seedSeries, SERIES_CAP, sinceCompact, stepAxes, stepAxis, tokenRate, WINDOW_MS } from '../hooks/series'
 import type { Point, Series } from '../hooks/series'
 
 const MIN = 60_000
@@ -79,7 +79,7 @@ test('an axis grows to the next step when a value would leave the plot, and shri
   expect(tokensAxis.max).toBe(1_500_000)
 })
 
-test('the token axis lets go of a rate burst the moment it leaves the window (#T0049)', async () => {
+test('the rate axis lets go of a rate burst the moment it leaves the window (#T0049, #T004E)', async () => {
   let series = emptySeries()
   let axes: ReturnType<typeof stepAxes> | undefined
   let t = HERO_NOW
@@ -89,18 +89,20 @@ test('the token axis lets go of a rate burst the moment it leaves the window (#T
     series = addTokens(series, t, i * 10_000_000, 10_000_000)
     axes = stepAxes(axes, series, t)
   }
-  expect(axes!.tokens.max).toBe(300_000_000)
+  // #T004E: the burst holds the rate axis (20M a minute), and only the count (100M) the token axis.
+  expect(axes!.rate.max).toBe(30_000_000)
+  expect(axes!.tokens.max).toBe(150_000_000)
   const burstEnd = t
   for (let i = 1; t < burstEnd + WINDOW_MS + 4 * QUANT_MS; i += 1) {
     t += QUANT_MS
     series = addTokens(series, t, 100_000_000 + i * 100_000, 100_000)
     axes = stepAxes(axes, series, t)
     if (t < burstEnd + WINDOW_MS - QUANT_MS) {
-      expect(axes.tokens.max).toBe(300_000_000)
+      expect(axes.rate.max).toBe(30_000_000)
     }
   }
-  // The count (about 106M) holds the axis now; the burst no longer does, and no 5-minute hold keeps it.
-  expect(axes!.tokens.max).toBe(150_000_000)
+  // The slow climb (200k a minute) holds the rate axis now; the burst no longer does, and no 5-minute hold keeps it.
+  expect(axes!.rate.max).toBe(300_000)
 })
 
 test('the token axis holds the count since the last compaction in the window, not the count before it (#T004A)', async () => {
@@ -109,10 +111,10 @@ test('the token axis holds the count since the last compaction in the window, no
   expect(sinceCompact(series, HERO_NOW - WINDOW_MS)).toEqual(tokens.slice(1))
   // A compaction out of the window holds nothing back.
   expect(sinceCompact(series, HERO_NOW - 10 * MIN)).toEqual(tokens)
-  // 13M, and ten times the rate (13M in the minute before -5 min, 130M; the rate is held over the whole window), so the step holds 130M, not 375M.
-  expect(stepAxes(undefined, series, HERO_NOW).tokens.max).toBe(150_000_000)
+  // The count since the compaction is 13M, so the step holds 15M, not 375M. The rate (#T004E) has its own axis.
+  expect(stepAxes(undefined, series, HERO_NOW).tokens.max).toBe(15_000_000)
   const slow = { ...series, tokens: [...tokens.slice(0, 2), [HERO_NOW - 10 * MIN, 6_500_000], [HERO_NOW - 5 * MIN, 13_000_000]] as Point[] }
-  expect(stepAxes(undefined, slow, HERO_NOW).tokens.max).toBe(90_000_000)
+  expect(stepAxes(undefined, slow, HERO_NOW).tokens.max).toBe(15_000_000)
 })
 
 test('stepAxes plots the visible values only, so a value that left the window no longer holds the axis up', async () => {
@@ -175,18 +177,25 @@ test('UCR-092 tokenRate counts each rise in the minute it happened: never a fall
   expect(tokenRate([], now)).toEqual([])
 })
 
-test('#T0039 #T003K the token axis holds both token traces: its top is at least RATE_RATIO times the highest tokens per minute', () => {
+test('#T004E the rate axis holds the highest tokens per minute, and the token axis only the count', () => {
   const now = 100 * QUANT_MS
-  // A burst, a compaction a minute ago, and a quiet climb: the axis top fits every rate step.
+  // A burst, a compaction a minute ago, and a quiet climb: the rate axis top fits every rate step.
   const states: Series[] = [
     { agents: [], tokens: [[now - 5 * MIN, 0], [now - 2 * MIN, 2_000_000], [now - MIN, 0], [now - 30_000, 100_000]], compacts: [now - MIN] },
     { agents: [], tokens: Array.from({ length: 30 }, (_, i) => [now - (30 - i) * MIN, i * 400_000] as Point), compacts: [] },
     { agents: [], tokens: [[now - 40 * MIN, 9_000_000], [now - 29 * MIN, 9_100_000]], compacts: [] },
   ]
   for (const series of states) {
-    const top = stepAxes(undefined, series, now).tokens.max
-    expect(top).toBeGreaterThanOrEqual(Math.max(...tokenRate(series.tokens, now).map(point => point[1])) * RATE_RATIO)
+    const axes = stepAxes(undefined, series, now)
+    const ratePeak = Math.max(...tokenRate(series.tokens, now).map(point => point[1]))
+    expect(axes.rate.max).toBe(niceMax('tokens', ratePeak))
+    expect(axes.tokens.max).toBe(niceMax('tokens', Math.max(...sinceCompact(series, now - WINDOW_MS).map(point => point[1]))))
   }
+  // A count of 600M with a rate of 2M a minute: the rate fills most of its axis, not 2% of it.
+  const big: Series = { agents: [], tokens: [[now - 10 * MIN, 598_000_000], [now - 30_000, 600_000_000]], compacts: [] }
+  const axes = stepAxes(undefined, big, now)
+  expect(axes.tokens.max).toBeGreaterThanOrEqual(600_000_000)
+  expect(axes.rate.max).toBeLessThanOrEqual(3_000_000)
 })
 
 test('UCR-084 B2 a kept series behind the kept count is brought to it, and its seeded rise is never usage', () => {

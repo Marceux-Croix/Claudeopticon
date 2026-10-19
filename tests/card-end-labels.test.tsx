@@ -135,7 +135,8 @@ test('UCR-089 the verifier r24 state: "7 live" never sits on "Compacted", at any
   for (const width of FUZZ_WIDTHS) {
     setWidth(width)
     const { soft, geometry } = overlaps(heroSvg(r24).source)
-    expect(geometry.marks.length).toBe(1)
+    // The Compacted label, and the peak of the segment before it, clipped since the rate has its own axis (#T004E).
+    expect(geometry.marks.length).toBe(2)
     expect(geometry.labels.some(label => label.what === 'fa:7 live')).toBe(true)
     expect(soft.filter(one => one.includes('Compacted'))).toEqual([])
   }
@@ -215,8 +216,9 @@ for (const width of R5_WIDTHS) {
       // (a) zero failures among the states that have a clear place; (b) every failing state has none.
       expect(clearHit).toEqual([])
       // A bound on the crowded states, so a layout that takes more plot width fails: 18 at 300 px
-      // and 1 at 384 px with the dual token axis (#T003K); at most 5 percent of the 420.
-      expect(noClear.length).toBeLessThanOrEqual(21)
+      // and 1 at 384 px with the dual token axis (#T003K). With the rate on its own axis (#T004E)
+      // the rate line fills the plot height: 47 at 300 px (a 101 px plot) and 3 at 384 px; at most 12 percent of the 420.
+      expect(noClear.length).toBeLessThanOrEqual(50)
     } else {
       expect(failures).toEqual([])
     }

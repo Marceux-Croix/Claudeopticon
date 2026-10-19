@@ -6,7 +6,7 @@
  */
 
 import type { View } from '../hooks/card-types'
-import { stepAxes, WINDOW_MS } from '../hooks/series'
+import { stepAxes, stepAxis, WINDOW_MS } from '../hooks/series'
 import type { Point, Series } from '../hooks/series'
 import { heroView, NOW } from './sample'
 
@@ -75,7 +75,7 @@ function tightView(rnd: () => number): View {
   const agents: Point[] = [[now - WINDOW_MS, Math.round(top * rnd())], [now - Math.floor(rnd() * 3 * MIN), agentsAtEnd]]
   const series: Series = { agents, tokens, compacts: rnd() < 0.5 ? [now - 50_000] : [] }
 
-  return { ...heroView, now, series, axes: { agents: { max: top }, tokens: { max: niceTop(tokens) } }, usage: { tokens: 9e8, atCompact: 9e8 - tokEnd, since: 0 }, live: agentsAtEnd }
+  return { ...heroView, now, series, axes: { agents: { max: top }, tokens: { max: niceTop(tokens) }, rate: stepAxis(undefined, 'tokens', r) }, usage: { tokens: 9e8, atCompact: 9e8 - tokEnd, since: 0 }, live: agentsAtEnd }
 }
 
 /** `random` random states and `tight` tight ones, named r0... and tight0..., from `seed` (the verifier's 12345 by default). */

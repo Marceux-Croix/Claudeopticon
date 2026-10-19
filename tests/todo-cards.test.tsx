@@ -99,8 +99,13 @@ test('an orchestrator ticket tag is O in its own color and blinks only while the
       expect(source).toContain('>O<')
       expect(source.includes('@keyframes k0')).toBe(blinks)
     }
+    // #T0044: the orchestrator card exists only while a main-conversation turn runs; idle, the tag above stays but the card is gone.
+    if (!isRunning) {
+      expect(view.orchestrator).toBeUndefined()
+      continue
+    }
     const card = agentSvg(view.orchestrator!, view).source
-    expect(card).toContain(isRunning ? '>Running<' : '>Idle<')
+    expect(card).toContain('>Running<')
     expect(card.includes('@keyframes k0')).toBe(blinks)
     expect(card).toContain('>O<')
     expect(card).toContain('#T3 Check the invoice')

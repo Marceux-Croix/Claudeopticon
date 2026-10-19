@@ -1539,10 +1539,15 @@ test('a main-conversation report_progress that names a ticket makes it the orche
   const drawn = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
   await $.tool.call({ tool: 'mcp__claudeopticon__report_progress', done: 0, total: 2, items: ['#T2'], agentId: 'a1' } as never)
   expect(orchCard(await drawn())).toBe(false)
-  await $.tool.call({ tool: 'mcp__claudeopticon__report_progress', done: 0, total: 2, items: ['#T2'] } as never)
+  // #T0044: a ticket a live agent works is that agent's alone, so the main conversation names #T1 here.
+  await $.tool.call({ tool: 'mcp__claudeopticon__report_progress', done: 0, total: 2, items: ['#T1'] } as never)
+  // The orchestrator card shows only while its main-conversation turn runs.
+  await $.prompt.submit({ text: 'go' } as never)
   const after = await drawn()
   expect(orchCard(after)).toBe(true)
-  expect(after).toContain('#T2 Review the copy')
+  const card = (await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard) ?? ''
+  expect(card).toContain('#T1 Ship the parser')
+  expect(card).not.toContain('#T2 Review the copy')
 })
 
 test('Send to Claude makes the ticket the orchestrator\'s, held in progress while its box is still open', async ($, on) => {
@@ -1552,6 +1557,8 @@ test('Send to Claude makes the ticket the orchestrator\'s, held in progress whil
   const drawn = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
   expect(orchCard(await drawn())).toBe(false)
   await ui.press({ key: 'ticket-OPEN.md-#t1' })
+  // #T0044: the orchestrator card shows only while its main-conversation turn runs.
+  await $.prompt.submit({ text: 'go' } as never)
   const card = (await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard) ?? ''
   expect(card).toContain('#T1 Ship the parser')
   expect(card).not.toContain('#T2 Review the copy')
@@ -1560,7 +1567,7 @@ test('Send to Claude makes the ticket the orchestrator\'s, held in progress whil
   expect((await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard)).toContain('#T3 Check the invoice')
 })
 
-test('the orchestrator card says Running during a turn and Idle after it, and the ticket blinks only while it runs', async ($, on) => {
+test('the orchestrator card says Running during a turn and is gone after it, and the ticket blinks only while it runs', async ($, on) => {
   const { edit } = orchSetup($, on)
   await begin($)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
@@ -1572,8 +1579,8 @@ test('the orchestrator card says Running during a turn and Idle after it, and th
   expect(await card()).toContain('@keyframes k0')
   expect(await ticket()).toContain('@keyframes k0')
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1' } as never).catch(() => undefined)
-  expect(await card()).toContain('O, Orchestrator: Idle')
-  expect(await card()).not.toContain('@keyframes k0')
+  // #T0044: idle, there is no orchestrator card; the ticket tag stays, drawn steady.
+  expect(await card()).toBe('')
   expect(await ticket()).toContain('#1fa7b8')
   expect(await ticket()).not.toContain('@keyframes k0')
   await $.prompt.submit({ text: 'More', asUser: true } as never)
@@ -1611,9 +1618,13 @@ test('a stored claim comes back after a reload, and a claim on a ticket that is 
   orchSetup($, on, store)
   await begin($)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  // #T0044: idle after a reload, no card; the claim still shows once a turn runs.
+  expect((await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard)).toBeUndefined()
+  // #T0044: the orchestrator card shows only while its main-conversation turn runs.
+  await $.prompt.submit({ text: 'go' } as never)
   const shown = (await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard) ?? ''
   expect(shown).toContain('#T2 Review the copy')
-  expect(shown).toContain('O, Orchestrator: Idle')
+  expect(shown).toContain('O, Orchestrator: Running')
   expect(readKeptTickets(store.get('orchestrator:sess-1'))).toEqual([['#t2', false]])
 })
 
@@ -1625,10 +1636,12 @@ test('report_progress title from the main conversation titles the orchestrator c
   await begin($)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   await $.tool.call({ tool: PROGRESS, done: 0, total: 2, items: ['#T2'], title: 'Helper headline', agentId: 'a1' } as never)
-  await $.tool.call({ tool: PROGRESS, done: 0, total: 2, items: ['#T2'] } as never)
+  await $.tool.call({ tool: PROGRESS, done: 0, total: 2, items: ['#T1'] } as never)
+  // #T0044: a ticket a live agent works is that agent's alone, so the main conversation names #T1 while the helper names #T2. The orchestrator card shows only while its main-conversation turn runs.
+  await $.prompt.submit({ text: 'go' } as never)
   const fallback = (await orchSvgs(ui)).find(orchCard) ?? ''
   expect(fallback).not.toContain('Helper headline')
-  await $.tool.call({ tool: PROGRESS, done: 0, total: 2, items: ['#T2'], title: '  Polish the copy\nsecond line' } as never)
+  await $.tool.call({ tool: PROGRESS, done: 0, total: 2, items: ['#T1'], title: '  Polish the copy\nsecond line' } as never)
   const card = (await orchSvgs(ui)).find(orchCard) ?? ''
   expect(card).toContain('>Polish the copy<')
   expect(card).toContain('Orchestrator')
@@ -1656,6 +1669,8 @@ test('a stored orchestrator title comes back after a reload', async ($, on) => {
   orchSetup($, on, store)
   await begin($)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  // #T0044: the orchestrator card shows only while its main-conversation turn runs.
+  await $.prompt.submit({ text: 'go' } as never)
   expect((await orchSvgs(ui)).find(orchCard)).toContain('>Copy review<')
 })
 
@@ -1683,6 +1698,8 @@ test('main-conversation calls store their detail; a duplicate or an MCP call has
 test('the text view lists the orchestrator before the agents', async ($, on) => {
   orchSetup($, on, new Map<string, unknown>([['orchestrator:sess-1', [['#t2', false]]]]))
   await begin($)
+  // #T0044: the orchestrator card shows only while its main-conversation turn runs.
+  await $.prompt.submit({ text: 'go' } as never)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'terminal', ...PANE })
   const drawn = JSON.stringify(await ui.drawn())
   expect(drawn).toContain('main conversation')

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.3
+
+### Fixes
+
+- The Orchestrator card shows only while Claude works a ticket itself in a turn. Before, it stayed between turns with its tickets still "Working on" and lit.
+- A ticket Claude hands to a helper agent belongs to that agent while it runs: it leaves the Orchestrator card, and the board shows only the agent's disk on it.
+- A ticket that fits no category is tagged "Uncategorized". Before, Haiku had to put it in the closest category, even a wrong one. The group of tickets not sorted yet is also named "Uncategorized" now, not "Not sorted yet".
+
 ## 0.9.2
 
 ### Fixes

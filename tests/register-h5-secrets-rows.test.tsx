@@ -312,6 +312,8 @@ const orchCard = async (ui: Awaited<ReturnType<typeof open>>) => (await ui.findA
 test('UCR-115 a report_progress title with a secret is drawn and stored hidden, its ticket ID kept', async ($, on) => {
   const { clock, store } = orchOwner(on)
   const ui = await open($)
+  // The orchestrator card shows only during a main-conversation turn (#T0044).
+  await $.prompt.submit({ text: 'go' } as never)
   await $.tool.call({ tool: PROGRESS, done: 0, total: 1, items: ['#T0026'], title: 'Ship with PGPASSWORD=Hunter2xyz #T0026' } as never)
   await clock.advance(6000)
   const card = await orchCard(ui)
@@ -325,6 +327,7 @@ test('UCR-115 a title stored by an older version with a secret is hidden when it
   const store = new Map<string, unknown>([['orchestrator-title:sess-1', 'Ship with PGPASSWORD=Hunter2xyz'], ['orchestrator:sess-1', [['#t0026', true]]]])
   const { clock } = orchOwner(on, store)
   const ui = await open($)
+  await $.prompt.submit({ text: 'go' } as never)
   await clock.advance(6000)
   const card = await orchCard(ui)
   expect(card).toContain('(hidden)')

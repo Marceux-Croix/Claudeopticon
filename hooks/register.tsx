@@ -22,7 +22,7 @@ import { clock, elapsed, tokens } from './card-format'
 import { ACCENT, DANGER, GREEN, setWidth } from './card-stage'
 import { altText, controlFree, cutUnits, keyText } from './card-text'
 import type { AgentView, FileView, ItemStatus, ItemView, Usage, View } from './card-types'
-import { applySortReply, bookBackups, bookKeptBy, categoryGroups, categoryOf, emptyBook, filterNames, isSubstantialChange, mergeRecategorized, pruneBookItems, readBook, SORT_BATCH, SORT_BATCHES, SORT_EVERY_MS, SORT_MODEL, SORT_TRIES, sortPrompt, usedCategories, withoutHidden } from './categories'
+import { applySortReply, bookBackups, bookKeptBy, categoryGroups, categoryOf, emptyBook, filterNames, groupOf, isSubstantialChange, mergeRecategorized, pruneBookItems, readBook, SORT_BATCH, SORT_BATCHES, SORT_EVERY_MS, SORT_MODEL, SORT_TRIES, sortPrompt, usedCategories, withoutHidden } from './categories'
 import type { CategoryBook } from './categories'
 import { keepsMissing, MISSING_CLAIM_MS } from './claim-keeping'
 import { elapsedSince } from './clock-elapsed'
@@ -5488,7 +5488,8 @@ export const register: Register = (on, options) => {
               }
               const sentKey = `${item.file ?? file.name}:${item.key}`
               const isSent = sentTickets.has(sentKey)
-              const category = categoryOf(book, storedKey(item.key))
+              // A ticket with no listed category is tagged Uncategorized (#T0045), once the book has categories.
+              const category = book.categories.length === 0 ? undefined : groupOf(book, storedKey(item.key))
               const id = new RegExp(`#${ID_SRC}\\b`).exec(item.text)?.[0]
               // Every ticket, in every column, ends with the status question mark.
               const send = isSent ? [] : [SEND_ACTION]

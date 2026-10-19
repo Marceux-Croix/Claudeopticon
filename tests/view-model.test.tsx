@@ -134,11 +134,16 @@ test('the view gives the orchestrator an owner slot after the agents, no timelin
   const list: TodoFile[] = [{ name: 'A.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo('- [ ] #T1 Ship the parser\n- [~] #T3 Check the invoice') }]
   const rows = [row({ id: 'a', brief: '#t3' })]
   const running = buildView(list, rows, 0, { keys: new Set(['#t1', '#t3']), isRunning: true, toolCalls: 4, doing: 'Run the tests' })
-  expect(running.files[0]?.items.map(item => item.owners)).toEqual([[ORCH], [0, ORCH]])
-  expect(running.orchestrator).toMatchObject({ index: ORCH, status: 'running', isIdle: false, doing: 'Run the tests', links: ['#T1 Ship the parser', '#T3 Check the invoice'] })
+  expect(running.files[0]?.items.map(item => item.owners)).toEqual([[ORCH], [0]])
+  // #T0044: #T3 is worked by the live agent, so it is on that agent's card, not the orchestrator's.
+  expect(running.orchestrator).toMatchObject({ index: ORCH, status: 'running', isIdle: false, doing: 'Run the tests', links: ['#T1 Ship the parser'] })
   expect(running.agents.length).toBe(1)
   expect(running.live).toBe(1)
-  expect(buildView(list, rows, 0, { keys: new Set(['#t1']), isRunning: false, toolCalls: 0 }).orchestrator).toMatchObject({ status: 'idle', isIdle: true })
+  // #T0044: an idle orchestrator has no card; it shows only while it works a ticket itself.
+  expect(buildView(list, rows, 0, { keys: new Set(['#t1']), isRunning: false, toolCalls: 0 }).orchestrator).toBeUndefined()
+  // Every ticket handed to a live agent: no card. Once the agent ends, the ticket is the orchestrator's again.
+  expect(buildView(list, rows, 0, { keys: new Set(['#t3']), isRunning: true, toolCalls: 0 }).orchestrator).toBeUndefined()
+  expect(buildView(list, [row({ id: 'a', brief: '#t3', status: 'completed' })], 0, { keys: new Set(['#t3']), isRunning: true, toolCalls: 0 }).orchestrator?.links).toEqual(['#T3 Check the invoice'])
   expect(buildView(list, rows, 0, { keys: new Set(['#nothing']), isRunning: true, toolCalls: 0 }).orchestrator).toBeUndefined()
   expect(buildView(list, rows, 0).orchestrator).toBeUndefined()
 })

@@ -32,13 +32,13 @@ test('category view keeps one card per file, its items grouped under category he
   expect(files[0]?.groups).toEqual([
     { name: 'Legal', from: 0, count: 1 },
     { name: 'Billing', from: 1, count: 2 },
-    { name: 'Not sorted yet', from: 3, count: 1 },
+    { name: 'Uncategorized', from: 3, count: 1 },
   ])
   expect(files[1]?.groups).toEqual([{ name: 'Billing', from: 0, count: 1 }])
   const card = fileCards(files[0]!, view, 12)[0]?.source ?? ''
   expect(card.indexOf('>Legal<')).toBeLessThan(card.indexOf('sign lease'))
   expect(card.indexOf('>Billing<')).toBeLessThan(card.indexOf('pay vendor'))
-  expect(card).toContain('>Not sorted yet<')
+  expect(card).toContain('>Uncategorized<')
 })
 
 test('hidden categories leave the views, a file left with nothing drops out, and the filter lists the names', async () => {
@@ -49,7 +49,7 @@ test('hidden categories leave the views, a file left with nothing drops out, and
   const view = buildView(list, [], 0)
   const book = { categories: ['Legal', 'Billing'], items: { '#t1': 'Billing', '#t2': 'Legal', '#t4': 'Billing' } }
   const files = todoLedger(view, false)
-  expect(filterNames(files, book)).toEqual(['Legal', 'Billing', 'Not sorted yet'])
+  expect(filterNames(files, book)).toEqual(['Legal', 'Billing', 'Uncategorized'])
   expect(filterNames(files, { categories: [], items: {} })).toEqual([])
   const shown = withoutHidden(files, book, new Set(['Billing']))
   expect(shown.map(file => file.name)).toEqual(['A.md'])
@@ -279,7 +279,7 @@ test('categoryGroups orders each group linked, in progress, queued, open, done',
   expect(files[0]?.items.map(item => item.status)).toEqual(['in_progress', 'queued', 'pending', 'completed'])
 })
 
-test('UCR-199 UCR-210 categoryGroups draws every ticket named after a prototype member, sorted or not, and filterNames offers Not sorted yet', () => {
+test('UCR-199 UCR-210 categoryGroups draws every ticket named after a prototype member, sorted or not, and filterNames offers Uncategorized', () => {
   for (const book of [emptyBook(), { categories: ['Parser'], items: { 'fix the parser': 'Parser' } }]) {
     const out = categoryGroups(protoFiles(), book)[0]!
     // The old code drew 3 of 5 in the verifier's probe: "constructor" read Object as its category, which no group holds.
@@ -287,7 +287,7 @@ test('UCR-199 UCR-210 categoryGroups draws every ticket named after a prototype 
     expect(out.items.map(item => item.text).sort()).toEqual(protoFiles()[0]!.items.map(item => item.text).sort())
     expect(withoutHidden(protoFiles(), book, new Set(['Parser']))[0]!.items.length).toBe(book.categories.length === 0 ? PROTO_TEXTS.length : PROTO_TEXTS.length - 1)
   }
-  // The old code saw "constructor" as sorted (Object is not undefined), so Not sorted yet was not offered with only it unsorted.
+  // The old code saw "constructor" as sorted (Object is not undefined), so Uncategorized was not offered with only it unsorted.
   const sorted = { categories: ['Work'], items: { 'fix the parser': 'Work', proto: 'Work', tostring: 'Work', hasownproperty: 'Work', 'ship it': 'Work' } }
   expect(filterNames(protoFiles(), sorted)).toEqual(['Work', UNSORTED])
 })
@@ -336,4 +336,14 @@ test('UCR-210 the sort and Recategorize assign, keep and prune prototype-named t
   const pruned = pruneBookItems(merged, key => key === '__proto__')
   expect(Object.keys(pruned.items)).toEqual(['__proto__'])
   expect(categoryOf(pruned, 'constructor')).toBeUndefined()
+})
+
+test('#T0045 an item that fits no category is kept as Uncategorized, never added as a category, and the prompt offers it', () => {
+  const current = { categories: ['Legal'], items: bookItems() }
+  const next = applySortReply(current, ['#t1', '#t2'], JSON.stringify({ categories: ['Legal', UNSORTED], assign: { 1: 'Legal', 2: UNSORTED } }))!
+  expect(UNSORTED).toBe('Uncategorized')
+  expect(next.categories).toEqual(['Legal'])
+  expect(categoryOf(next, '#t2')).toBe(UNSORTED)
+  expect(groupOf(next, '#t2')).toBe(UNSORTED)
+  expect(sortPrompt(['Legal'], ['x'])).toContain('"Uncategorized"')
 })

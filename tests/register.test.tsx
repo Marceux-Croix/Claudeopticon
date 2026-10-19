@@ -68,8 +68,12 @@ test('one pane shows the todo and the agents, and the link between them', async 
     if (surface === 'desktop') {
       await ui.press({ key: 'todo-tickets' })
       expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(4)
-      // The timeline and A1's card take two of the held slots; blanks fill the other three.
+      // Limit UI shift is off by default (#T004T): no blank slots.
+      expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(0)
+      // On, the timeline and A1's card take two of the held slots; blanks fill the other three.
+      await ui.press({ key: 'room-toggle' })
       expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(HELD_SLOTS - 2)
+      await ui.press({ key: 'room-toggle' })
       const drawn = JSON.stringify(await ui.drawn())
       expect(drawn.indexOf('"Agents"')).toBeLessThan(drawn.indexOf('"Todo"'))
       expect(await ui.find({ type: 'Text', text: /2 of 4 done, 1 in progress/ })).toBeDefined()
@@ -88,7 +92,10 @@ test('with neither todo nor agents both sections are empty, and the idle Orchest
   on('agent.list', () => ({ value: [] }))
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
-  // The timeline draws empty, and empty slots fill the rest of the held room.
+  // Limit UI shift is off by default (#T004T): nothing is drawn.
+  expect((await ui.findAll({ type: 'Svg' })).length).toBe(0)
+  // On, the timeline draws empty, and empty slots fill the rest of the held room.
+  await ui.press({ key: 'room-toggle' })
   expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(1)
   expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('No agents ran in this window')
   expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(HELD_SLOTS - 1)
@@ -96,20 +103,23 @@ test('with neither todo nor agents both sections are empty, and the idle Orchest
   expect(await ui.find({ type: 'Text', text: /None in this session yet/ })).toBeDefined()
 })
 
-test('#T004S the room switch at the Orchestrator heading gives up the held room and takes it back, with its tip', async ($, on) => {
+test('#T004S #T004T Limit UI shift at the Orchestrator heading is off by default, holds the room when on, filled like a category tag, with its tip', async ($, on) => {
   mock.clock(on)
   on('fs.exists', () => ({ value: false }))
   on('agent.list', () => ({ value: [] }))
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
-  expect(JSON.stringify(await ui.find({ key: 'room-tip' }))).toContain('keeps empty room for agents')
-  expect((await ui.find({ key: 'room-toggle' }))?.text).toBe('Reserve agent space: on')
-  await ui.press({ key: 'room-toggle' })
-  expect((await ui.find({ key: 'room-toggle' }))?.text).toBe('Reserve agent space: off')
-  // Not held, the pane draws as before #T004L: no empty timeline, no blank slots.
+  expect(JSON.stringify(await ui.find({ key: 'room-tip' }))).toContain('Limit UI shift reserves interface space so new agent activity does not cause scroll jumps.')
+  expect((await ui.find({ key: 'room-toggle' }))?.text).toBe('Limit UI shift')
+  expect(JSON.stringify(await ui.find({ key: 'room-toggle' }))).toContain('"secondary"')
+  // Off, the pane draws as before #T004L: no empty timeline, no blank slots.
   expect((await ui.findAll({ type: 'Svg' })).length).toBe(0)
   await ui.press({ key: 'room-toggle' })
+  expect((await ui.find({ key: 'room-toggle' }))?.text).toBe('Limit UI shift')
+  expect(JSON.stringify(await ui.find({ key: 'room-toggle' }))).toContain('"primary"')
   expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(HELD_SLOTS - 1)
+  await ui.press({ key: 'room-toggle' })
+  expect((await ui.findAll({ type: 'Svg' })).length).toBe(0)
 })
 
 test('each file shows its top 12 open items, and its button shows them all, then 12 again', async ($, on) => {
@@ -288,13 +298,13 @@ test('long items stop at 8 lines inside one card, and one button per file shows 
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   await ui.press({ key: 'todo-tickets' })
   const svgs = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
-  expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(3)
+  expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(2)
   expect(await svgs()).toContain('…')
   expect(await svgs()).not.toContain('w149')
   expect((await ui.find({ key: 'file-text-OPEN.md' }))?.text).toContain('Show full text (1 long item)')
   await ui.press({ key: 'file-text-OPEN.md' })
   expect(await svgs()).toContain('w149')
-  expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(3)
+  expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(2)
   expect((await ui.find({ key: 'file-text-OPEN.md' }))?.text).toContain('Shorten long items')
   await ui.press({ key: 'file-text-OPEN.md' })
   expect(await svgs()).not.toContain('w149')

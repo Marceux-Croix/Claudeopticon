@@ -95,7 +95,7 @@ const PANE = 'claudeopticon'
 const TITLE = 'Claudeopticon'
 /** The hover group of the room switch and its tip (#T004S). */
 const ROOM_SCOPE = 'claudeopticon-room'
-const ROOM_TIP = 'On: keeps empty room for agents so the board stays put. Off: saves screen space.'
+const ROOM_TIP = 'Limit UI shift reserves interface space so new agent activity does not cause scroll jumps.'
 /** Whether this load of the mod has reopened a pane that carried an older title. */
 let isRetitled = false
 const TICK_MS = 1000
@@ -171,8 +171,8 @@ let ticketOrder: TicketOrder = 'group'
 let query = ''
 /** The tallest the agent area was drawn this session, held so the board below it stays put (#T004L). */
 let agentRoom: AgentRoom = NO_ROOM
-/** Whether the pane holds that room at all (#T004S): the reader may give it up for screen space. */
-let isRoomHeld = true
+/** Whether the pane holds that room at all (#T004S): off by default, the reader turns it on (#T004T). */
+let isRoomHeld = false
 function redraw($: EngineInterface): void {
   noteLive()
   $.ui.invalidate('ui.render')
@@ -5321,7 +5321,8 @@ export const register: Register = (on, options) => {
               </Box>
               <Button
                 key="room-toggle"
-                label={isRoomHeld ? 'Reserve agent space: on' : 'Reserve agent space: off'}
+                label="Limit UI shift"
+                variant={isRoomHeld ? 'primary' : 'secondary'}
                 hover={{ scope: ROOM_SCOPE, bold: true }}
                 onPress={() => {
                   isRoomHeld = !isRoomHeld

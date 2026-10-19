@@ -93,6 +93,9 @@ import type { AgentRoom } from './agent-room'
 
 const PANE = 'claudeopticon'
 const TITLE = 'Claudeopticon'
+/** The hover group of the room switch and its tip. */
+const ROOM_SCOPE = 'claudeopticon-room'
+const ROOM_TIP = 'On: keeps empty room for agents so the board stays put. Off: saves screen space.'
 /** Whether this load of the mod has reopened a pane that carried an older title. */
 let isRetitled = false
 const TICK_MS = 1000
@@ -168,6 +171,8 @@ let ticketOrder: TicketOrder = 'group'
 let query = ''
 /** The tallest the agent area was drawn this session, held so the board below it stays put. */
 let agentRoom: AgentRoom = NO_ROOM
+/** Whether the pane holds that room at all: the reader may give it up for screen space. */
+let isRoomHeld = true
 function redraw($: EngineInterface): void {
   noteLive()
   $.ui.invalidate('ui.render')
@@ -5275,11 +5280,11 @@ export const register: Register = (on, options) => {
     if (Svg !== undefined) {
       setWidth((e.props.bodyColumns ?? 48) * CELL_PX)
       const { active, idle, finished, shown } = ledger(view, isFinishedShown)
-      // Drawn with no agents too, so the held room starts with the timeline's empty card.
-      const timeline = timelineSvg(view, shown)
+      // Held, it is drawn with no agents too, so the held room starts with the timeline's empty card.
+      const timeline = isRoomHeld || view.agents.length > 0 ? timelineSvg(view, shown) : undefined
       const orchCard = view.orchestrator !== undefined ? agentSvg(view.orchestrator, view) : undefined
       const agentCards = shown.map(agent => ({ agent, drawn: agentSvg(agent, view) }))
-      const held = holdRoom(agentRoom, [timeline, orchCard, ...agentCards.map(one => one.drawn)].flatMap(one => (one === undefined ? [] : [one.height])), agentCards.length)
+      const held = isRoomHeld ? holdRoom(agentRoom, [timeline, orchCard, ...agentCards.map(one => one.drawn)].flatMap(one => (one === undefined ? [] : [one.height])), agentCards.length) : { room: agentRoom, blanks: [] }
       agentRoom = held.room
       // Every card reaches the pane here, so its alt is cleaned here, once: one control character
       // in a ticket, a command or a file name would make the engine refuse the whole pane.
@@ -5304,15 +5309,29 @@ export const register: Register = (on, options) => {
       return (
         <Box flexDirection="column" gap={1}>
           {(view.total > 0 || view.agents.length > 0 || view.usage !== undefined) && card('hero', heroSvg(view))}
-          {section(
-            'orchestrator',
-            'Orchestrator',
-            orchestrator.isActive ? 'Working' : orchestrator.history.length === 0 ? 'Idle, nothing done yet' : 'Idle',
-            undefined,
-            () => undefined,
-          )}
+          {/* The Orchestrator heading carries the room switch; pointing at it reveals its tip to its left, on the same line. */}
+          <Box key="orchestrator" flexDirection="row" justifyContent="space-between" alignItems="center" marginTop={1}>
+            <Box flexDirection="row" gap={2}>
+              <Text bold>Orchestrator</Text>
+              <Text dimColor>{orchestrator.isActive ? 'Working' : orchestrator.history.length === 0 ? 'Idle, nothing done yet' : 'Idle'}</Text>
+            </Box>
+            <Box flexDirection="row" gap={1} alignItems="center">
+              <Box key="room-tip" display="none" hover={{ scope: ROOM_SCOPE, display: 'flex' }}>
+                <Text dimColor wrap="truncate-end">{ROOM_TIP}</Text>
+              </Box>
+              <Button
+                key="room-toggle"
+                label={isRoomHeld ? 'Reserve agent space: on' : 'Reserve agent space: off'}
+                hover={{ scope: ROOM_SCOPE, bold: true }}
+                onPress={() => {
+                  isRoomHeld = !isRoomHeld
+                  redraw($)
+                }}
+              />
+            </Box>
+          </Box>
           {/* As the Agents card: with nothing done yet, the heading alone. */}
-          {orchestrator.history.length > 0 && card('orchestrator', orchestratorSvg(orchestratorView(orchestrator.history, orchestratorPage).entries))}
+          {orchestrator.history.length > 0 && card('orchestrator', orchestratorSvg(orchestratorView(orchestrator.history, orchestratorPage).entries, isRoomHeld))}
           {orchestratorView(orchestrator.history, orchestratorPage).pages > 1 && (
             <Box key="orchestrator-pages" flexDirection="row" gap={1} alignItems="center">
               <Text dimColor>{pageLabel(orchestratorView(orchestrator.history, orchestratorPage), callCount)}</Text>
@@ -5358,7 +5377,7 @@ export const register: Register = (on, options) => {
               redraw($)
             },
           )}
-          {card('timeline', timeline)}
+          {timeline !== undefined && card('timeline', timeline)}
           {/* The orchestrator leads, before A1; no Stop button, no timeline bar. */}
           {orchCard !== undefined && card('agent-orchestrator-card', orchCard)}
           {agentCards.map(({ agent, drawn }) => (

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.8
+
+### Features
+
+- A **Reserve agent space** button at the right of the Orchestrator heading turns the held agent area of 0.9.7 on or off. Off, the pane draws only the cards it has, as before 0.9.7: no empty gray cards, no empty timeline, and an Orchestrator card only as tall as its entries. This saves screen space on a small display, but the board moves as agents come and go. Pointing at the button shows a short tip to its left. The choice lasts for the session; the default is on.
+
 ## 0.9.7
 
 ### Fixes

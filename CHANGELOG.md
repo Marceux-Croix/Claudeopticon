@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.4
+
+### Features
+
+- The token axis is scaled to the count since the last compaction in view, and to the tokens per minute. A count from before the compaction that is too tall is cut off at the top, with a zigzag break mark and its peak. Before, a large count before a compaction made the lines after it flat along the bottom for 30 minutes.
+
+### Fixes
+
+- The token axis shrinks as soon as the high count from before a compaction leaves the graph. Before, it waited 5 more minutes, and the lines stayed flat along the bottom.
+- The README images are rendered again from the code, with the 0.9.2 axis label widths.
+
 ## 0.9.3
 
 ### Fixes

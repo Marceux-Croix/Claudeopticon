@@ -119,6 +119,36 @@ export function compactedBox(x: number, top: number, x0: number, x1: number, tak
   return sides.find(side => side.box.x0 >= x0 - 0.5 && side.box.x1 <= x1 + 0.5 && !taken.some(one => boxesMeet(grown(one), side.box)))
 }
 
+/** The baseline of a clipped segment's peak label under the plot top, in px: the row under the Compacted labels (#T004A). */
+const CLIP_LABEL_DY = 27
+
+/**
+ * The break mark of a segment clipped at the plot top (#T004A): a zigzag 3 px each side of the top
+ * line, from the segment's start over at most 24 px of it. Undefined for a segment under 6 px wide.
+ */
+export function clipMark(from: number, to: number, top: number): { x0: number; x1: number; points: [number, number][] } | undefined {
+  const x1 = Math.min(to, from + 24)
+  if (x1 - from < 6) {
+    return undefined
+  }
+  const points: [number, number][] = []
+  for (let x = from, i = 0; x <= x1 + 0.01; x += 4, i += 1) {
+    points.push([x, top + (i % 2 === 0 ? 3 : -3)])
+  }
+
+  return { x0: from, x1, points }
+}
+
+/**
+ * The box of a clipped segment's peak label (#T004A): left-aligned 3 px past the segment start,
+ * moved left to stay inside the plot [x0, x1].
+ */
+export function clipLabelBox(from: number, top: number, width: number, x0: number, x1: number): Box {
+  const left = Math.max(x0, Math.min(from + 3, x1 - width))
+
+  return { x0: left, x1: left + width, y0: top + CLIP_LABEL_DY - 10, y1: top + CLIP_LABEL_DY + 2 }
+}
+
 /** The right-hand label columns (#T003K): the first starts RIGHT_DX px right of the plot, the second RATE_GAP px after the first. */
 const RIGHT_DX = 16
 const RATE_GAP = 14
@@ -273,6 +303,9 @@ export function heroSvg(view: View): Card {
     }
     // Every drawn trace in px, for the end labels to keep clear of.
     const traces: Trace[] = []
+    // Segments before a compaction that pass the axis top (#T004A): the axis holds only the count
+    // since the last compaction, so these draw clipped at the top, with a break mark and their peak.
+    const clipped: { from: number; to: number; peak: number }[] = []
     segments.forEach((all, k) => {
       if (all === undefined || all.length === 0) {
         return
@@ -281,6 +314,10 @@ export function heroSvg(view: View): Card {
       const end = cs[k] ?? now
       const last = segment[segment.length - 1]!
       const pts = [...segment, ...(last[0] < end ? [[end, last[1]] as Point] : [])]
+      const segmentPeak = pts.reduce((most, point) => Math.max(most, point[1]), 0)
+      if (segmentPeak > axes.tokens.max) {
+        clipped.push({ from: px(pts[0]![0]), to: px(end), peak: segmentPeak })
+      }
       traces.push(pts.map(point => [px(point[0]), yt(point[1])]))
       const line = pts.map(point => `${f(px(point[0]))},${f(yt(point[1]))}`).join(' ')
       parts.push(
@@ -339,6 +376,25 @@ export function heroSvg(view: View): Card {
         )
         obstacles.push(side.box)
       }
+    }
+    // Clipped segments (#T004A): a zigzag over the top line where the segment starts, and its peak
+    // under it, on a halo, in the row under the Compacted labels; the end labels keep clear of both.
+    for (const clip of clipped) {
+      const span = clipMark(clip.from, clip.to, top)
+      if (span !== undefined) {
+        traces.push(span.points)
+        const zig = span.points.map(point => `${f(point[0])},${f(point[1])}`).join(' ')
+        parts.push(
+          `<line x1="${f(span.x0)}" y1="${top}" x2="${f(span.x1)}" y2="${top}" stroke="${STAGE_BG}" stroke-width="3"/>`,
+          `<polyline points="${zig}" fill="none" stroke="${TOKEN_LINE}" class="st" stroke-width="1.25" stroke-linejoin="round"/>`,
+        )
+      }
+      const text = axisLabel(Number(clip.peak.toPrecision(3)))
+      const box = clipLabelBox(clip.from, top, labelPx(text), x0, x1)
+      parts.push(
+        `<text x="${f(box.x0)}" y="${top + CLIP_LABEL_DY}" fill="${TOKEN_LINE}" class="ft" font-size="11" stroke="${STAGE_BG}" stroke-width="3" stroke-linejoin="round" paint-order="stroke">${esc(text)}</text>`,
+      )
+      obstacles.push(box)
     }
     const labels = ends.map(end => ({ y: end.y, width: endLabelWidth(end.text, end.tail) }))
     // Over the whole plot width (UCR-218, #T003B), and on into the left margin to 2 px right of the

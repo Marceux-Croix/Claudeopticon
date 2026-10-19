@@ -7,6 +7,7 @@
 
 import { endLabelWidth, labelBox } from '../hooks/card-end-labels'
 import type { Box } from '../hooks/card-end-labels'
+import { labelPx } from '../hooks/hero-card'
 
 type Named = Box & { what: string }
 /** A trace segment from (ax, ay) to (bx, by), and the class of its trace (st, sr or sa). */
@@ -35,6 +36,12 @@ export function heroGeometry(svg: string): HeroGeometry {
     const y = Number(m[2])
     const w = 11 * 4.9
     marks.push({ x0: m[3] === 'end' ? x - w : x, x1: m[3] === 'end' ? x : x + w, y0: y - 8, y1: y + 2.5, what: 'Compacted' })
+  }
+  // A clipped segment's peak label (#T004A), left-aligned: the code's box (clipLabelBox), which the end labels keep clear of.
+  for (const m of svg.matchAll(/<text x="([\d.-]+)" y="([\d.-]+)" fill="[^"]+" class="ft" font-size="11"[^>]*>([^<]+)<\/text>/g)) {
+    const x = Number(m[1])
+    const y = Number(m[2])
+    marks.push({ x0: x, x1: x + labelPx(m[3]!), y0: y - 10, y1: y + 2, what: `Clip ${m[3]}` })
   }
   const dots: Named[] = []
   let right: number | undefined

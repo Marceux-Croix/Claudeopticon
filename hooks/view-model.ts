@@ -10,6 +10,7 @@ import type { CategoryBook } from './categories'
 import { fileId, filePath, itemKey, keptKey, qualifiedKey, storedKey } from './item-keys'
 import { linkAgents } from './links'
 import { folderPlace } from './repo-folders'
+import { ticketValue } from './ticket-ids'
 import { count } from './todo-markdown'
 
 /**
@@ -246,14 +247,28 @@ export function boardTargets(entries: readonly { file: FileView; prefix: string 
 
 export type TicketColumn = { name: string; items: ItemView[] }
 
+/** How the board orders the tickets of a column: `group` (agent, category, file order) or `recency` (newest ID first). */
+export type TicketOrder = 'group' | 'recency'
+
+/**
+ * The value of an item's ticket ID on the number line (`ticketValue`), which grows with each new ID;
+ * undefined for an item with no `#T` ID.
+ */
+export function itemIdValue(item: ItemView): number | undefined {
+  const key = item.localKey ?? item.key
+
+  return key.startsWith('#') ? ticketValue(key.slice(1)) : undefined
+}
+
 /**
  * A file's tickets as board columns: In progress, Queued (`- [>]`, the work slated next) and Open;
  * done tickets have no column (Show completed opens them). An open or queued ticket that a live
  * agent works on goes in In progress, and shows as in progress, though its box is still `- [ ]` or
  * `- [>]`. Within a column, the tickets an agent works on come first, then by category in the
- * order the categories were made, then in file order.
+ * order the categories were made, then in file order. With `order` set to `recency`, each
+ * column is newest first by ticket ID value instead; a ticket with no ID comes last, in file order.
  */
-export function ticketColumns(given: readonly ItemView[], current: CategoryBook): TicketColumn[] {
+export function ticketColumns(given: readonly ItemView[], current: CategoryBook, order: TicketOrder = 'group'): TicketColumn[] {
   const items = given.map(item => ((item.status === 'pending' || item.status === 'queued') && item.owners.length > 0 ? { ...item, status: 'in_progress' as const, heldFrom: item.status } : item))
   const rank = (item: ItemView) => {
     const category = categoryOf(current, storedKey(item.key))
@@ -261,12 +276,13 @@ export function ticketColumns(given: readonly ItemView[], current: CategoryBook)
 
     return (item.owners.length > 0 ? 0 : 1) * 100 + (at < 0 ? current.categories.length : at)
   }
+  const newer = (a: ItemView, b: ItemView) => (itemIdValue(b) ?? -1) - (itemIdValue(a) ?? -1)
   const column = (name: string, status: ItemStatus) => ({
     name,
     items: items
       .map((item, index) => ({ item, index }))
       .filter(({ item }) => item.status === status)
-      .sort((a, b) => rank(a.item) - rank(b.item) || a.index - b.index)
+      .sort((a, b) => (order === 'recency' ? newer(a.item, b.item) : rank(a.item) - rank(b.item)) || a.index - b.index)
       .map(({ item }) => item),
   })
 

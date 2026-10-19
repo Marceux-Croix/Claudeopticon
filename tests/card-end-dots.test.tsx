@@ -50,10 +50,10 @@ test('the late-compact sample draws no two plain end dots on top of each other, 
   setWidth(384)
 })
 
-test('a state with the token count equal to 10 x the rate draws the green and blue ends as one split dot, at every width', () => {
-  // 900k tokens since compact; the last minute holds one rise of 90k, so the rate is 90k a minute and 10 x 90k is the count.
+test('a state with the token count and the rate at the same height draws the green and blue ends as one split dot, at every width', () => {
+  // 900k tokens since compact, all in the last minute: the rate is 900k a minute, and both axes top out at 900k.
   const now = 100 * QUANT_MS
-  const series: Series = { agents: [[now - 20 * MIN, 2]], tokens: [[now - 20 * MIN, 0], [now - 10 * MIN, 810_000], [now - 45_000, 900_000]], compacts: [] }
+  const series: Series = { agents: [[now - 20 * MIN, 2]], tokens: [[now - 20 * MIN, 0], [now - 45_000, 900_000]], compacts: [] }
   for (const width of [300, 384, 520, 720, 960]) {
     setWidth(width)
     const svg = heroSvg({ ...buildView([], [], now), series, axes: stepAxes(undefined, series, now), usage: { tokens: 900_000, since: 0 } }).source

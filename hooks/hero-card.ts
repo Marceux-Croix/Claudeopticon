@@ -8,7 +8,7 @@ import { tokens } from './card-format'
 import { ACCENT, FAINT, LABEL, PAD, RULE, stage, STAGE_BG, SUB, W } from './card-stage'
 import { esc } from './card-text'
 import type { Card, View } from './card-types'
-import { emptySeries, onePerStep, QUANT_MS, RATE_RATIO, stepAxes, tokenRate, WINDOW_MS, windowed } from './series'
+import { emptySeries, onePerStep, QUANT_MS, stepAxes, tokenRate, WINDOW_MS, windowed } from './series'
 import type { Point } from './series'
 
 /** The top card's fixed height, in px. */
@@ -189,9 +189,9 @@ export function heroSvg(view: View): Card {
   // 63 px right of the plot, as in the approved sample (x1 + 63 at 900 px), at every width; a widest
   // label longer than the sample's six characters pushes it on, so it stays 15 px clear of them.
   // Two left-aligned columns from x1 + RIGHT_DX: all tokens since compact in the token color, and
-  // tokens per minute in the rate color, the token axis divided by RATE_RATIO, RATE_GAP px after it.
+  // tokens per minute in the rate color, on its own axis, RATE_GAP px after it.
   const rightLabels = [0, 1, 2, 3, 4].map(i => axisLabel((axes.tokens.max * i) / 4))
-  const rateLabels = [0, 1, 2, 3, 4].map(i => axisLabel((axes.tokens.max * i) / 4 / RATE_RATIO))
+  const rateLabels = [0, 1, 2, 3, 4].map(i => axisLabel((axes.rate.max * i) / 4))
   const labelW = Math.ceil(Math.max(...rightLabels.map(labelPx)))
   const rateW = Math.ceil(Math.max(...rateLabels.map(labelPx)))
   const titleDx = Math.max(TITLE_DX, RIGHT_DX + labelW + RATE_GAP + rateW + 15)
@@ -224,7 +224,7 @@ export function heroSvg(view: View): Card {
   const px = (t: number) => x0 + Math.min(1, Math.max(0, (t - from) / WINDOW_MS)) * (x1 - x0)
   const ya = (v: number) => bottom - Math.min(1, v / axes.agents.max) * height
   const yt = (v: number) => bottom - Math.min(1, v / axes.tokens.max) * height
-  const yr = (v: number) => yt(v * RATE_RATIO)
+  const yr = (v: number) => bottom - Math.min(1, v / axes.rate.max) * height
   const parts: string[] = []
 
   parts.push(`<text x="24" y="30" font-size="${size}">${totals.parts.map(part => `<tspan ${INK[part.ink]}>${esc(part.text)}</tspan>`).join('')}</text>`)
@@ -379,6 +379,8 @@ export function heroSvg(view: View): Card {
     }
     // Clipped segments: a zigzag over the top line where the segment starts, and its peak
     // under it, on a halo, in the row under the Compacted labels; the end labels keep clear of both.
+    // The zigzag goes first, so a peak label left out (below) still leaves its mark.
+    const peakBoxes: Box[] = []
     for (const clip of clipped) {
       const span = clipMark(clip.from, clip.to, top)
       if (span !== undefined) {
@@ -391,6 +393,12 @@ export function heroSvg(view: View): Card {
       }
       const text = axisLabel(Number(clip.peak.toPrecision(3)))
       const box = clipLabelBox(clip.from, top, labelPx(text), x0, x1)
+      // Two clipped segments close together would put their peaks on one spot: a peak
+      // label that comes within COMPACT_CLEAR px of a peak label drawn before it is left out; its zigzag stays.
+      if (peakBoxes.some(one => boxesMeet({ x0: one.x0 - COMPACT_CLEAR, x1: one.x1 + COMPACT_CLEAR, y0: one.y0 - COMPACT_CLEAR, y1: one.y1 + COMPACT_CLEAR }, box))) {
+        continue
+      }
+      peakBoxes.push(box)
       parts.push(
         `<text x="${f(box.x0)}" y="${top + CLIP_LABEL_DY}" fill="${TOKEN_LINE}" class="ft" font-size="11" stroke="${STAGE_BG}" stroke-width="3" stroke-linejoin="round" paint-order="stroke">${esc(text)}</text>`,
       )

@@ -8,7 +8,7 @@ import type { View } from '../hooks/card-types'
 import { clipLabelBox, clipMark, finishedCount, HERO_H, heroSvg, heroText, labelPx, LEADER_PX, leaderLine, totalsLine } from '../hooks/hero-card'
 import { r5States } from '../scripts/hero-fuzz-r5'
 import { heroView as sampleHero } from '../scripts/sample'
-import { addCompact, addPoint, emptySeries, QUANT_MS, RATE_RATIO, stepAxes, WINDOW_MS } from '../hooks/series'
+import { addCompact, addPoint, emptySeries, QUANT_MS, stepAxes, WINDOW_MS } from '../hooks/series'
 import type { Axes, Point, Series } from '../hooks/series'
 import { turnTokens } from '../hooks/token-usage'
 import { buildView } from '../hooks/view-model'
@@ -143,13 +143,15 @@ test('a compaction drops the token line to zero and shows a dashed line labeled 
   const svg = heroSvg(graphView(series, { tokens: 10_000_000, atCompact: 9_000_000 })).source
   expect(svg).toContain('>Compacted<')
   expect(svg).toContain('stroke-dasharray="3 4"')
-  // Two token segments: the line before the compaction and the one after it; and one tokens-per-minute line.
-  expect(svg.match(/<polyline [^>]*class="st"/g)?.length).toBe(2)
+  // Two token segments, the line before the compaction and the one after it, and the break mark of the first, clipped at the top; and one tokens-per-minute line.
+  expect(svg.match(/<polyline [^>]*class="st"/g)?.length).toBe(3)
   expect(svg.match(/<polyline [^>]*class="sr"/g)?.length).toBe(1)
-  // the token axis holds 10 x the rate peak (6M a minute), so it tops out at 60M, and the rate axis at 6M; the first segment's peak (9M) sits below the top gridline.
-  expect(svg).toContain('>60M<')
+  // the token axis holds the count since the compaction (1M), so it tops out at 1.5M; the rate axis holds the rate peak (6M a minute), so it tops out at 6M.
+  // The first segment's peak (9M) is over the top: it is drawn clipped, with its peak as a label.
+  expect(svg).toContain('>1.5M<')
   expect(svg).toContain('>6M<')
-  expect(svg).not.toContain('>9M<')
+  expect(svg).toContain('>9M<')
+  expect(svg).not.toContain('>60M<')
 })
 
 test('the token axis holds the count since the last compaction; the count before it draws clipped, with a break mark and its peak', async () => {
@@ -162,7 +164,7 @@ test('the token axis holds the count since the last compaction; the count before
     series = { ...series, tokens: addPoint(series.tokens, HERO_NOW - 25 * MIN + i * MIN, i * 600_000) }
   }
   const svg = heroSvg(graphView(series, { tokens: 400_000_000, atCompact: 375_000_000 })).source
-  // The axis tops at the step that holds 12M and ten times the rate (1M a minute), not at 600M.
+  // The axis tops at the step that holds 12M, the count since the compaction, not at 600M.
   expect(svg).toContain('>15M<')
   expect(svg).not.toContain('>600M<')
   // The segment before the compaction: its peak in the token color, and a zigzag break mark at the top.
@@ -193,8 +195,9 @@ test('with no data the card draws the empty axes and says no activity yet', asyn
   const svg = heroSvg(graphView(emptySeries())).source
   expect(svg).toContain('>No activity yet<')
   expect(svg).toContain('>150k<')
-  // the rate axis is the token axis over RATE_RATIO.
-  expect(svg).toContain('>15k<')
+  // the rate axis has its own scale, at its smallest step with no data, as the token axis.
+  expect(svg).not.toContain('>15k<')
+  expect(axisLabels(svg).fr.at(-1)!.text).toBe('150k')
   // zero reads a plain 0, as in the approved sample (it read 0k).
   expect(svg).toContain('>0<')
   expect(svg).not.toContain('>0k<')
@@ -208,11 +211,11 @@ test('the axis labels: 4 grid intervals, whole numbers on the left, M and k on t
   const series = { agents: [[HERO_NOW - 5 * MIN, 5]] as Point[], tokens: [[HERO_NOW - 5 * MIN, 44_810_000]] as Point[], compacts: [] }
   const svg = heroSvg(graphView(series, { tokens: 44_810_000 })).source
   // Left top is 6, labeled 0, 3 and 6 only (1.5 and 4.5 are not whole). Right top is 60M: 0, 15M, 30M, 45M, 60M (zero reads 0, not 0M).
-  // the agent labels are in the agent color (class fa); the rate axis next to the token axis reads the same numbers over 10.
+  // the agent labels are in the agent color (class fa).: the rate axis has its own scale; with one point there is no rate, so it sits at its smallest step.
   const axis = axisLabels(svg)
   expect(axis.fa.map(label => label.text)).toEqual(['0', '3', '6'])
   expect(axis.ft.map(label => label.text)).toEqual(['0', '15M', '30M', '45M', '60M'])
-  expect(axis.fr.map(label => label.text)).toEqual(['0', '1.5M', '3M', '4.5M', '6M'])
+  expect(axis.fr.map(label => label.text)).toEqual(['0', '37.5k', '75k', '112.5k', '150k'])
   expect((svg.match(/text-anchor="end" fill="#FACC15" class="fa" font-size="11.5"/g) ?? []).length).toBe(3)
   // 4 grid intervals: 5 gridlines from the plot's left edge.
   expect(svg.match(new RegExp(`<line x1="${plotEdges(svg).x0}" `, 'g'))?.length).toBe(5)
@@ -241,7 +244,7 @@ function heroView(opts: HeroOpts = {}): View {
   const series: Series = { agents: opts.agents ?? [], tokens: opts.tokens ?? [], compacts: opts.compacts ?? [] }
   const base = buildView([], opts.rows ?? [], NOW)
 
-  return { ...base, series, axes: opts.axes ?? { agents: { max: 4 }, tokens: { max: 150_000 } }, usage: opts.usage === undefined ? undefined : { tokens: opts.usage, since: 0 } }
+  return { ...base, series, axes: opts.axes ?? { agents: { max: 4 }, tokens: { max: 150_000 }, rate: { max: 150_000 } }, usage: opts.usage === undefined ? undefined : { tokens: opts.usage, since: 0 } }
 }
 
 /** The plot's gridlines in a drawn top card: left and right edge, bottom (250) and top. */
@@ -317,7 +320,7 @@ test('the end labels stay 14 px apart and inside the plot, clear of the time axi
 
 test('at narrow widths text is dropped or shortened instead of overlapping', () => {
   const rows = Array.from({ length: 35 }, (_, i) => row({ id: `a${i}`, status: i < 33 ? 'completed' : 'running', endedAt: i < 33 ? 5 : undefined }))
-  const opts: HeroOpts = { rows, usage: 17_380_000, axes: { agents: { max: 4 }, tokens: { max: 4_500_000 } }, agents: [[NOW - 60_000, 2]], tokens: [[NOW - 60_000, 1_500_000]] }
+  const opts: HeroOpts = { rows, usage: 17_380_000, axes: { agents: { max: 4 }, tokens: { max: 4_500_000 }, rate: { max: 4_500_000 } }, agents: [[NOW - 60_000, 2]], tokens: [[NOW - 60_000, 1_500_000]] }
   setWidth(300)
   const narrow = heroSvg(heroView(opts)).source
   // the totals line drops words to fit, so "Live" keeps its room; the two middle time labels go.
@@ -392,15 +395,15 @@ test(' a third trace, tokens per minute, in blue with its own axis at 1/10 of th
   expect(titles.left).toBe(720 - titles.right)
   expect(svg).toMatch(/<text transform="translate\([\d.]+ [\d.]+\) rotate\(-90\)" text-anchor="middle"[^>]*>Live agents</)
   expect(svg).toMatch(/<text transform="translate\([\d.]+ [\d.]+\) rotate\(90\)" text-anchor="middle"[^>]*>Tokens</)
-  // The rate axis reads the token axis over RATE_RATIO on every gridline.
+  // the rate axis has its own scale, a quarter of its top on each gridline.
   const axis = axisLabels(svg)
+  const top = graphView(series, { tokens: 1_200_000 }, NOW).axes.rate.max
   expect(axis.fr.length).toBe(5)
-  axis.ft.forEach((label, i) => expect(Math.abs(parseAxis(axis.fr[i]!.text) * RATE_RATIO - parseAxis(label.text))).toBeLessThan(0.01))
-  // The rate line is drawn at 10 x its value on the token axis: its last point (300k a minute) ends where 3M sits on the token scale.
-  const top = graphView(series, { tokens: 1_200_000 }, NOW).axes.tokens.max
+  axis.fr.forEach((label, i) => expect(Math.abs(parseAxis(label.text) - (top * i) / 4)).toBeLessThan(0.01))
+  // The rate line is drawn on its own axis: its last point (300k a minute) ends where 300k sits on the rate scale.
   const rate = /<polyline points="([^"]+)" fill="none" stroke="#60A5FA" class="sr"/.exec(svg)![1]!.split(' ')
   const { bottom, plotTop } = plotEdges(svg)
-  expect(Math.abs(Number(rate.at(-1)!.split(',')[1]) - (bottom - ((300_000 * RATE_RATIO) / top) * (bottom - plotTop)))).toBeLessThan(0.1)
+  expect(Math.abs(Number(rate.at(-1)!.split(',')[1]) - (bottom - (300_000 / top) * (bottom - plotTop)))).toBeLessThan(0.1)
   expect(heroSvg(graphView(series, { tokens: 1_200_000 }, NOW)).alt).toContain('Tokens per minute:')
 })
 
@@ -490,18 +493,15 @@ test('the totals line says total session tokens, and drops words to fit at narro
 
 test(' the zero axis label reads 0 on every token axis and on the rate axis, as in the approved sample', () => {
   for (const top of [150_000, 4_500_000, 60_000_000, 9_000_000_000]) {
-    const svg = heroSvg({ ...graphView({ agents: [[NOW - 5 * MIN, 1]], tokens: [[NOW - 5 * MIN, top / 2]], compacts: [] }, { tokens: top / 2 }, NOW), axes: { agents: { max: 4 }, tokens: { max: top } } }).source
+    const svg = heroSvg({ ...graphView({ agents: [[NOW - 5 * MIN, 1]], tokens: [[NOW - 5 * MIN, top / 2]], compacts: [] }, { tokens: top / 2 }, NOW), axes: { agents: { max: 4 }, tokens: { max: top }, rate: { max: top } } }).source
     const axis = axisLabels(svg)
     expect(axis.ft[0]!.text).toBe('0')
     expect(axis.fr[0]!.text).toBe('0')
     expect(axis.fa[0]!.text).toBe('0')
     expect(svg).not.toMatch(/>0[MkB]</)
-    // The blue column reads the green one over RATE_RATIO on each gridline, at the same height.
+    // the blue column has its own scale, on the green column's gridlines.
     expect(axis.fr.length).toBe(5)
-    axis.ft.forEach((label, i) => {
-      expect(Math.abs(parseAxis(axis.fr[i]!.text) * RATE_RATIO - parseAxis(label.text))).toBeLessThan(0.01)
-      expect(axis.fr[i]!.y).toBe(label.y)
-    })
+    axis.ft.forEach((label, i) => expect(axis.fr[i]!.y).toBe(label.y))
   }
 })
 
@@ -510,7 +510,7 @@ test(' the right axis title sits TITLE_IN px in from x1 + 63 (more with wide lab
   for (const top of [150_000, 4_500_000, 60_000_000]) {
     for (const width of [300, 384, 520, 699, 700, 720, 900, 960]) {
       setWidth(width)
-      const svg = heroSvg({ ...graphView({ agents: [[NOW - 5 * MIN, 1]], tokens: [[NOW - 5 * MIN, top / 2]], compacts: [] }, { tokens: top / 2 }, NOW), axes: { agents: { max: 4 }, tokens: { max: top } } }).source
+      const svg = heroSvg({ ...graphView({ agents: [[NOW - 5 * MIN, 1]], tokens: [[NOW - 5 * MIN, top / 2]], compacts: [] }, { tokens: top / 2 }, NOW), axes: { agents: { max: 4 }, tokens: { max: top }, rate: { max: top } } }).source
       const { x0, x1 } = plotEdges(svg)
       const axis = axisLabels(svg)
       const { left, right } = axisTitles(svg)
@@ -557,11 +557,11 @@ test('M4 a compaction 10 s ago keeps its marker: the plot snaps now down, and th
   // now is 25 s into a QUANT_MS step, so the snapped now is 25 s behind it and the compaction (at now - 10 s) is 15 s past the snapped now.
   const now = NOW + 25_000
   const series: Series = { agents: [], tokens: [[now - 20 * MIN, 200_000], [now - 10_000, 0]], compacts: [now - 10_000] }
-  const svg = heroSvg({ ...buildView([], [], now), series, axes: { agents: { max: 4 }, tokens: { max: 300_000 } }, usage: { tokens: 200_000, atCompact: 200_000, since: 0 } }).source
+  const svg = heroSvg({ ...buildView([], [], now), series, axes: { agents: { max: 4 }, tokens: { max: 300_000 }, rate: { max: 300_000 } }, usage: { tokens: 200_000, atCompact: 200_000, since: 0 } }).source
   expect(svg).toContain('>Compacted<')
   expect(svg).toContain('stroke-dasharray="3 4"')
   // The limit: exactly one step past the snapped now still shows; one ms more does not (a clock that ran ahead).
-  const edge = (at: number) => heroSvg({ ...buildView([], [], now), series: { ...series, compacts: [at] }, axes: { agents: { max: 4 }, tokens: { max: 300_000 } } }).source
+  const edge = (at: number) => heroSvg({ ...buildView([], [], now), series: { ...series, compacts: [at] }, axes: { agents: { max: 4 }, tokens: { max: 300_000 }, rate: { max: 300_000 } } }).source
   expect(edge(NOW + QUANT_MS)).toContain('>Compacted<')
   expect(edge(NOW + QUANT_MS + 1)).not.toContain('>Compacted<')
 })
@@ -578,7 +578,7 @@ function compactedBoxes(svg: string): { x0: number; x1: number }[] {
 /** The plot's left and right edge of compactedAt's card at 384 px (the margins now depend on the axis labels). */
 function compactedPlot(): { x0: number; x1: number } {
   setWidth(384)
-  const svg = heroSvg({ ...buildView([], [], HERO_NOW), series: { agents: [], tokens: [], compacts: [] }, axes: { agents: { max: 4 }, tokens: { max: 300_000 } } }).source
+  const svg = heroSvg({ ...buildView([], [], HERO_NOW), series: { agents: [], tokens: [], compacts: [] }, axes: { agents: { max: 4 }, tokens: { max: 300_000 }, rate: { max: 300_000 } } }).source
 
   return plotEdges(svg)
 }
@@ -593,7 +593,7 @@ function compactedAt(offsets: readonly number[], isTokenTop = false): string {
   const at = (offset: number) => from + (offset / (x1 - x0)) * WINDOW_MS
   const tokens: Point[] = isTokenTop ? [[from - MIN, 300_000]] : [[from - MIN, 1000], ...offsets.map((offset): Point => [at(offset), 0])]
 
-  return heroSvg({ ...buildView([], [], HERO_NOW), series: { agents: [], tokens, compacts: offsets.map(at) }, axes: { agents: { max: 4 }, tokens: { max: 300_000 } } }).source
+  return heroSvg({ ...buildView([], [], HERO_NOW), series: { agents: [], tokens, compacts: offsets.map(at) }, axes: { agents: { max: 4 }, tokens: { max: 300_000 }, rate: { max: 300_000 } } }).source
 }
 
 test('a Compacted label is drawn only where its box clears every earlier Compacted label by 4 px, in three constructed states', () => {
@@ -623,7 +623,7 @@ test('the Compacted label is drawn after the traces, on a halo in the stage colo
   setWidth(384)
   const from = HERO_NOW - 30 * MIN
   const series: Series = { agents: [[from - MIN, 4]], tokens: [[from - MIN, 1000], [from + 10 * MIN, 0]], compacts: [from + 10 * MIN] }
-  const svg = heroSvg({ ...buildView([], [], HERO_NOW), series, axes: { agents: { max: 4 }, tokens: { max: 300_000 } } }).source
+  const svg = heroSvg({ ...buildView([], [], HERO_NOW), series, axes: { agents: { max: 4 }, tokens: { max: 300_000 }, rate: { max: 300_000 } } }).source
   const halo = svg.indexOf('fill="none" stroke="#07080F" stroke-width="3" stroke-linejoin="round" font-size="11" aria-hidden="true">Compacted<')
   const label = svg.indexOf('font-size="11">Compacted<')
   const agent = svg.indexOf('class="sa" stroke-width="1.5"')

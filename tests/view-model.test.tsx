@@ -6,7 +6,7 @@ import type { View } from '../hooks/card-types'
 import { readTitle } from '../hooks/progress-report'
 import { fileCards } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
-import { buildView, columnsThatFit, ledger, orchestratorTitle, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
+import { buildView, columnShare, columnsThatFit, ledger, orchestratorTitle, rowsOf, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
 import { readBook } from '../hooks/categories'
 import { storedKey } from '../hooks/item-keys'
 import type { AgentRow, TodoFile } from '../types'
@@ -269,4 +269,16 @@ test('columnsThatFit puts as many columns side by side as keep the minimum ticke
   expect(columnsThatFit(609, 3, 10, 300)).toBe(1)
   expect(columnsThatFit(5000, 1, 10, 300)).toBe(1)
   expect(columnsThatFit(5000, 0, 10, 300)).toBe(1)
+})
+
+test('rowsOf keeps every column: three columns two to a row give a second row with the third', () => {
+  expect(rowsOf(['In progress', 'Queued', 'Open'], 2)).toEqual([['In progress', 'Queued'], ['Open']])
+  expect(rowsOf(['a', 'b', 'c'], 3)).toEqual([['a', 'b', 'c']])
+  expect(rowsOf(['a', 'b'], 0)).toEqual([['a'], ['b']])
+})
+
+test('columnShare: three to a row at 32%, two at 49%, a column alone in its row at the full width', () => {
+  expect(columnShare(3)).toBe(0.32)
+  expect(columnShare(2)).toBe(0.49)
+  expect(columnShare(1)).toBe(1)
 })

@@ -5,7 +5,7 @@ import { endLabelWidth, labelBox, segmentMeets } from '../hooks/card-end-labels'
 import { tokens } from '../hooks/card-format'
 import { setWidth } from '../hooks/card-stage'
 import type { View } from '../hooks/card-types'
-import { finishedCount, HERO_H, heroSvg, heroText, LEADER_PX, leaderLine, totalsLine } from '../hooks/hero-card'
+import { finishedCount, HERO_H, heroSvg, heroText, labelPx, LEADER_PX, leaderLine, totalsLine } from '../hooks/hero-card'
 import { r5States } from '../scripts/hero-fuzz-r5'
 import { heroView as sampleHero } from '../scripts/sample'
 import { addCompact, addPoint, emptySeries, QUANT_MS, RATE_RATIO, stepAxes, WINDOW_MS } from '../hooks/series'
@@ -225,8 +225,8 @@ function axisLabels(svg: string): Record<'fa' | 'ft' | 'fr', { x: number; y: num
   return out
 }
 
-/** A column's width: its longest label at 6.3 px a character, as the card measures it. */
-const columnW = (labels: { text: string }[]) => Math.ceil(Math.max(...labels.map(label => label.text.length)) * 6.3)
+/** A column's width: its widest label by labelPx, as the card measures it. */
+const columnW = (labels: { text: string }[]) => Math.ceil(Math.max(...labels.map(label => labelPx(label.text))))
 
 /** The right title's distance from x1 before TITLE_IN: 63, or 16 + the green column + 14 + the blue column + 15 where the labels are wider. */
 const titleDxOf = (axis: ReturnType<typeof axisLabels>): number => Math.max(63, 16 + columnW(axis.ft) + 14 + columnW(axis.fr) + 15)
@@ -298,12 +298,12 @@ test('at narrow widths text is dropped or shortened instead of overlapping', () 
   for (const width of [300, 384, 500, 640, 699, 700, 960]) {
     setWidth(width)
     const source = heroSvg(heroView(opts)).source
-    // Each right axis label, green and blue (about 6.3 px a character), ends inside the card with a margin.
+    // Each right axis label, green and blue (labelPx wide), ends inside the card with a margin.
     const axis = axisLabels(source)
     const right = [...axis.ft, ...axis.fr].filter(label => /[Mk]$/.test(label.text))
     expect(right.length).toBeGreaterThan(0)
     for (const label of right) {
-      expect(label.x + label.text.length * 6.3).toBeLessThanOrEqual(width - 4)
+      expect(label.x + labelPx(label.text)).toBeLessThanOrEqual(width - 4)
     }
   }
   setWidth(384)
@@ -380,7 +380,7 @@ test('nothing clips from 300 to 960 px: axis titles and labels stay inside the c
     const axis = axisLabels(svg)
     expect(axis.ft.length + axis.fr.length).toBe(10)
     for (const label of [...axis.ft, ...axis.fr]) {
-      expect(label.x + label.text.length * 6.3).toBeLessThan(right - 3)
+      expect(label.x + labelPx(label.text)).toBeLessThan(right - 3)
     }
   }
   setWidth(384)
@@ -487,11 +487,11 @@ test(' the right axis title sits TITLE_IN px in from x1 + 63 (more with wide lab
       expect(axis.fa[0]!.anchor).toBe('end')
       // A rotated 12 px title spans 3 px to the plot side of its center and 9 px to the edge side; every label of both columns ends before the right title starts.
       for (const label of [...axis.ft, ...axis.fr]) {
-        expect(label.x + label.text.length * 6.3).toBeLessThan(right - 3)
+        expect(label.x + labelPx(label.text)).toBeLessThan(right - 3)
       }
       // The agent labels start after the left title's glyphs.
       for (const label of axis.fa) {
-        expect(label.x - label.text.length * 6.3).toBeGreaterThan(left + 3)
+        expect(label.x - labelPx(label.text)).toBeGreaterThan(left + 3)
       }
       expect(right + 9).toBeLessThanOrEqual(width - 4)
       expect(left - 9).toBeGreaterThanOrEqual(4)
@@ -661,4 +661,10 @@ test('a label far from its dot gets a leader line; one near it does not, in thre
   }
   expect(crossed).toEqual([])
   setWidth(384)
+})
+
+test('labelPx takes M and digits wider than a flat 6.3 px a character, so "600M" is not taken for 25 px', () => {
+  expect(labelPx('600M')).toBeGreaterThan(30)
+  expect(labelPx('60M')).toBeGreaterThan(labelPx('600'))
+  expect(labelPx('1.5k')).toBeLessThan(labelPx('15kk'))
 })

@@ -128,6 +128,11 @@ const KEY_SPACE = 10
 /** The extra space between the left axis title and the agent labels, in px. */
 const LEFT_TITLE_SPACE = 10
 
+/** An axis label's width at 11.5 px, in px: digits and units by glyph, so "600M" is not taken as narrow as "6000". */
+export function labelPx(label: string): number {
+  return [...label].reduce((sum, ch) => sum + (ch === 'M' ? 9.9 : ch === 'B' ? 7.4 : ch === 'k' ? 6.1 : ch === '.' ? 3.1 : 6.9), 0)
+}
+
 /** The right axis title's center from the plot's right edge, in px, as in the approved sample. */
 export const TITLE_DX = 63
 
@@ -149,7 +154,7 @@ export function heroSvg(view: View): Card {
   const axes = view.axes ?? stepAxes(undefined, series, view.now)
   const n = view.agents.length
   const usage = view.usage
-  // The right margin holds the right axis labels (about 6.3 px a character) from x1 + RIGHT_DX, then the
+  // The right margin holds the right axis labels (labelPx wide) from x1 + RIGHT_DX, then the
   // axis title, its glyphs 9 px right of its center, and 8 px to the edge. The title's center sits
   // 63 px right of the plot, as in the approved sample (x1 + 63 at 900 px), at every width; a widest
   // label longer than the sample's six characters pushes it on, so it stays 15 px clear of them.
@@ -157,8 +162,8 @@ export function heroSvg(view: View): Card {
   // tokens per minute in the rate color, the token axis divided by RATE_RATIO, RATE_GAP px after it.
   const rightLabels = [0, 1, 2, 3, 4].map(i => axisLabel((axes.tokens.max * i) / 4))
   const rateLabels = [0, 1, 2, 3, 4].map(i => axisLabel((axes.tokens.max * i) / 4 / RATE_RATIO))
-  const labelW = Math.ceil(Math.max(...rightLabels.map(label => label.length)) * 6.3)
-  const rateW = Math.ceil(Math.max(...rateLabels.map(label => label.length)) * 6.3)
+  const labelW = Math.ceil(Math.max(...rightLabels.map(labelPx)))
+  const rateW = Math.ceil(Math.max(...rateLabels.map(labelPx)))
   const titleDx = Math.max(TITLE_DX, RIGHT_DX + labelW + RATE_GAP + rateW + 15)
   const x1 = W - Math.max(W >= 700 ? 96 : 0, titleDx + 9 + 8)
   // The left margin mirrors the right one: the left title as far from the card's left
@@ -168,7 +173,7 @@ export function heroSvg(view: View): Card {
   const rightTitleX = x1 + titleDx - TITLE_IN
   const leftTitleX = W - rightTitleX
   const titleGap = rightTitleX - 3 - (x1 + RIGHT_DX + labelW + RATE_GAP + rateW)
-  const agentW = Math.ceil(String(axes.agents.max).length * 6.3)
+  const agentW = Math.ceil(labelPx(String(axes.agents.max)))
   const x0 = Math.ceil(leftTitleX + 3 + titleGap + LEFT_TITLE_SPACE + agentW + RIGHT_DX)
   const size = W < 520 ? 12 : 13
   // The totals keep clear of the Live dot (top right) when an agent is live, else of the edge; the

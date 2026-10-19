@@ -281,3 +281,22 @@ export function columnsThatFit(width: number, columns: number, gap: number, min:
 
   return 1
 }
+
+/**
+ * A board column's share of the pane, by the number of columns in its row; a ticket is drawn this
+ * wide. A last row with fewer columns widens them to fill it: Open goes double wide under the other two.
+ */
+export function columnShare(inRow: number): number {
+  return inRow >= 3 ? 0.32 : inRow === 2 ? 0.49 : 1
+}
+
+/** The board's columns in rows of `perRow`, left to right: the rows the board draws one under another. */
+export function rowsOf<T>(columns: readonly T[], perRow: number): T[][] {
+  const n = Math.max(1, Math.floor(perRow))
+  const rows: T[][] = []
+  for (let i = 0; i < columns.length; i += n) {
+    rows.push(columns.slice(i, i + n))
+  }
+
+  return rows
+}

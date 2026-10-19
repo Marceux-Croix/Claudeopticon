@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { agentSvg, timelineSvg } from '../hooks/agent-cards'
-import { setWidth } from '../hooks/card-stage'
+import { PANE, setWidth, W } from '../hooks/card-stage'
 import { heroSvg } from '../hooks/hero-card'
 import { fileCards } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
@@ -29,4 +29,13 @@ test('every card carries the light palette, swapped in by the system theme', asy
     expect(card.source).toContain('@media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}')
     expect(card.source).toContain('[fill="rgba(255,255,255,.88)"]{fill:#10131C}')
   }
+})
+
+test('setWidth caps the cards at 960 px but keeps the full pane width for the board', () => {
+  setWidth(2000)
+  expect(W).toBe(960)
+  expect(PANE).toBe(2000)
+  setWidth(200)
+  expect(PANE).toBe(300)
+  setWidth(384)
 })

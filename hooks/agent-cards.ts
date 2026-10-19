@@ -6,12 +6,18 @@ import { actor, badge, badgeWidth, strip } from './card-parts'
 import { ACCENT, Blinks, FAINT, INNER, LABEL, PAD, RULE, stage, STAGE_DANGER, SUB, TRACK, W } from './card-stage'
 import { esc, fit } from './card-text'
 import type { AgentView, Card, View } from './card-types'
+import { ORCHESTRATOR_PAGE } from './orchestrator-history'
 
 const MAX_LINKS_SHOWN = 3
 
 /** The height of one Orchestrator entry: its summary line, and a dim detail line when it has one. */
 const ENTRY_PX = 22
 const DETAIL_PX = 16
+/**
+ * The Orchestrator card's held height: a full page of entries, each with a detail line. A page with
+ * fewer entries or shorter ones keeps it, so the cards below the card stay put as calls come in (#T004L).
+ */
+export const ORCHESTRATOR_HELD_PX = 8 + ORCHESTRATOR_PAGE * (ENTRY_PX + DETAIL_PX) + 14
 
 /**
  * The Orchestrator card: one line per tool call summary, newest first, each with its start time in
@@ -33,7 +39,7 @@ export function orchestratorSvg(entries: readonly { line: string; at: number; is
     return drawn
   })
 
-  return stage(y + 14, parts.join('\n'), `Orchestrator: ${entries.map(entry => `${clock(entry.at)} ${entry.line}`).join('; ')}`)
+  return stage(Math.max(y + 14, ORCHESTRATOR_HELD_PX), parts.join('\n'), `Orchestrator: ${entries.map(entry => `${clock(entry.at)} ${entry.line}`).join('; ')}`)
 }
 
 function agentBadge(agent: AgentView): { label: string; kind: 'live' | 'ok' | 'danger' | 'neutral' } {
@@ -60,6 +66,15 @@ function agentBadge(agent: AgentView): { label: string; kind: 'live' | 'ok' | 'd
  * The agents' timeline, from the first agent's start to now: one strip per agent. The right end
  * reads "Now" and a running strip pulses at its head.
  */
+/** The timeline's top margin, and the room each agent's strip takes. */
+const TIMELINE_TOP = 26
+const TIMELINE_ROW_H = 30
+
+/** The height of the timeline for `n` agent strips: one strip's room when there are none. */
+export function timelineHeight(n: number): number {
+  return TIMELINE_TOP + Math.max(n, 1) * TIMELINE_ROW_H - 8 + 28
+}
+
 export function timelineSvg(view: View, all: readonly AgentView[]): Card {
   // No agent shown: the span is empty (Math.min() of nothing is Infinity and would draw NaN).
   const t0 = all.length === 0 ? view.now : Math.min(...all.map(a => a.startedAt))
@@ -72,9 +87,9 @@ export function timelineSvg(view: View, all: readonly AgentView[]): Card {
   const plotW = INNER - 34 - 52
   const span = Math.max(1000, t1 - t0)
   const x = (t: number) => plotX + ((Math.min(Math.max(t, t0), t1) - t0) / span) * plotW
-  const top = 26
-  const rowH = 30
-  const axisY = top + Math.max(n, 1) * rowH - 8
+  const top = TIMELINE_TOP
+  const rowH = TIMELINE_ROW_H
+  const axisY = timelineHeight(n) - 28
   for (const f of [0, 0.5, 1]) {
     const gx = plotX + f * plotW
     const t = t0 + f * span
@@ -117,6 +132,14 @@ const STOP_GAP_PX = 8
  */
 const HEAD_DROP_PX = 5
 
+/** The height of an agent card of `lines` text lines, with the progress strip's extra room when it has one. */
+export function agentCardHeight(lines: number, hasProgress: boolean): number {
+  return 20 + HEAD_DROP_PX + lines * 20 + (hasProgress ? 8 : 0)
+}
+
+/** The smallest agent card: its title line and its meta line. */
+export const AGENT_CARD_MIN_PX = agentCardHeight(2, false)
+
 /** How far a live agent's Stop button sits from the card's right padding: past the badge and a gap. */
 export function stopInsetPx(agent: AgentView): number {
   return badgeWidth(agentBadge(agent).label) + STOP_GAP_PX
@@ -139,7 +162,7 @@ export function agentSvg(agent: AgentView, view: View): Card {
   const hasLink = shownLinks.length > 0
   const progress = agent.isEnded ? undefined : agent.progress
   const lines = 2 + shownLinks.length + (moreLinks > 0 ? 1 : 0) + (!agent.isEnded && agent.doing !== undefined ? 1 : 0) + (progress !== undefined ? 1 : 0)
-  const h = 20 + HEAD_DROP_PX + lines * 20 + (progress !== undefined ? 8 : 0)
+  const h = agentCardHeight(lines, progress !== undefined)
   if (hasLink && !agent.isEnded) {
     parts.push(`<rect x="1" y="1" width="${W - 2}" height="${h - 2}" rx="11" fill="none" stroke="${color}" stroke-opacity=".55"/>`)
   }

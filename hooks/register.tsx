@@ -88,6 +88,8 @@ import { failAfter, inTime, NoAnswer, RUN_LIMIT_MS, STORE_LIMIT_MS, TIMED_OUT } 
 import { tryWriteLock, withWriteLock } from './write-lock'
 import { deferredIds } from './deferred-tickets'
 import { stoppedKeys } from './stop-queue'
+import { blankCard, holdRoom, NO_ROOM } from './agent-room'
+import type { AgentRoom } from './agent-room'
 
 const PANE = 'claudeopticon'
 const TITLE = 'Claudeopticon'
@@ -164,6 +166,8 @@ let sortBy: 'file' | 'category' = 'file'
 /** How the board orders each column's tickets (#T004F): by group, or newest ID first. */
 let ticketOrder: TicketOrder = 'group'
 let query = ''
+/** The tallest the agent area was drawn this session, held so the board below it stays put (#T004L). */
+let agentRoom: AgentRoom = NO_ROOM
 function redraw($: EngineInterface): void {
   noteLive()
   $.ui.invalidate('ui.render')
@@ -5271,6 +5275,12 @@ export const register: Register = (on, options) => {
     if (Svg !== undefined) {
       setWidth((e.props.bodyColumns ?? 48) * CELL_PX)
       const { active, idle, finished, shown } = ledger(view, isFinishedShown)
+      // Drawn with no agents too, so the held room starts with the timeline's empty card.
+      const timeline = timelineSvg(view, shown)
+      const orchCard = view.orchestrator !== undefined ? agentSvg(view.orchestrator, view) : undefined
+      const agentCards = shown.map(agent => ({ agent, drawn: agentSvg(agent, view) }))
+      const held = holdRoom(agentRoom, [timeline, orchCard, ...agentCards.map(one => one.drawn)].flatMap(one => (one === undefined ? [] : [one.height])), agentCards.length)
+      agentRoom = held.room
       // Every card reaches the pane here, so its alt is cleaned here, once: one control character
       // in a ticket, a command or a file name would make the engine refuse the whole pane.
       const card = (key: string, drawn: { source: string; width: number; alt: string }) => (
@@ -5348,14 +5358,14 @@ export const register: Register = (on, options) => {
               redraw($)
             },
           )}
-          {view.agents.length > 0 && card('timeline', timelineSvg(view, shown))}
+          {card('timeline', timeline)}
           {/* The orchestrator leads, before A1; no Stop button, no timeline bar. */}
-          {view.orchestrator !== undefined && card('agent-orchestrator-card', agentSvg(view.orchestrator, view))}
-          {shown.map(agent => (
+          {orchCard !== undefined && card('agent-orchestrator-card', orchCard)}
+          {agentCards.map(({ agent, drawn }) => (
             // A live agent's Stop button sits left of its status badge, in the room the card keeps free.
             // Keyed by the agent's ID: a cut at the front of the rows shifts every index, and index keys would remount every card (UCR-156).
             <Box key={keyText(`agent-${agent.id ?? agent.index}`)} flexDirection="column" position="relative">
-              {card(`agent-${agent.id ?? agent.index}-card`, agentSvg(agent, view))}
+              {card(`agent-${agent.id ?? agent.index}-card`, drawn)}
               {!agent.isEnded && (
                 <Box position="absolute" right={ACTION_RIGHT + Math.ceil(stopInsetPx(agent) / CELL_PX)} top={STOP_TOP}>
                   <Button key={keyText(`agent-stop-${agent.id ?? agent.index}`)} label={STOP_GLYPH} onPress={() => (agent.id === undefined ? undefined : stopAgent($, agent.id).catch(toastFailure($, 'mark the agent stopped')))} />
@@ -5363,6 +5373,8 @@ export const register: Register = (on, options) => {
               )}
             </Box>
           ))}
+          {/* Empty gray slots hold the agent area at its height, so the board below stays put while three agents or fewer show. */}
+          {held.blanks.map((px, i) => card(`agent-room-${i}`, blankCard(px)))}
           {section(
             'todo',
             'Todo',

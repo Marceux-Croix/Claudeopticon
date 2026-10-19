@@ -8,7 +8,7 @@
 export type OrchestratorEntry = { id: number; line: string; at: number; isRunning: boolean; detail?: string }
 
 export const ORCHESTRATOR_KEPT = 1000
-const ORCHESTRATOR_PAGE = 5
+export const ORCHESTRATOR_PAGE = 5
 
 /** "Newest 5 of 57" on the first page, then "11 to 15 of 57". */
 export function pageLabel(view: { entries: readonly unknown[]; page: number }, total: number): string {

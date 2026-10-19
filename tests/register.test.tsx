@@ -5,6 +5,7 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
+import { HELD_SLOTS } from '../hooks/agent-room'
 import { appendSections } from '../hooks/consolidate-text'
 import { blockIds, CLAIM_MS } from '../hooks/id-blocks'
 import { itemKey } from '../hooks/item-keys'
@@ -50,6 +51,9 @@ function fakeSteps(on: Parameters<Parameters<typeof test>[1]>[1]) {
   }
 }
 
+/** True for an empty slot that holds the agent area's height (#T004L, #T004M): not an agent's card. */
+const isBlank = (one: unknown) => JSON.stringify(one).includes('Empty agent slot')
+
 test('one pane shows the todo and the agents, and the link between them', async ($, on) => {
   mock.clock(on)
   on('fs.exists', (_$, e) => ({ value: !e.path.endsWith('archive') }))
@@ -63,7 +67,9 @@ test('one pane shows the todo and the agents, and the link between them', async 
     const ui = await $.ui.mount({ plugin: 'claudeopticon', surface, ...PANE })
     if (surface === 'desktop') {
       await ui.press({ key: 'todo-tickets' })
-      expect((await ui.findAll({ type: 'Svg' })).length).toBe(4)
+      expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(4)
+      // The timeline and A1's card take two of the held slots; blanks fill the other three.
+      expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(HELD_SLOTS - 2)
       const drawn = JSON.stringify(await ui.drawn())
       expect(drawn.indexOf('"Agents"')).toBeLessThan(drawn.indexOf('"Todo"'))
       expect(await ui.find({ type: 'Text', text: /2 of 4 done, 1 in progress/ })).toBeDefined()
@@ -82,7 +88,10 @@ test('with neither todo nor agents both sections are empty, and the idle Orchest
   on('agent.list', () => ({ value: [] }))
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
-  expect((await ui.findAll({ type: 'Svg' })).length).toBe(0)
+  // The timeline draws empty, and empty slots fill the rest of the held room.
+  expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(1)
+  expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('No agents ran in this window')
+  expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(HELD_SLOTS - 1)
   expect(await ui.find({ type: 'Text', text: /No checkbox items/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /None in this session yet/ })).toBeDefined()
 })
@@ -263,13 +272,13 @@ test('long items stop at 8 lines inside one card, and one button per file shows 
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   await ui.press({ key: 'todo-tickets' })
   const svgs = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
-  expect((await ui.findAll({ type: 'Svg' })).length).toBe(2)
+  expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(3)
   expect(await svgs()).toContain('…')
   expect(await svgs()).not.toContain('w149')
   expect((await ui.find({ key: 'file-text-OPEN.md' }))?.text).toContain('Show full text (1 long item)')
   await ui.press({ key: 'file-text-OPEN.md' })
   expect(await svgs()).toContain('w149')
-  expect((await ui.findAll({ type: 'Svg' })).length).toBe(2)
+  expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(3)
   expect((await ui.find({ key: 'file-text-OPEN.md' }))?.text).toContain('Shorten long items')
   await ui.press({ key: 'file-text-OPEN.md' })
   expect(await svgs()).not.toContain('w149')

@@ -683,7 +683,13 @@ test('UCR-218 a label far from its dot gets a leader line; one near it does not,
   const s30 = r5States(31)[30]!
   expect(s30[0]).toBe('s30-equal')
   expect(heroSvg(s30[1]).source).toMatch(/<line [^>]*stroke="#60A5FA" class="sr" stroke-width="0.75"/)
-  // Over the reviewer's states at 300 px, no leader crosses another end label (s90-huge had one through "807.23M").
+  setWidth(384)
+})
+
+// The sweep draws the top card 140 times, 8.6 s in a full run: past the runner's 5 s default (#T004K).
+test('UCR-218 over the reviewer\'s 140 states at 300 px, no leader line crosses another end label', { timeoutMs: 120_000 }, () => {
+  setWidth(300)
+  // s90-huge had one through "807.23M".
   const crossed: string[] = []
   for (const [name, view] of r5States(140)) {
     const svg = heroSvg(view).source

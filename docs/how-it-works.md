@@ -77,6 +77,7 @@ Each file in `hooks/` has one responsibility. `hooks.json` loads only `register.
 | `hero-card.ts` | The top card: totals line, key, plot, axes |
 | `todo-cards.ts` | The ticket cards, file cards, board header and spaces |
 | `agent-cards.ts` | The agent card, the timeline and the Orchestrator history card |
+| `agent-room.ts` | The empty cards that hold the agent area's height while three agent cards or fewer show |
 
 The tests follow the same layout: `tests/<module>.test.tsx` holds the cases of `hooks/<module>.ts`. The `tests/register*.test.tsx` files hold the cases that run the mod through the fake engine. Its fakes come from older suites in blocks of their own, because their names repeat.
 
@@ -176,3 +177,4 @@ Each card is an SVG image. Its markup does not change with the clock alone, so a
 - An SVG card takes no click, so buttons sit over its bottom row.
 - Elements sit in text cells, so button positions are approximate.
 - A pane cannot scroll, so the Orchestrator history uses paging buttons.
+- On the desktop app the pane scrolls by pixels, and the mod gets no `ui.scroll` event and an offset of 0. The mod cannot read or set where you are, so it holds heights instead (`agent-room.ts`): empty gray cards keep the agent area at its tallest height while three agent cards or fewer show, and the timeline is drawn with no agents, and the Orchestrator card is always as tall as a page of five entries with detail lines.

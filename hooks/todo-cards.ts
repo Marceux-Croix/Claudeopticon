@@ -2,7 +2,7 @@
 
 import { agentColor, agentLabel, ORCH } from './agent-identity'
 import { actor, badge, badgeWidth, isBlinking, moreDisk, ownerDot, ownersFit, strip } from './card-parts'
-import { ACCENT, Blinks, CARD, FAINT, INNER, LABEL, LIGHT_CSS, PAD, RULE, stage, STAGE_GRAY, SUB, SUGGESTED, W } from './card-stage'
+import { ACCENT, Blinks, CARD, FAINT, INNER, LABEL, LIGHT_CSS, PAD, PANE, RULE, stage, STAGE_GRAY, SUB, SUGGESTED, W } from './card-stage'
 import { cutText, esc, fit, MAX_LINES, wrap } from './card-text'
 import type { Card, FileView, ItemStatus, ItemView, View } from './card-types'
 
@@ -129,6 +129,11 @@ export const SEND_ROW_PX = 60
 /** The pane's card width, for laying tickets out in columns beside it. */
 export function cardWidth(): number {
   return W
+}
+
+/** The pane's full width, for the board's ticket columns, which grow past the card cap (#T0040). */
+export function boardWidth(): number {
+  return PANE
 }
 
 /** The least width, in px, that an item's text keeps in the list view. */

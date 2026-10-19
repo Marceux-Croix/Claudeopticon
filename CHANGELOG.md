@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.2
+
+### Fixes
+
+- The "Tokens" axis title no longer overlaps the blue tokens-per-minute numbers. The axis numbers are measured by glyph, so "600M" gets its true width.
+- Board tickets grow with the pane, not only shrink. Before, they stopped at 960 px of pane width while their columns kept growing.
+- Ticket buttons sit on their card. Before, on a wide pane they were at the right edge of the column, away from the card.
+- On a pane too narrow for three columns, In progress and Queued are side by side and Open is under them at the full width. Before, Open was pushed off the right edge. On a very narrow pane all three stack, as before.
+
 ## 0.9.1
 
 ### Fixes

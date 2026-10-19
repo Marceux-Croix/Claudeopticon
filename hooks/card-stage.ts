@@ -35,10 +35,13 @@ export const RULE = 'rgba(255,255,255,.08)'
 export const PAD = 16
 export let W = 384
 export let INNER = W - PAD * 2
+/** The pane's width in CSS pixels, not capped at 960: the board's ticket columns grow with it (#T0040). */
+export let PANE = W
 
 /** The cards' width in CSS pixels, set once per draw from the pane's width. */
 export function setWidth(px: number): void {
   W = Math.round(Math.min(960, Math.max(300, px)))
+  PANE = Math.round(Math.max(300, px))
   INNER = W - PAD * 2
 }
 

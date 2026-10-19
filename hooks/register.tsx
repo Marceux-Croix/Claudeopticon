@@ -72,7 +72,7 @@ import type { Reservation } from './ticket-ids'
 import { findTickets, narrowTickets } from './ticket-lookup'
 import { moveQuestion, sendScope, ticketSummary } from './ticket-prompts'
 import { clearSpaces, columnSlots, expireSpaces, newLayout } from './ticket-spaces'
-import { boardHead, cardWidth, fileCards, listRowPx, longItems, spaceSvg, ticketSvg } from './todo-cards'
+import { boardHead, boardWidth, cardWidth, fileCards, listRowPx, longItems, spaceSvg, ticketSvg } from './todo-cards'
 import { bare, CHECKBOX, exampleMask, ID_SRC, ITEM_ID, leadingId, lineOwnIds, parseTodo, plainText } from './todo-markdown'
 import { readReason, reasonOf, TodoReadError } from './todo-read'
 import type { TodoRead } from './todo-read'
@@ -82,7 +82,7 @@ import { isSkipped, nextStreak } from './unread-files'
 import type { UnreadStreak } from './unread-files'
 import { foldersWithUnread } from './unread-folders'
 import { callDetail, callSummary, describeCall } from './tool-calls'
-import { boardTargets, buildView, columnsThatFit, ledger, searchTodo, ticketColumns, todoLedger } from './view-model'
+import { boardTargets, buildView, columnShare, columnsThatFit, ledger, rowsOf, searchTodo, ticketColumns, todoLedger } from './view-model'
 import type { OrchestratorState } from './view-model'
 import { failAfter, inTime, NoAnswer, RUN_LIMIT_MS, STORE_LIMIT_MS, TIMED_OUT } from './time-limit'
 import { tryWriteLock, withWriteLock } from './write-lock'
@@ -5473,12 +5473,15 @@ export const register: Register = (on, options) => {
               columns: ticketColumns(file.items.slice(group.from, group.from + group.count), book),
             }))
             // Side by side while each ticket has room for its text and buttons; the rest wrap to the next row, or all stack.
-            const columnCount = columnsThatFit(cardWidth(), sections[0]?.columns.length ?? 1, CELL_PX, MIN_TICKET_PX)
+            // The board view spans the whole pane, so its tickets grow with it (#T0040); each ticket is as
+            // wide as its column, so the buttons, anchored to the column's right edge, sit on the card (#T003Z).
+            const paneW = isTicketView ? boardWidth() : cardWidth()
+            const columnCount = columnsThatFit(paneW, sections[0]?.columns.length ?? 1, CELL_PX, MIN_TICKET_PX)
             const isStacked = columnCount === 1
-            const ticketW = Math.floor((cardWidth() - (columnCount - 1) * CELL_PX) / columnCount)
             // What one ticket draws, worked out once per render: the slots need its height before it is placed.
             const prepared = new Map<ItemView, { sentKey: string; isSent: boolean; actions: TicketAction[]; drawn: ReturnType<typeof ticketSvg> }>()
-            const prepare = (item: ItemView) => {
+            // Each item is in one column, so the first call's width is its column's.
+            const prepare = (item: ItemView, ticketW: number) => {
               const known = prepared.get(item)
               if (known !== undefined) {
                 return known
@@ -5505,8 +5508,8 @@ export const register: Register = (on, options) => {
               return one
             }
             // `slotId` is the ticket's slot ID, which is stable while the ticket stays: its key may not carry the slot's index, or every card below a change would remount.
-            const ticket = (item: ItemView, slotId: string) => {
-              const { sentKey, actions, drawn } = prepare(item)
+            const ticket = (item: ItemView, slotId: string, ticketW: number) => {
+              const { sentKey, actions, drawn } = prepare(item, ticketW)
               const press = (action: TicketAction) => {
                 if (action.mark !== undefined) {
                   void markTicket($, item, action.mark, action.toast).catch(toastFailure($, `move ${ticketSummary(item.text, 60)}`))
@@ -5567,9 +5570,14 @@ export const register: Register = (on, options) => {
                           <Text dimColor>{String(section.columns.reduce((sum, column) => sum + column.items.length, 0))}</Text>
                         </Box>
                       )}
-                      <Box flexDirection={isStacked ? 'column' : 'row'} flexWrap="wrap" gap={1} alignItems="flex-start">
-                        {section.columns.map(column => (
-                          <Box key={keyText(`${prefix}-${file.id}-col-${section.name}-${column.name}`)} flexDirection="column" gap={1} width={columnCount === 3 ? '32%' : columnCount === 2 ? '49%' : '100%'}>
+                      {/* Explicit rows of columnCount columns: a column that does not fit starts a row below, never past the right edge (#T0041). */}
+                      {rowsOf(section.columns, columnCount).map((row, r) => (
+                      <Box key={keyText(`${prefix}-${file.id}-row-${section.name}-${r}`)} flexDirection={isStacked ? 'column' : 'row'} gap={1} alignItems="flex-start">
+                        {row.map(column => {
+                          const ticketW = Math.floor(paneW * columnShare(row.length))
+
+                          return (
+                          <Box key={keyText(`${prefix}-${file.id}-col-${section.name}-${column.name}`)} flexDirection="column" gap={1} width={`${Math.round(columnShare(row.length) * 100)}%`}>
                             <Box flexDirection="row" gap={1}>
                               <Text dimColor bold>{column.name}</Text>
                               <Text dimColor>{String(column.items.length)}</Text>
@@ -5579,7 +5587,7 @@ export const register: Register = (on, options) => {
                               // Two tickets with one key get distinct slot IDs.
                               const seen = new Map<string, number>()
                               const slotId = (item: ItemView) => {
-                                const base = prepare(item).sentKey
+                                const base = prepare(item, ticketW).sentKey
                                 const n = seen.get(base) ?? 0
                                 seen.set(base, n + 1)
 
@@ -5588,13 +5596,15 @@ export const register: Register = (on, options) => {
                               const ids = shown.map(slotId)
                               const byId = new Map(shown.map((item, i) => [ids[i]!, item]))
                               // A ticket that left keeps an empty space of its height, until a press or SPACE_MS.
-                              return columnSlots(layout, `${prefix}-${file.id}-col-${section.name}-${column.name}`, `${isExpanded}:${ticketW}:${isStacked}`, shown.map((item, i) => ({ id: ids[i]!, h: prepare(item).drawn.height })), nowSync()).map(slot =>
-                                slot.isSpace === true ? card(`${prefix}-${file.id}-${slot.id}`, spaceSvg(ticketW, slot.h)) : ticket(byId.get(slot.id)!, slot.id),
+                              return columnSlots(layout, `${prefix}-${file.id}-col-${section.name}-${column.name}`, `${isExpanded}:${ticketW}:${isStacked}`, shown.map((item, i) => ({ id: ids[i]!, h: prepare(item, ticketW).drawn.height })), nowSync()).map(slot =>
+                                slot.isSpace === true ? card(`${prefix}-${file.id}-${slot.id}`, spaceSvg(ticketW, slot.h)) : ticket(byId.get(slot.id)!, slot.id, ticketW),
                               )
                             })()}
                           </Box>
-                        ))}
+                          )
+                        })}
                       </Box>
+                      ))}
                     </Box>
                   )),
                 ]

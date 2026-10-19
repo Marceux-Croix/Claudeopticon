@@ -169,7 +169,7 @@ When a ticket leaves a column or a list, a transparent card of the same height t
 
 ## Drawing
 
-Each card is an SVG image. Its markup does not change with the clock alone, so a redraw with no new data does not reload the image. Motion is CSS and stops under `prefers-reduced-motion`. A light palette follows the system theme. Ticket columns stack when a ticket would be under 300 px wide.
+Each card is an SVG image. Its markup does not change with the clock alone, so a redraw with no new data does not reload the image. Motion is CSS and stops under `prefers-reduced-motion`. A light palette follows the system theme. Cards other than tickets are at most 960 px wide. The board's ticket columns use the full pane width, so tickets grow and shrink with the pane, and each ticket is as wide as its column, with its buttons on it. When three columns do not fit, the columns are drawn in rows of two: In progress and Queued on top, and Open under them at the full width. They stack, one under another, when a ticket would be under 300 px wide. The right axis margin measures each axis number by glyph (`labelPx` in `hero-card.ts`), so the Tokens title stays clear of the numbers.
 
 ## Limits of the mod API
 

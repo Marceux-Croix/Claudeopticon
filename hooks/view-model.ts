@@ -55,13 +55,18 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
       fileOwners.set(link.file, [...new Set([...(fileOwners.get(link.file) ?? []), i])])
     }
   })
-  // The orchestrator owns last in an item's list, so an agent's color still leads a shared ticket.
+  // The orchestrator owns a ticket only while no live agent works it, then last in the item's list.
   const orchLinks: string[] = []
+  const isLive = (i: number) => !isEnded(rows[i]!.status) && rows[i]!.idleSince === undefined
   if (orch !== undefined && orch.keys.size > 0) {
     for (const file of list.filter(one => one.isArchived !== true)) {
       file.items.forEach((item, index) => {
         if (item.status !== 'completed' && orch.keys.has(keptKey(file, item))) {
           const key = `${fileId(file)}:${index}`
+          // A ticket handed off to a live agent is that agent's alone: its card and its owner disk.
+          if ((itemOwners.get(key) ?? []).some(isLive)) {
+            return
+          }
           itemOwners.set(key, [...(itemOwners.get(key) ?? []), ORCH])
           fileOwners.set(fileId(file), [...new Set([...(fileOwners.get(fileId(file)) ?? []), ORCH])])
           orchLinks.push(item.text)
@@ -164,7 +169,8 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     ...all,
     live: rows.filter(row => !isEnded(row.status) && row.idleSince === undefined).length,
     now,
-    ...(orch === undefined || orchLinks.length === 0
+    // The orchestrator card shows only while the main conversation works a ticket itself.
+    ...(orch === undefined || orchLinks.length === 0 || !orch.isRunning
       ? {}
       : {
           orchestrator: {

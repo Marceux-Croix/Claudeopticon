@@ -481,12 +481,19 @@ for (const [name, extra] of [
     orchSetup($, on)
     await begin($)
     const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+    // The orchestrator card shows only during a main-conversation turn.
+    await $.prompt.submit({ text: 'go' } as never)
     await $.tool.call({ tool: PROGRESS, done: 0, total: 2, items: ['#T2'], title: 'Main headline' } as never)
     expect(await orchCardOf(ui)).toContain('>Main headline<')
     await $.tool.call({ tool: PROGRESS, done: 1, total: 2, title: 'Helper headline', agentId: 'a1', ...extra } as never)
     const card = await orchCardOf(ui)
-    expect(card).toContain('>Main headline<')
     expect(card).not.toContain('Helper headline')
+    // With items the helper claims #T2, so the ticket is the helper's and the orchestrator card goes.
+    if ('items' in extra) {
+      expect(card).toBe('')
+    } else {
+      expect(card).toContain('>Main headline<')
+    }
   })
 }
 

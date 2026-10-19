@@ -117,7 +117,7 @@ for (const [line, shown] of PROTO) {
   })
 }
 
-test('the list view by category and the terminal draw an item "constructor" under Not sorted yet', T5, async ($, on) => {
+test('the list view by category and the terminal draw an item "constructor" under Uncategorized', T5, async ($, on) => {
   mock.clock(on)
   l5Rig(on, { [TODO]: '- [ ] constructor\n- [ ] #T2 Fix the parser', [BOOK]: '{"categories":["Work"],"items":{"#t2":"Work"}}' })
   const ui = await open($)
@@ -125,9 +125,9 @@ test('the list view by category and the terminal draw an item "constructor" unde
   await ui.press({ key: 'todo-sort' })
   const drawn = JSON.stringify(await ui.findAll({ type: 'Svg' }))
   expect(drawn).toContain('>constructor<')
-  expect(drawn).toContain('Not sorted yet')
-  // The filter offers Not sorted yet: the old code read "constructor" as sorted (Object is not undefined).
-  expect(JSON.stringify(await ui.findAll({ type: 'Button' }))).toContain('Not sorted yet')
+  expect(drawn).toContain('Uncategorized')
+  // The filter offers Uncategorized: the old code read "constructor" as sorted (Object is not undefined).
+  expect(JSON.stringify(await ui.findAll({ type: 'Button' }))).toContain('Uncategorized')
   const term = await $.ui.mount({ plugin: 'claudeopticon', surface: 'terminal', ...PANE })
   expect(JSON.stringify(await term.findAll({ type: 'Text' }))).toContain('constructor')
 })

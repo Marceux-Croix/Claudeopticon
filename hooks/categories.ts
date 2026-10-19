@@ -42,7 +42,7 @@ export function categoryOf(current: CategoryBook, key: string): string | undefin
 /**
  * The group the view puts `key` in: its category when the book lists that category, else UNSORTED.
  * A ticket whose entry names no listed category (a prototype name before , or a hand edit)
- * still draws, under Not sorted yet, and is never dropped from the view.
+ * still draws, under Uncategorized, and is never dropped from the view.
  */
 export function groupOf(current: CategoryBook, key: string): string {
   const name = categoryOf(current, key)
@@ -51,7 +51,8 @@ export function groupOf(current: CategoryBook, key: string): string {
 }
 
 export const MAX_CATEGORIES = 5
-export const UNSORTED = 'Not sorted yet'
+/** The group, filter and ticket tag of a ticket with no listed category: not sorted yet, or fits none. */
+export const UNSORTED = 'Uncategorized'
 export const SORT_BATCH = 60
 /** The most batches one sort runs back to back. */
 export const SORT_BATCHES = 5
@@ -115,12 +116,13 @@ export function sortPrompt(categories: readonly string[], texts: readonly string
     categories.length === 0
       ? 'There are no categories yet: make them from the items, so that together they cover the whole project.'
       : `Existing categories, which you must keep: ${JSON.stringify(categories)}. Add a new one only while there are fewer than ${MAX_CATEGORIES}.`,
+    `An item that fits no category, when no new one can be added, gets "${UNSORTED}". Never put an item in a category it does not fit.`,
     'A category name is 1 to 3 words, in sentence case.',
     '',
     'Items:',
     ...texts.map((text, i) => `${i + 1}. ${cutUnits(text, 160)}`),
     '',
-    'Reply with JSON only: {"categories": [every category name], "assign": {"1": "Category", "2": "Category", ...}}. Give every item exactly one category from the list.',
+    `Reply with JSON only: {"categories": [every category name], "assign": {"1": "Category", "2": "Category", ...}}. Give every item exactly one category from the list, or "${UNSORTED}".`,
   ].join('\n')
 }
 
@@ -141,7 +143,7 @@ export function applySortReply(current: CategoryBook, keys: readonly string[], r
     return undefined
   }
   const record = parsed as { categories?: unknown; assign?: unknown }
-  const proposed = Array.isArray(record.categories) ? record.categories.filter((name): name is string => typeof name === 'string' && altText(name) !== '') : []
+  const proposed = Array.isArray(record.categories) ? record.categories.filter((name): name is string => typeof name === 'string' && altText(name) !== '' && altText(name) !== UNSORTED) : []
   const categories = [...current.categories]
   for (const name of proposed.map(one => cutUnits(altText(one), 40))) {
     if (categories.length < MAX_CATEGORIES && !categories.includes(name)) {
@@ -153,7 +155,8 @@ export function applySortReply(current: CategoryBook, keys: readonly string[], r
   keys.forEach((key, i) => {
     const number = String(i + 1)
     const name = Object.hasOwn(assign, number) ? assign[number] : undefined
-    if (!Object.hasOwn(items, key) && typeof name === 'string' && categories.includes(altText(name))) {
+    // An item that fits none is kept as Uncategorized, so it is not sent again each sort.
+    if (!Object.hasOwn(items, key) && typeof name === 'string' && (categories.includes(altText(name)) || altText(name) === UNSORTED)) {
       items[key] = altText(name)
     }
   })
@@ -329,7 +332,7 @@ export function withoutHidden(files: readonly FileView[], current: CategoryBook,
     .filter(file => file.items.length > 0)
 }
 
-/** The category names the filter offers: the book's, then Not sorted yet when an item has none. */
+/** The category names the filter offers: the book's, then Uncategorized when an item has none. */
 export function filterNames(files: readonly FileView[], current: CategoryBook): string[] {
   const unsorted = files.some(file => file.items.some(item => groupOf(current, storedKey(item.key)) === UNSORTED))
 

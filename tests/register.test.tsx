@@ -96,6 +96,22 @@ test('with neither todo nor agents both sections are empty, and the idle Orchest
   expect(await ui.find({ type: 'Text', text: /None in this session yet/ })).toBeDefined()
 })
 
+test('#T004S the room switch at the Orchestrator heading gives up the held room and takes it back, with its tip', async ($, on) => {
+  mock.clock(on)
+  on('fs.exists', () => ({ value: false }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  expect(JSON.stringify(await ui.find({ key: 'room-tip' }))).toContain('keeps empty room for agents')
+  expect((await ui.find({ key: 'room-toggle' }))?.text).toBe('Reserve agent space: on')
+  await ui.press({ key: 'room-toggle' })
+  expect((await ui.find({ key: 'room-toggle' }))?.text).toBe('Reserve agent space: off')
+  // Not held, the pane draws as before #T004L: no empty timeline, no blank slots.
+  expect((await ui.findAll({ type: 'Svg' })).length).toBe(0)
+  await ui.press({ key: 'room-toggle' })
+  expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(HELD_SLOTS - 1)
+})
+
 test('each file shows its top 12 open items, and its button shows them all, then 12 again', async ($, on) => {
   mock.clock(on)
   const lines = Array.from({ length: 30 }, (_, i) => `- [${i < 10 ? 'x' : ' '}] item ${i}`).join('\n')

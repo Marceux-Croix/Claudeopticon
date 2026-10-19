@@ -23,8 +23,9 @@ export const ORCHESTRATOR_HELD_PX = 8 + ORCHESTRATOR_PAGE * (ENTRY_PX + DETAIL_P
  * The Orchestrator card: one line per tool call summary, newest first, each with its start time in
  * small text on the right; a call still running has a live dot, a finished one a quiet one. An
  * entry with a `detail` (the command, path or pattern of the call) has it on a dim mono line below.
+ * Held (the default), the card keeps the height of a full page; not held, it fits its entries (#T004S).
  */
-export function orchestratorSvg(entries: readonly { line: string; at: number; isRunning: boolean; detail?: string }[]): Card {
+export function orchestratorSvg(entries: readonly { line: string; at: number; isRunning: boolean; detail?: string }[], isHeld = true): Card {
   let y = 8
   const parts = entries.map(entry => {
     y += ENTRY_PX
@@ -39,7 +40,7 @@ export function orchestratorSvg(entries: readonly { line: string; at: number; is
     return drawn
   })
 
-  return stage(Math.max(y + 14, ORCHESTRATOR_HELD_PX), parts.join('\n'), `Orchestrator: ${entries.map(entry => `${clock(entry.at)} ${entry.line}`).join('; ')}`)
+  return stage(isHeld ? Math.max(y + 14, ORCHESTRATOR_HELD_PX) : y + 14, parts.join('\n'), `Orchestrator: ${entries.map(entry => `${clock(entry.at)} ${entry.line}`).join('; ')}`)
 }
 
 function agentBadge(agent: AgentView): { label: string; kind: 'live' | 'ok' | 'danger' | 'neutral' } {

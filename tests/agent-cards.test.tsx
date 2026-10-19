@@ -44,6 +44,12 @@ test('the orchestrator card holds the height of a full page of five entries with
   expect(full.source).toContain(`height="${ORCHESTRATOR_HELD_PX}"`)
 })
 
+test('the orchestrator card not held fits its entries (#T004S)', () => {
+  const one = orchestratorSvg([{ line: 'A', at: 0, isRunning: false }], false)
+  expect(one.height).toBeLessThan(ORCHESTRATOR_HELD_PX)
+  expect(one.height).toBe(8 + 22 + 14)
+})
+
 test('timelineHeight and agentCardHeight are the heights the cards draw at', () => {
   const view = buildView([], [], 9000)
   expect(timelineSvg(view, []).height).toBe(timelineHeight(0))

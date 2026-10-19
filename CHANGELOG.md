@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.9
+
+### Changes
+
+- The button is now **Limit UI shift**, and it is off by default: the pane reserves no space until you turn it on. While on, the button is filled, like a selected category tag. The tip reads: Limit UI shift reserves interface space so new agent activity does not cause scroll jumps.
+
 ## 0.9.8
 
 ### Features

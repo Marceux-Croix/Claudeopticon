@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { addAgentPoint, addAgents, addCompact, addPoint, addStep, addTokens, emptySeries, niceMax, onePerStep, QUANT_MS, RATE_RATIO, readKeptSeries, retimeSeries, seedSeries, SERIES_CAP, SHRINK_MS, stepAxes, stepAxis, tokenRate, WINDOW_MS } from '../hooks/series'
+import { addAgentPoint, addAgents, addCompact, addPoint, addStep, addTokens, emptySeries, niceMax, onePerStep, QUANT_MS, RATE_RATIO, readKeptSeries, retimeSeries, seedSeries, SERIES_CAP, sinceCompact, stepAxes, stepAxis, tokenRate, WINDOW_MS } from '../hooks/series'
 import type { Point, Series } from '../hooks/series'
 
 const MIN = 60_000
@@ -55,37 +55,64 @@ test('the nice axis tops: agents 4, 6, 8, 12, 16, 24; tokens 150k, 300k, 600k, 9
   ])
 })
 
-test('an axis grows to the next step when a value would leave the plot, and shrinks only after 5 minutes below half', async () => {
-  let axis = stepAxis(undefined, 'agents', 3, 0)
+test('an axis grows to the next step when a value would leave the plot, and shrinks once the peak is under half', async () => {
+  let axis = stepAxis(undefined, 'agents', 3)
   expect(axis.max).toBe(4)
-  axis = stepAxis(axis, 'agents', 4, 1000)
+  axis = stepAxis(axis, 'agents', 4)
   expect(axis.max).toBe(4)
-  axis = stepAxis(axis, 'agents', 5, 2000)
+  axis = stepAxis(axis, 'agents', 5)
   expect(axis.max).toBe(6)
-  axis = stepAxis(axis, 'agents', 9, 3000)
+  axis = stepAxis(axis, 'agents', 9)
   expect(axis.max).toBe(12)
-  // Below half (6) from here: no shrink before 5 minutes.
-  axis = stepAxis(axis, 'agents', 2, 10 * MIN)
-  expect(axis).toEqual({ max: 12, lowSince: 10 * MIN })
-  axis = stepAxis(axis, 'agents', 5, 12 * MIN)
-  expect(axis.max).toBe(12)
-  axis = stepAxis(axis, 'agents', 5, 14 * MIN + 59_000)
-  expect(axis.max).toBe(12)
-  // A value back at half or above restarts the timer.
-  axis = stepAxis(axis, 'agents', 6, 15 * MIN)
+  // At half (6) or above, it stays.
+  axis = stepAxis(axis, 'agents', 6)
   expect(axis).toEqual({ max: 12 })
-  axis = stepAxis(axis, 'agents', 3, 16 * MIN)
-  axis = stepAxis(axis, 'agents', 3, 16 * MIN + SHRINK_MS - 1)
-  expect(axis.max).toBe(12)
-  axis = stepAxis(axis, 'agents', 3, 16 * MIN + SHRINK_MS)
+  // Under half, it shrinks at once to the step that holds the peak.
+  axis = stepAxis(axis, 'agents', 5)
+  expect(axis.max).toBe(6)
+  axis = stepAxis(axis, 'agents', 2)
   expect(axis.max).toBe(4)
   // Tokens use the same rule.
-  let tokensAxis = stepAxis(undefined, 'tokens', 44_810_000, 0)
+  let tokensAxis = stepAxis(undefined, 'tokens', 44_810_000)
   expect(tokensAxis.max).toBe(60_000_000)
-  tokensAxis = stepAxis(tokensAxis, 'tokens', 1_000_000, MIN)
-  expect(tokensAxis.max).toBe(60_000_000)
-  tokensAxis = stepAxis(tokensAxis, 'tokens', 1_000_000, MIN + SHRINK_MS)
+  tokensAxis = stepAxis(tokensAxis, 'tokens', 1_000_000)
   expect(tokensAxis.max).toBe(1_500_000)
+})
+
+test('the token axis lets go of a rate burst the moment it leaves the window', async () => {
+  let series = emptySeries()
+  let axes: ReturnType<typeof stepAxes> | undefined
+  let t = HERO_NOW
+  // A burst: 10M a step for 10 steps (20M a minute), then a slow climb of 100k a step.
+  for (let i = 1; i <= 10; i += 1) {
+    t += QUANT_MS
+    series = addTokens(series, t, i * 10_000_000, 10_000_000)
+    axes = stepAxes(axes, series, t)
+  }
+  expect(axes!.tokens.max).toBe(300_000_000)
+  const burstEnd = t
+  for (let i = 1; t < burstEnd + WINDOW_MS + 4 * QUANT_MS; i += 1) {
+    t += QUANT_MS
+    series = addTokens(series, t, 100_000_000 + i * 100_000, 100_000)
+    axes = stepAxes(axes, series, t)
+    if (t < burstEnd + WINDOW_MS - QUANT_MS) {
+      expect(axes.tokens.max).toBe(300_000_000)
+    }
+  }
+  // The count (about 106M) holds the axis now; the burst no longer does, and no 5-minute hold keeps it.
+  expect(axes!.tokens.max).toBe(150_000_000)
+})
+
+test('the token axis holds the count since the last compaction in the window, not the count before it', async () => {
+  const tokens = [[HERO_NOW - 20 * MIN, 375_000_000], [HERO_NOW - 15 * MIN, 0], [HERO_NOW - 5 * MIN, 13_000_000]] as Point[]
+  const series = { agents: [], tokens, compacts: [HERO_NOW - 15 * MIN] }
+  expect(sinceCompact(series, HERO_NOW - WINDOW_MS)).toEqual(tokens.slice(1))
+  // A compaction out of the window holds nothing back.
+  expect(sinceCompact(series, HERO_NOW - 10 * MIN)).toEqual(tokens)
+  // 13M, and ten times the rate (13M in the minute before -5 min, 130M; the rate is held over the whole window), so the step holds 130M, not 375M.
+  expect(stepAxes(undefined, series, HERO_NOW).tokens.max).toBe(150_000_000)
+  const slow = { ...series, tokens: [...tokens.slice(0, 2), [HERO_NOW - 10 * MIN, 6_500_000], [HERO_NOW - 5 * MIN, 13_000_000]] as Point[] }
+  expect(stepAxes(undefined, slow, HERO_NOW).tokens.max).toBe(90_000_000)
 })
 
 test('stepAxes plots the visible values only, so a value that left the window no longer holds the axis up', async () => {

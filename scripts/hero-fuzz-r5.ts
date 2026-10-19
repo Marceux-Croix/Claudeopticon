@@ -6,6 +6,7 @@
  */
 
 import type { View } from '../hooks/card-types'
+import { labelPx } from '../hooks/hero-card'
 import { addAgentPoint, addCompact, addStep, emptySeries, seedSeries, WINDOW_MS } from '../hooks/series'
 
 export const R5_KINDS = ['walk', 'late', 'equal', 'agentsOnly', 'tokensOnly', 'compactOnly', 'huge', 'tiny', 'burst', 'many', 'seeded', 'blip', 'flat', 'idle'] as const
@@ -143,6 +144,12 @@ export function r5Check(svg: string, w: number): string[] {
     const y = Number(m[2])
     const width = 56.2
     marks.push({ x0: m[3] === 'end' ? x - width : x, x1: m[3] === 'end' ? x : x + width, y0: y - 7.9, y1: y + 2.3 })
+  }
+  // A clipped segment's peak label: the code's box (clipLabelBox).
+  for (const m of svg.matchAll(/<text x="([-\d.]+)" y="([-\d.]+)" fill="[^"]+" class="ft" font-size="11"[^>]*>([^<]+)<\/text>/g)) {
+    const x = Number(m[1])
+    const y = Number(m[2])
+    marks.push({ x0: x, x1: x + labelPx(m[3]!), y0: y - 10, y1: y + 2 })
   }
   const segs: [number, number, number, number, string][] = []
   for (const m of svg.matchAll(/<polyline points="([^"]+)"[^>]*class="(st|sr)"/g)) {

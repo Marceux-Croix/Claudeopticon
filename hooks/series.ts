@@ -25,8 +25,6 @@ export const RATE_MS = 60_000
 
 /** X positions snap to this step, so a redraw between steps sends the same markup. */
 export const QUANT_MS = 30_000
-/** An axis shrinks only after every visible value stayed below half of it for this long. */
-export const SHRINK_MS = 5 * 60_000
 
 export const emptySeries = (): Series => ({ agents: [], tokens: [], compacts: [] })
 
@@ -296,8 +294,8 @@ export function readKeptSeries(stored: unknown, now = Infinity): Series {
   return out
 }
 
-/** One axis: its top value, and since when every visible value has been under half of it. */
-export type AxisState = { max: number; lowSince?: number }
+/** One axis: its top value. */
+export type AxisState = { max: number }
 export type Axes = { agents: AxisState; tokens: AxisState }
 type AxisKind = 'agents' | 'tokens'
 
@@ -326,18 +324,14 @@ export function niceMax(kind: AxisKind, peak: number): number {
 
 /**
  * The next state of one axis: it grows when the peak would leave the plot, to the next nice step;
- * it shrinks, to the step that holds the peak, only after the peak stayed under half the axis for
- * SHRINK_MS. Otherwise it stays.
+ * it shrinks, to the step that holds the peak, when the peak is under half the axis. The
+ * peak is the top of the whole window, so a shrink needs every visible value under half: it never
+ * flaps, and a high value (the count before a compaction) lets go the moment it leaves the window.
+ * Otherwise it stays.
  */
-export function stepAxis(prev: AxisState | undefined, kind: AxisKind, peak: number, now: number): AxisState {
-  const need = niceMax(kind, peak)
-  if (prev === undefined || peak > prev.max) {
-    return { max: need }
-  }
-  if (peak < prev.max / 2) {
-    const low = prev.lowSince ?? now
-
-    return now - low >= SHRINK_MS ? { max: need } : { max: prev.max, lowSince: low }
+export function stepAxis(prev: AxisState | undefined, kind: AxisKind, peak: number): AxisState {
+  if (prev === undefined || peak > prev.max || peak < prev.max / 2) {
+    return { max: niceMax(kind, peak) }
   }
 
   return { max: prev.max }
@@ -372,6 +366,16 @@ export function onePerStep(points: readonly Point[]): Point[] {
 }
 
 /**
+ * The token points the token axis must hold: those from the last compaction in the
+ * window on, or all of them when no compaction is in the window.
+ */
+export function sinceCompact(series: Series, from: number): Point[] {
+  const last = series.compacts.filter(one => one >= from).pop()
+
+  return last === undefined ? series.tokens : series.tokens.filter(point => point[0] >= last)
+}
+
+/**
  * The token axis's top over the tokens-per-minute axis's top: the rate axis is always the
  * token axis divided by RATE_RATIO, so the two lines stay comparable at every scale.
  */
@@ -383,7 +387,10 @@ export function stepAxes(prev: Axes | undefined, series: Series, now: number): A
   const peak = (points: readonly Point[]) => windowed(points, from).reduce((top, point) => Math.max(top, point[1]), 0)
 
   // The token axis holds both token traces: the count since compact, and the tokens per minute on its own axis, RATE_RATIO times smaller.
-  const tokenPeak = Math.max(peak(series.tokens), peak(tokenRate(series.tokens, now, series.seeds)) * RATE_RATIO)
+  // The count is taken from the last compaction in the window on: the count before it is
+  // drawn clipped at the top, so it never flattens the count since. The rate does not reset at a
+  // compaction, so the whole window of it is held: clipped, it would draw as noise along the top.
+  const tokenPeak = Math.max(peak(sinceCompact(series, from)), peak(tokenRate(series.tokens, now, series.seeds)) * RATE_RATIO)
 
-  return { agents: stepAxis(prev?.agents, 'agents', peak(series.agents), now), tokens: stepAxis(prev?.tokens, 'tokens', tokenPeak, now) }
+  return { agents: stepAxis(prev?.agents, 'agents', peak(series.agents)), tokens: stepAxis(prev?.tokens, 'tokens', tokenPeak) }
 }

@@ -5,7 +5,7 @@ import { endLabelWidth, labelBox, segmentMeets } from '../hooks/card-end-labels'
 import { tokens } from '../hooks/card-format'
 import { setWidth } from '../hooks/card-stage'
 import type { View } from '../hooks/card-types'
-import { finishedCount, HERO_H, heroSvg, heroText, labelPx, LEADER_PX, leaderLine, totalsLine } from '../hooks/hero-card'
+import { clipLabelBox, clipMark, finishedCount, HERO_H, heroSvg, heroText, labelPx, LEADER_PX, leaderLine, totalsLine } from '../hooks/hero-card'
 import { r5States } from '../scripts/hero-fuzz-r5'
 import { heroView as sampleHero } from '../scripts/sample'
 import { addCompact, addPoint, emptySeries, QUANT_MS, RATE_RATIO, stepAxes, WINDOW_MS } from '../hooks/series'
@@ -150,6 +150,43 @@ test('a compaction drops the token line to zero and shows a dashed line labeled 
   expect(svg).toContain('>60M<')
   expect(svg).toContain('>6M<')
   expect(svg).not.toContain('>9M<')
+})
+
+test('the token axis holds the count since the last compaction; the count before it draws clipped, with a break mark and its peak', async () => {
+  let series: Series = emptySeries()
+  // 375M before the compaction, with a small rise in the window (1M a minute), so the rate stays small.
+  series = { ...series, tokens: addPoint(series.tokens, HERO_NOW - 29 * MIN, 374_000_000) }
+  series = { ...series, tokens: addPoint(series.tokens, HERO_NOW - 27 * MIN, 375_000_000) }
+  series = addCompact(series, HERO_NOW - 25 * MIN)
+  for (let i = 1; i <= 20; i += 1) {
+    series = { ...series, tokens: addPoint(series.tokens, HERO_NOW - 25 * MIN + i * MIN, i * 600_000) }
+  }
+  const svg = heroSvg(graphView(series, { tokens: 400_000_000, atCompact: 375_000_000 })).source
+  // The axis tops at the step that holds 12M and ten times the rate (1M a minute), not at 600M.
+  expect(svg).toContain('>15M<')
+  expect(svg).not.toContain('>600M<')
+  // The segment before the compaction: its peak in the token color, and a zigzag break mark at the top.
+  expect(svg).toMatch(/class="ft" font-size="11"[^>]*>375M</)
+  expect(svg.match(/<polyline [^>]*class="st"/g)?.length).toBe(3)
+})
+
+test('the break mark spans at most 24 px of a clipped segment, none under 6 px; its label stays in the plot', async () => {
+  const mark = clipMark(100, 400, 60)!
+  expect(mark.x1).toBe(124)
+  expect(mark.points[0]).toEqual([100, 63])
+  expect(mark.points[1]).toEqual([104, 57])
+  expect(clipMark(100, 105, 60)).toBeUndefined()
+  expect(clipLabelBox(100, 60, 30, 50, 500).x0).toBe(103)
+  expect(clipLabelBox(490, 60, 30, 50, 500).x1).toBe(500)
+})
+
+test('with no compaction in the window, nothing is clipped', async () => {
+  let series: Series = emptySeries()
+  series = { ...series, tokens: addPoint(series.tokens, HERO_NOW - 20 * MIN, 5_000_000) }
+  series = { ...series, tokens: addPoint(series.tokens, HERO_NOW - 5 * MIN, 9_000_000) }
+  const svg = heroSvg(graphView(series, { tokens: 9_000_000 })).source
+  expect(svg).not.toMatch(/class="ft" font-size="11"/)
+  expect(svg.match(/<polyline [^>]*class="st"/g)?.length).toBe(1)
 })
 
 test('with no data the card draws the empty axes and says no activity yet', async () => {

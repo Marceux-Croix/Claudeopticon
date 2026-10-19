@@ -125,6 +125,7 @@ Each button reads a file again right before it writes it, and skips a file that 
 Other controls:
 
 - **Show as list** shows each file as a list, and **Show as tickets** goes back to the board. **Arrange by category** groups the list.
+- **Rank by recency** orders each board column newest first, by ticket ID; a ticket with no ID comes last. **Rank by group** goes back to the default order: tickets an agent works on, then by category, then in file order.
 - **Show all N items** and **Show fewer** expand and shorten a long list. **Show full text** shows long items whole, and **Shorten long items** cuts them again.
 - The **group buttons** show or hide each group. Haiku makes the groups: it reads your open tickets, names up to five groups, and puts each ticket in one. A ticket keeps its group, and new tickets are sorted as they appear. A ticket that fits no group, when there is no room for a new one, is tagged **Uncategorized**, as is a ticket not sorted yet.
 - **Recategorize** asks Haiku to sort all open tickets into groups again, from scratch. The new groups replace the old ones only when the change is real: the number of groups changes, or at least a quarter of the open tickets would land in a different group. A rename alone does not count. Otherwise the current groups stay, and "The current categories are correct" shows next to the button for 4 seconds.

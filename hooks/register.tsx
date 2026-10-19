@@ -83,7 +83,7 @@ import type { UnreadStreak } from './unread-files'
 import { foldersWithUnread } from './unread-folders'
 import { callDetail, callSummary, describeCall } from './tool-calls'
 import { boardTargets, buildView, columnShare, columnsThatFit, ledger, rowsOf, searchTodo, ticketColumns, todoLedger } from './view-model'
-import type { OrchestratorState } from './view-model'
+import type { OrchestratorState, TicketOrder } from './view-model'
 import { failAfter, inTime, NoAnswer, RUN_LIMIT_MS, STORE_LIMIT_MS, TIMED_OUT } from './time-limit'
 import { tryWriteLock, withWriteLock } from './write-lock'
 import { deferredIds } from './deferred-tickets'
@@ -161,6 +161,8 @@ let isRecategorizing = false
 let recatNote: { text: string; until: number } | undefined
 const NOTE_MS = 4000
 let sortBy: 'file' | 'category' = 'file'
+/** How the board orders each column's tickets (#T004F): by group, or newest ID first. */
+let ticketOrder: TicketOrder = 'group'
 let query = ''
 function redraw($: EngineInterface): void {
   noteLive()
@@ -5399,6 +5401,16 @@ export const register: Register = (on, options) => {
                   redraw($)
                 }}
               />
+              {isTicketView && (
+                <Button
+                  key="todo-order"
+                  label={ticketOrder === 'recency' ? 'Rank by group' : 'Rank by recency'}
+                  onPress={() => {
+                    ticketOrder = ticketOrder === 'recency' ? 'group' : 'recency'
+                    redraw($)
+                  }}
+                />
+              )}
               {openItems().length > 0 && (
                 <Button
                   key="todo-recategorize"
@@ -5470,7 +5482,7 @@ export const register: Register = (on, options) => {
             const isTextOpen = openText.has(id)
             const sections = (file.groups ?? [{ name: '', from: 0, count: file.items.length }]).map(group => ({
               name: group.name,
-              columns: ticketColumns(file.items.slice(group.from, group.from + group.count), book),
+              columns: ticketColumns(file.items.slice(group.from, group.from + group.count), book, ticketOrder),
             }))
             // Side by side while each ticket has room for its text and buttons; the rest wrap to the next row, or all stack.
             // The board view spans the whole pane, so its tickets grow with it (#T0040); each ticket is as

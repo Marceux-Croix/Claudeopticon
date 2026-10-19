@@ -100,6 +100,25 @@ test('ticket columns: In progress (with open and queued tickets a live agent wor
   expect(columns.flatMap(column => column.items).some(item => item.status === 'completed')).toBe(false)
 })
 
+test('#T004F recency order puts the newest ticket ID first in each column, a ticket with no ID last', () => {
+  const list: TodoFile[] = [{ name: 'TODO.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo([
+    '- [ ] #T0049 four characters',
+    '- [ ] No ID yet',
+    '- [ ] #T10000 five characters',
+    '- [ ] #T12 old short',
+    '- [ ] #T004A next four',
+    '- [~] #T0001 working',
+    '- [~] #T0002 working too',
+  ].join('\n')) }, { name: 'TODO.md', folder: '/r/mods/x/.claude_todo', rel: 'mods/x/.claude_todo', isOther: true, mtimeMs: 2, items: parseTodo('- [ ] #T004B other folder') }]
+  const view = buildView(list, [], 0)
+  const book = { categories: ['Legal'], items: { '#t12': 'Legal' } }
+  const items = view.files.flatMap(file => file.items)
+  const recency = ticketColumns(items, book, 'recency')
+  expect(recency[2]?.items.map(item => item.text.split(' ')[0])).toEqual(['#T10000', '#T004B', '#T004A', '#T0049', '#T12', 'No'])
+  expect(recency[0]?.items.map(item => item.key)).toEqual(['#t0002', '#t0001'])
+  expect(ticketColumns(items, book)[2]?.items[0]?.key).toBe('#t12')
+})
+
 
 test('files of one name in different folders stay two files, and each item keeps its source', async () => {
   const items = parseTodo('- [ ] #T1 Same ID\n- [x] Done thing')

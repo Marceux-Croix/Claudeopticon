@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.6
+
+### Features
+
+- **Rank by recency** on the board puts the newest ticket first in each column, by ticket ID: a higher ID is a newer ticket, and a 5-character ID is newer than every 4-character one. A ticket with no ID yet comes last. **Rank by group** goes back to the default order: tickets an agent works on, then by category, then in file order.
+
 ## 0.9.5
 
 ### Fixes

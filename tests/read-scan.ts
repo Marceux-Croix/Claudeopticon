@@ -26,6 +26,7 @@ export const ALLOWED: readonly AllowedRead[] = [
   { file: 'register.tsx', fn: 'bookOnDisk', line: 'const text: unknown = await $.fs.read(path)', reason: 'reads categories.json, no todo file, for the book load and the check before each book write (UCR-149); a failed read is undefined, which clears the book folder (UCR-012) and skips the write, never an empty book' },
   { file: 'repo-folders.ts', fn: 'mainOf', line: "const set = /^\\s*worktree\\s*=\\s*(.+)$/m.exec(await fs.read(`${common}/config`).catch(() => ''))?.[1]?.trim()", reason: 'reads the git config for core.worktree, no todo file; no text means the key is not set' },
   { file: 'repo-folders.ts', fn: 'mainOf', line: "const named = (await fs.read(`${dir}/commondir`).catch(() => '')).split('\\n')[0]?.replace(/\\r$/, '').trim() ?? ''", reason: "reads a git dir's `commondir` file, no todo file (UCR-202); no text means the git dir is no linked worktree's, as git reads it, so there is no other main checkout" },
+  { file: 'register.tsx', fn: 'readPluginVersion', line: 'const text: unknown = await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`).catch(() => undefined)', reason: "reads the mod's own plugin.json for its version (#T0050), no todo file; a failed read shows no version" },
   { file: 'repo-folders.ts', fn: 'repoTodoDir', line: "const gitdir = /^gitdir:\\s*(.+)$/m.exec(await fs.read(git))?.[1]?.replace(/\\r$/, '').trim()", reason: "reads a worktree's `.git` file, no todo file; a failure throws" },
 ]
 

@@ -44,6 +44,13 @@ test('the orchestrator card holds the height of a full page of five entries with
   expect(full.source).toContain(`height="${ORCHESTRATOR_HELD_PX}"`)
 })
 
+test('#T004W the held orchestrator card with no entries is drawn empty at its held height, and says so', () => {
+  const empty = orchestratorSvg([])
+  expect(empty.height).toBe(ORCHESTRATOR_HELD_PX)
+  expect(empty.alt).toBe('Orchestrator: nothing done yet')
+  expect(empty.source).not.toContain('<text')
+})
+
 test('the orchestrator card not held fits its entries (#T004S)', () => {
   const one = orchestratorSvg([{ line: 'A', at: 0, isRunning: false }], false)
   expect(one.height).toBeLessThan(ORCHESTRATOR_HELD_PX)

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { clearSpaces, columnSlots, expireSpaces, MAX_SPACES, newLayout, SPACE_MS } from '../hooks/ticket-spaces'
+import { clearSpaces, columnSlots, expireSpaces, MAX_SPACES, newLayout, pressKeepsSpaces, SPACE_MS } from '../hooks/ticket-spaces'
 
 // ---------------------------------------------------------------- stable layout when a ticket leaves
 
@@ -102,4 +102,64 @@ test('UCR-159 a ticket that comes back within SPACE_MS takes its place again: it
   expect(ids(columnSlots(apart, 'open', 'w', entries, 20))).toEqual(['a', 'b', 'c'])
   expect(apart.spaces.length).toBe(1)
   expect(apart.spaces[0]?.col).toBe('progress')
+})
+
+// ---------------------------------------------------------------- #T004W no press moves the cards under the reader
+
+const GLYPHS: ReadonlySet<string> = new Set(['◐', '✓', '⋙'])
+
+test('#T004W a ticket button and a press that changes nothing on the board keep the spaces; a press that changes the board clears them', () => {
+  // A ticket's own button, by its glyph, whatever its key.
+  expect(pressKeepsSpaces('ticket-start-TODO.md-#T1', '◐', GLYPHS)).toBe(true)
+  expect(pressKeepsSpaces(undefined, '✓', GLYPHS)).toBe(true)
+  // The presses that change nothing on the board.
+  for (const key of ['room-toggle', 'orchestrator-newer', 'orchestrator-older', 'orchestrator-latest', 'agents-toggle', 'todo-show-completed', 'agent-stop-a41802afbc61e3ed6']) {
+    expect(pressKeepsSpaces(key, 'any label', GLYPHS)).toBe(true)
+  }
+  // The presses that change the board: a filter, a view switch, a sort, Show all, a cleared search.
+  for (const key of ['todo-tickets', 'todo-order', 'todo-sort', 'category-toggle-Docs', 'search-clear', 'file-toggle-TODO.md', 'file-text-TODO.md', 'todo-recategorize', 'todo-consolidate']) {
+    expect(pressKeepsSpaces(key, 'Show as tickets', GLYPHS)).toBe(false)
+  }
+  // No key and no glyph: the board may change, so it reflows.
+  expect(pressKeepsSpaces(undefined, 'Show as list', GLYPHS)).toBe(false)
+  // A key that only starts like a kept one is not kept.
+  expect(pressKeepsSpaces('room-toggle-x', 'x', GLYPHS)).toBe(false)
+  expect(pressKeepsSpaces('agent-sto', 'x', GLYPHS)).toBe(false)
+})
+
+test('#T004W a second ticket press keeps the first ticket\'s space, so the cards below it do not move up at the press', () => {
+  const layout = newLayout()
+  const all = [{ id: 'a', h: 100 }, { id: 'b', h: 140 }, { id: 'c', h: 100 }, { id: 'd', h: 90 }]
+  const height = (slots: readonly { h: number }[]) => slots.reduce((sum, slot) => sum + slot.h, 0)
+  columnSlots(layout, 'open', 'w', all, 0)
+  // a is started: its space holds its place.
+  expect(ids(columnSlots(layout, 'open', 'w', all.slice(1), 1000))).toEqual(['space', 'b', 'c', 'd'])
+  // c is started 10 s later: the press keeps a's space (no clearSpaces call), so b, c and d stay where they were.
+  expect(pressKeepsSpaces('ticket-start-TODO.md-c', '◐', GLYPHS)).toBe(true)
+  const after = columnSlots(layout, 'open', 'w', [all[1]!, all[3]!], 11_000)
+  expect(ids(after)).toEqual(['space', 'b', 'space', 'd'])
+  expect(height(after)).toBe(height(all))
+  // Each space still goes SPACE_MS after its own ticket left.
+  expect(expireSpaces(layout, 1000 + SPACE_MS)).toBe(true)
+  expect(ids(columnSlots(layout, 'open', 'w', [all[1]!, all[3]!], 1000 + SPACE_MS))).toEqual(['b', 'space', 'd'])
+})
+
+test('#T004X a ticket that went up to a column drawn above leaves no space, so the cards from its place down stay put', () => {
+  const layout = newLayout()
+  const open = [{ id: 'a', h: 100 }, { id: 'b', h: 140 }, { id: 'c', h: 100 }, { id: 'd', h: 100 }]
+  columnSlots(layout, 'open', 'w', open, 0)
+  // 'a' left for another column, as before: it keeps its space.
+  expect(ids(columnSlots(layout, 'open', 'w', open.slice(1), 10))).toEqual(['space', 'b', 'c', 'd'])
+  // 'c' went up to In progress, drawn above: no space for it, and the held space of 'a' keeps its place.
+  const slots = columnSlots(layout, 'open', 'w', [open[1]!, open[3]!], 20, new Set(['c']))
+  expect(ids(slots)).toEqual(['space', 'b', 'd'])
+  expect(layout.spaces.length).toBe(1)
+})
+
+test('#T004X a held space after the ticket that went up moves up one place with the cards', () => {
+  const layout = newLayout()
+  const open = [{ id: 'a', h: 100 }, { id: 'b', h: 140 }, { id: 'c', h: 100 }]
+  columnSlots(layout, 'open', 'w', open, 0)
+  expect(ids(columnSlots(layout, 'open', 'w', [open[0]!, open[1]!], 10))).toEqual(['a', 'b', 'space'])
+  expect(ids(columnSlots(layout, 'open', 'w', [open[1]!], 20, new Set(['a'])))).toEqual(['b', 'space'])
 })

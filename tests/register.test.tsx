@@ -5,7 +5,7 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
-import { HELD_SLOTS } from '../hooks/agent-room'
+import { ROOM_SLOTS } from '../hooks/agent-room'
 import { appendSections } from '../hooks/consolidate-text'
 import { blockIds, CLAIM_MS } from '../hooks/id-blocks'
 import { itemKey } from '../hooks/item-keys'
@@ -70,9 +70,9 @@ test('one pane shows the todo and the agents, and the link between them', async 
       expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(4)
       // Limit UI shift is off by default (#T004T): no blank slots.
       expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(0)
-      // On, the timeline and A1's card take two of the held slots; blanks fill the other three.
+      // On, the timeline and A1's card take two of the room's slots; blanks fill the other four (#T004W: one always trails).
       await ui.press({ key: 'room-toggle' })
-      expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(HELD_SLOTS - 2)
+      expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(ROOM_SLOTS - 2)
       await ui.press({ key: 'room-toggle' })
       const drawn = JSON.stringify(await ui.drawn())
       expect(drawn.indexOf('"Agents"')).toBeLessThan(drawn.indexOf('"Todo"'))
@@ -94,11 +94,17 @@ test('with neither todo nor agents both sections are empty, and the idle Orchest
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   // Limit UI shift is off by default (#T004T): nothing is drawn.
   expect((await ui.findAll({ type: 'Svg' })).length).toBe(0)
-  // On, the timeline draws empty, and empty slots fill the rest of the held room.
+  // On, the timeline draws empty, the Orchestrator card draws empty at its held height (#T004W), and empty slots fill the rest of the held room.
   await ui.press({ key: 'room-toggle' })
-  expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(1)
+  expect((await ui.findAll({ type: 'Svg' })).filter(one => !isBlank(one)).length).toBe(2)
   expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('No agents ran in this window')
-  expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(HELD_SLOTS - 1)
+  // An Svg is no element a key finds: the card is found by its alt text.
+  expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('Orchestrator: nothing done yet')
+  // Off again, the idle Orchestrator draws no card.
+  await ui.press({ key: 'room-toggle' })
+  expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).not.toContain('Orchestrator: nothing done yet')
+  await ui.press({ key: 'room-toggle' })
+  expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(ROOM_SLOTS - 1)
   expect(await ui.find({ type: 'Text', text: /No checkbox items/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /None in this session yet/ })).toBeDefined()
 })
@@ -117,7 +123,7 @@ test('#T004S #T004T Limit UI shift at the Orchestrator heading is off by default
   await ui.press({ key: 'room-toggle' })
   expect((await ui.find({ key: 'room-toggle' }))?.text).toBe('Limit UI shift')
   expect(JSON.stringify(await ui.find({ key: 'room-toggle' }))).toContain('"primary"')
-  expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(HELD_SLOTS - 1)
+  expect((await ui.findAll({ type: 'Svg' })).filter(isBlank).length).toBe(ROOM_SLOTS - 1)
   await ui.press({ key: 'room-toggle' })
   expect((await ui.findAll({ type: 'Svg' })).length).toBe(0)
 })
@@ -775,6 +781,25 @@ test('a pane drawn under an older title is opened again once, with the current o
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...old })
   await ui.drawn()
   await new Promise(resolve => setTimeout(resolve, 20))
+  expect(opened).toEqual(['Claudeopticon'])
+})
+
+test('a retitle open that fails is not tried again on the next draw (#T004Z)', async ($, on) => {
+  mock.clock(on)
+  on('fs.exists', () => ({ value: false }))
+  on('agent.list', () => ({ value: [] }))
+  const opened: unknown[] = []
+  on('ui.open', (_$, e) => {
+    opened.push((e as { title?: string }).title)
+    throw new Error('no pane')
+  })
+  const old = { ...PANE, props: { ...(PANE.props as object), title: 'Work' } } as never as typeof PANE
+  for (let draw = 0; draw < 3; draw += 1) {
+    const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...old })
+    await ui.drawn()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await ui.unmount()
+  }
   expect(opened).toEqual(['Claudeopticon'])
 })
 
@@ -2051,6 +2076,8 @@ test('Recategorize says so when the model fails, changes nothing, and the note g
   const before = files['/repo/.claude_todo/categories.json']
   await ui.press({ key: 'todo-recategorize' })
   expect(await ui.find({ type: 'Text', text: /Could not recategorize/ })).toBeDefined()
+  // #T004W: the note stays one line, cut to fit, so it never makes the controls row taller and moves the board.
+  expect(JSON.stringify(await ui.find({ type: 'Text', text: /Could not recategorize/ }))).toContain('"truncate-end"')
   expect(files['/repo/.claude_todo/categories.json']).toBe(before)
   expect(writes).toEqual([])
   await clock.advance(4000)

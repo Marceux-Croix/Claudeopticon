@@ -80,6 +80,8 @@ export type View = {
   archived: number
   live: number
   now: number
+  /** The mod's version from its manifest, drawn small in the hero card's lower right corner (#T0050); absent until read. */
+  version?: string
   /** The session's token burn, when the mod has counted any. */
   usage?: Usage
   /** What the top card plots, and the axes it plots on (held by the pane across draws). */

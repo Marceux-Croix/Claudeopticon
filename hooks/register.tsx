@@ -71,7 +71,7 @@ import { heldBy, highestId, lostIds, RESERVE_MS, ticketValue } from './ticket-id
 import type { Reservation } from './ticket-ids'
 import { findTickets, narrowTickets } from './ticket-lookup'
 import { moveQuestion, sendScope, ticketSummary } from './ticket-prompts'
-import { clearSpaces, columnSlots, expireSpaces, newLayout } from './ticket-spaces'
+import { clearSpaces, columnSlots, expireSpaces, newLayout, pressKeepsSpaces } from './ticket-spaces'
 import { boardHead, boardWidth, cardWidth, fileCards, listRowPx, longItems, spaceSvg, ticketSvg } from './todo-cards'
 import { bare, CHECKBOX, exampleMask, ID_SRC, ITEM_ID, leadingId, lineOwnIds, parseTodo, plainText } from './todo-markdown'
 import { readReason, reasonOf, TodoReadError } from './todo-read'
@@ -90,13 +90,16 @@ import { deferredIds } from './deferred-tickets'
 import { stoppedKeys } from './stop-queue'
 import { blankCard, holdRoom, NO_ROOM } from './agent-room'
 import type { AgentRoom } from './agent-room'
+import { manifestVersion } from './plugin-version'
 
 const PANE = 'claudeopticon'
+/** The tallest an Svg may be drawn, in px: the engine refuses the whole pane past it, so a taller card (a timeline of 200 agents) takes its own height. */
+const MAX_SVG_PX = 4096
 const TITLE = 'Claudeopticon'
 /** The hover group of the room switch and its tip (#T004S). */
 const ROOM_SCOPE = 'claudeopticon-room'
 const ROOM_TIP = 'Limit UI shift reserves interface space so new agent activity does not cause scroll jumps.'
-/** Whether this load of the mod has reopened a pane that carried an older title. */
+/** Whether this load of the mod has tried to reopen a pane that carried an older title: once, failed or not (#T004Z). */
 let isRetitled = false
 const TICK_MS = 1000
 const SCAN_EVERY = 3
@@ -173,6 +176,14 @@ let query = ''
 let agentRoom: AgentRoom = NO_ROOM
 /** Whether the pane holds that room at all (#T004S): off by default, the reader turns it on (#T004T). */
 let isRoomHeld = false
+/** The mod's version from its plugin.json, read at each load, for the hero card's corner (#T0050). */
+let pluginVersion: string | undefined
+/** The mod's version from its own plugin.json (#T0050); undefined when the manifest cannot be read. */
+async function readPluginVersion($: EngineInterface): Promise<string | undefined> {
+  const text: unknown = await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`).catch(() => undefined)
+
+  return typeof text === 'string' ? manifestVersion(text) : undefined
+}
 function redraw($: EngineInterface): void {
   noteLive()
   $.ui.invalidate('ui.render')
@@ -4870,6 +4881,11 @@ export const register: Register = (on, options) => {
   })
 
   on('session.start', async ($, e, next) => {
+    // Read at each load, so a reload shows the revision that runs (#T0050); a manifest that cannot be read shows none.
+    void readPluginVersion($).then(version => {
+      pluginVersion = version
+      redraw($)
+    })
     await $.command.register({
       name: 'claudeopticon',
       description: 'Show the project todo and the running agents in one pane',
@@ -5236,9 +5252,8 @@ export const register: Register = (on, options) => {
     // after this draw, gives it the current one.
     if (e.props.title !== undefined && e.props.title !== TITLE && !isRetitled) {
       isRetitled = true
-      void Promise.resolve().then(() => $.ui.open({ id: PANE, title: TITLE })).catch(() => {
-        isRetitled = false
-      })
+      // Tried once per load (#T004Z): a failed open retried on every draw reseated the pane each time, and a reseat resets its scroll.
+      void Promise.resolve().then(() => $.ui.open({ id: PANE, title: TITLE })).catch(() => undefined)
     }
     const table = $.ui.resolve(e)
     const { Box, Button: RawButton, Text: RawText } = table
@@ -5246,15 +5261,15 @@ export const register: Register = (on, options) => {
     // a control character in a ticket, a todo file name or a command would make the engine refuse
     // the whole pane (UCR-038, the terminal surface draws them all as Text).
     const Text = ((props: Parameters<typeof RawText>[0]) => <RawText {...props}>{textChildren(props.children) as never}</RawText>) as typeof RawText
-    // Any press clears the spaces of tickets that left. A ticket's own button keeps what was drawn, so the ticket it moves leaves a space;
-    // every other press forgets it, so the change it makes (a filter, a view switch, a search) reflows.
+    // A ticket's own button, and a press that changes nothing on the board, keep the spaces of tickets that left, so no card moves at the press (#T004W);
+    // every other press clears them and forgets what was drawn, so the change it makes (a filter, a view switch, a search) reflows.
     // Every label is cleaned here, once, as Text is (UCR-154): a category name with a control character made the engine refuse the pane.
     const Button = ((props: Parameters<typeof RawButton>[0]) => (
       <RawButton
         {...props}
         label={controlFree(String(props.label))}
         onPress={() => {
-          if (clearSpaces(layout, TICKET_GLYPHS.has(String(props.label)))) {
+          if (!pressKeepsSpaces(props.key, String(props.label), TICKET_GLYPHS) && clearSpaces(layout, false)) {
             redraw($)
           }
           props.onPress?.()
@@ -5288,8 +5303,9 @@ export const register: Register = (on, options) => {
       agentRoom = held.room
       // Every card reaches the pane here, so its alt is cleaned here, once: one control character
       // in a ticket, a command or a file name would make the engine refuse the whole pane.
-      const card = (key: string, drawn: { source: string; width: number; alt: string }) => (
-        <Svg key={keyText(key)} source={drawn.source} alt={altText(drawn.alt)} width={drawn.width} />
+      // The height is given too (#T004Y): without it a new card drew at no height until its image loaded, and moved the cards below it twice.
+      const card = (key: string, drawn: { source: string; width: number; height: number; alt: string }) => (
+        <Svg key={keyText(key)} source={drawn.source} alt={altText(drawn.alt)} width={drawn.width} {...(drawn.height <= MAX_SVG_PX ? { height: drawn.height } : {})} />
       )
       const section = (key: string, title: string, detail: string, buttonLabel: string | undefined, toggle: () => void, extra: { key: string; label: string; onPress: () => void }[] = [], showDone?: { label: string; onPress: () => void }) => (
         <Box key={keyText(key)} flexDirection="row" justifyContent="space-between" alignItems="center" marginTop={1}>
@@ -5308,9 +5324,9 @@ export const register: Register = (on, options) => {
 
       return (
         <Box flexDirection="column" gap={1}>
-          {(view.total > 0 || view.agents.length > 0 || view.usage !== undefined) && card('hero', heroSvg(view))}
+          {(view.total > 0 || view.agents.length > 0 || view.usage !== undefined) && card('hero', heroSvg(pluginVersion === undefined ? view : { ...view, version: pluginVersion }))}
           {/* The Orchestrator heading carries the room switch (#T004S); pointing at it reveals its tip to its left, on the same line. */}
-          <Box key="orchestrator" flexDirection="row" justifyContent="space-between" alignItems="center" marginTop={1}>
+          <Box key="orchestrator-heading" flexDirection="row" justifyContent="space-between" alignItems="center" marginTop={1}>
             <Box flexDirection="row" gap={2}>
               <Text bold>Orchestrator</Text>
               <Text dimColor>{orchestrator.isActive ? 'Working' : orchestrator.history.length === 0 ? 'Idle, nothing done yet' : 'Idle'}</Text>
@@ -5331,8 +5347,8 @@ export const register: Register = (on, options) => {
               />
             </Box>
           </Box>
-          {/* As the Agents card: with nothing done yet, the heading alone. */}
-          {orchestrator.history.length > 0 && card('orchestrator', orchestratorSvg(orchestratorView(orchestrator.history, orchestratorPage).entries, isRoomHeld))}
+          {/* With nothing done yet, the heading alone; held, the card is drawn empty at its held height, so the first call moves nothing below it (#T004W). */}
+          {(orchestrator.history.length > 0 || isRoomHeld) && card('orchestrator', orchestratorSvg(orchestratorView(orchestrator.history, orchestratorPage).entries, isRoomHeld))}
           {orchestratorView(orchestrator.history, orchestratorPage).pages > 1 && (
             <Box key="orchestrator-pages" flexDirection="row" gap={1} alignItems="center">
               <Text dimColor>{pageLabel(orchestratorView(orchestrator.history, orchestratorPage), callCount)}</Text>
@@ -5452,7 +5468,8 @@ export const register: Register = (on, options) => {
                   }}
                 />
               )}
-              {(isRecategorizing || recatNote !== undefined) && <Text dimColor>{isRecategorizing ? 'Recategorizing...' : recatNote!.text}</Text>}
+              {/* One line, cut to fit (#T004W): a long note that wrapped made the row taller, and moved the board below, for its 4 s. */}
+              {(isRecategorizing || recatNote !== undefined) && <Text dimColor wrap="truncate-end">{isRecategorizing ? 'Recategorizing...' : recatNote!.text}</Text>}
               {query.trim() === '' && !isTicketView && (
                 <Button
                   key="todo-sort"
@@ -5641,7 +5658,11 @@ export const register: Register = (on, options) => {
                               const ids = shown.map(slotId)
                               const byId = new Map(shown.map((item, i) => [ids[i]!, item]))
                               // A ticket that left keeps an empty space of its height, until a press or SPACE_MS.
-                              return columnSlots(layout, `${prefix}-${file.id}-col-${section.name}-${column.name}`, `${isExpanded}:${ticketW}:${isStacked}`, shown.map((item, i) => ({ id: ids[i]!, h: prepare(item, ticketW).drawn.height })), nowSync()).map(slot =>
+                              // The tickets drawn above this column: the rows above, and stacked, the columns before it in its row.
+                              // One that went up from here leaves no space, so the cards below stay put (#T004X).
+                              const columnsAbove = [...rowsOf(section.columns, columnCount).slice(0, r).flat(), ...(isStacked ? row.slice(0, row.indexOf(column)) : [])]
+                              const above = new Set(columnsAbove.flatMap(one => one.items.slice(0, isExpanded ? one.items.length : ITEMS_SHOWN).map(item => `${item.file ?? file.name}:${item.key}`)))
+                              return columnSlots(layout, `${prefix}-${file.id}-col-${section.name}-${column.name}`, `${isExpanded}:${ticketW}:${isStacked}`, shown.map((item, i) => ({ id: ids[i]!, h: prepare(item, ticketW).drawn.height })), nowSync(), above).map(slot =>
                                 slot.isSpace === true ? card(`${prefix}-${file.id}-${slot.id}`, spaceSvg(ticketW, slot.h)) : ticket(byId.get(slot.id)!, slot.id, ticketW),
                               )
                             })()}

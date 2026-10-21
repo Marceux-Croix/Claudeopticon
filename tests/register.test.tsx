@@ -1627,6 +1627,26 @@ test('Send to Claude makes the ticket the orchestrator\'s, held in progress whil
   expect((await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard)).toContain('#T3 Check the invoice')
 })
 
+test('#T008O a status ask on an open ticket claims nothing, and move_ticket to open ends a claim on a ticket already open', async ($, on) => {
+  orchSetup($, on)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  const card = async () => (await ui.findAll({ type: 'Svg' })).map(svg => JSON.stringify(svg)).find(orchCard) ?? ''
+  // A status ask starts no work: the open ticket stays open, unclaimed, so no card shows it.
+  await ui.press({ key: 'ticket-status-OPEN.md-#t2' })
+  await $.prompt.submit({ text: 'go' } as never)
+  expect(await card()).not.toContain('#T2 Review the copy')
+  // Sent, a ticket is claimed and held in progress while its box is still open; moving it to open ends the claim.
+  await ui.press({ key: 'ticket-OPEN.md-#t1' })
+  expect(await card()).toContain('#T1 Ship the parser')
+  const answer = JSON.stringify(await $.tool.call({ tool: 'mcp__claudeopticon__move_ticket', item: '#T1', to: 'open', reason: 'stuck' } as never))
+  expect(answer).toContain('Released')
+  expect(await card()).not.toContain('#T1 Ship the parser')
+  // With no claim left, the same call says the ticket is already open.
+  const again = JSON.stringify(await $.tool.call({ tool: 'mcp__claudeopticon__move_ticket', item: '#T1', to: 'open', reason: 'stuck' } as never))
+  expect(again).toContain('already open')
+})
+
 test('the orchestrator card says Running during a turn and is gone after it, and the ticket blinks only while it runs', async ($, on) => {
   const { edit } = orchSetup($, on)
   await begin($)

@@ -4218,6 +4218,17 @@ async function moveTicket($: EngineInterface, input: Record<string, unknown>): P
   const path = noteName(`${rel}/${file}`)
   const quoted = quoteName(`${rel}/${file}`)
   if (item.status === to) {
+    // A ticket whose box is already open or queued can still show in In progress under the main conversation's claim (#T008O):
+    // moving it there ends that claim, with no write and no question, since the box does not change.
+    const todo = todoFiles.find(one => one.folder === folder && one.name === file)
+    const claimKey = todo === undefined ? undefined : keptKey(todo, item)
+    if ((to === 'pending' || to === 'queued') && claimKey !== undefined && orchTickets.delete(claimKey)) {
+      claimMissedAt.delete(claimKey)
+      redraw($)
+
+      return `Released: ${quoteTicket(item.text, 80)} was already ${STATUS_WORDS[to]} in the file; the main conversation's claim on it is cleared, so the board shows it ${STATUS_WORDS[to]} again.`
+    }
+
     return `Not moved: ${quoteTicket(item.text, 80)} is already ${STATUS_WORDS[to]}.`
   }
   const key = `${folder}/${file}:${itemKey(item)}`
@@ -5578,11 +5589,15 @@ export const register: Register = (on, options) => {
 
                   return
                 }
+                // Sent, the ticket is the orchestrator's to build. A status ask starts no work (#T008O): on an open or queued box it
+                // claims nothing, since a claim on a ticket never seen in progress never ends, and the board held it in In progress
+                // for good. On a box already in progress the claim ends as the box leaves it, so that ask still claims.
                 if (action === SEND_ACTION) {
                   sentTickets.add(sentKey)
                 }
-                // The prompt goes to the main conversation: the ticket is the orchestrator's.
-                claimTickets($, [item.key])
+                if (action === SEND_ACTION || (item.status === 'in_progress' && item.heldFrom === undefined)) {
+                  claimTickets($, [item.key])
+                }
                 void $.prompt.submit({ text: action.prompt(item.path ?? `${DIR}/${item.file ?? file.name}`, item.text), asUser: true }).catch(toastFailure($, `send ${ticketSummary(item.text, 60)}`))
                 showToast($, `${action.toast}: ${ticketSummary(item.text, 60)}`)
                 redraw($)

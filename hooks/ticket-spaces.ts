@@ -31,8 +31,13 @@ function dropSpace(layout: Layout, space: Space): void {
  * The sequence to draw for one column (or list) whose entries are now `items`. An entry that was
  * drawn last time (same `sig`: same width, same limit) and is gone now leaves a space of its height
  * at its place, so what is below does not move. Never more than MAX_SPACES in all.
+ *
+ * An entry that left for a column drawn above this one (`above`, the IDs in the board's rows above
+ * it) leaves no space: the column above grew by its card, and the space it would leave
+ * here would move everything below down by one card. Without it the two cancel, and the cards from
+ * its place down stay put.
  */
-export function columnSlots(layout: Layout, col: string, sig: string, items: readonly { id: string; h: number }[], now: number): Slot[] {
+export function columnSlots(layout: Layout, col: string, sig: string, items: readonly { id: string; h: number }[], now: number, above: ReadonlySet<string> = new Set()): Slot[] {
   const last = layout.drawn.get(col)
   if (last !== undefined && last.sig !== sig) {
     for (const space of layout.spaces.filter(one => one.col === col)) {
@@ -44,10 +49,18 @@ export function columnSlots(layout: Layout, col: string, sig: string, items: rea
     for (const space of layout.spaces.filter(one => one.col === col && present.has(one.id))) {
       dropSpace(layout, space)
     }
+    // Each entry that went up leaves no place, so the places after it, held spaces too, move up one.
+    const upAt = last.slots.flatMap((slot, index) => (slot.isSpace !== true && !present.has(slot.id) && above.has(slot.id) ? [index] : []))
+    for (const space of layout.spaces.filter(one => one.col === col)) {
+      space.index -= upAt.filter(at => at < space.index).length
+    }
+    let wentUp = 0
     last.slots.forEach((slot, index) => {
-      if (slot.isSpace !== true && !present.has(slot.id)) {
+      if (upAt.includes(index)) {
+        wentUp += 1
+      } else if (slot.isSpace !== true && !present.has(slot.id)) {
         layout.seq += 1
-        layout.spaces.push({ col, id: slot.id, index, h: slot.h, at: now, seq: layout.seq })
+        layout.spaces.push({ col, id: slot.id, index: index - wentUp, h: slot.h, at: now, seq: layout.seq })
       }
     })
     while (layout.spaces.length > MAX_SPACES) {
@@ -75,6 +88,22 @@ export function clearSpaces(layout: Layout, isKept: boolean): boolean {
   }
 
   return had
+}
+
+/** The keys of the pane's buttons that change nothing on the board: the room switch, the Orchestrator pages, the finished agents switch and Show completed. */
+const OFF_BOARD_KEYS: ReadonlySet<string> = new Set(['room-toggle', 'orchestrator-newer', 'orchestrator-older', 'orchestrator-latest', 'agents-toggle', 'todo-show-completed'])
+/** An agent's Stop button: its key is this and the agent's ID. */
+const STOP_KEY_PREFIX = 'agent-stop-'
+
+/**
+ * Whether a press leaves the spaces as they are. A ticket's own button (its label one of
+ * `ticketGlyphs`) and a press that changes nothing on the board keep them, so no space goes, and
+ * the cards below it do not move, at a press; each still goes after SPACE_MS. Every other press
+ * (a filter, a view switch, a search, Show all) changes the board itself, so its spaces clear and
+ * that change reflows.
+ */
+export function pressKeepsSpaces(key: string | undefined, label: string, ticketGlyphs: ReadonlySet<string>): boolean {
+  return ticketGlyphs.has(label) || (key !== undefined && (OFF_BOARD_KEYS.has(key) || key.startsWith(STOP_KEY_PREFIX)))
 }
 
 /** Removes the spaces older than SPACE_MS. True when any went. */

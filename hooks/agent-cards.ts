@@ -40,7 +40,9 @@ export function orchestratorSvg(entries: readonly { line: string; at: number; is
     return drawn
   })
 
-  return stage(isHeld ? Math.max(y + 14, ORCHESTRATOR_HELD_PX) : y + 14, parts.join('\n'), `Orchestrator: ${entries.map(entry => `${clock(entry.at)} ${entry.line}`).join('; ')}`)
+  const alt = entries.length === 0 ? 'Orchestrator: nothing done yet' : `Orchestrator: ${entries.map(entry => `${clock(entry.at)} ${entry.line}`).join('; ')}`
+
+  return stage(isHeld ? Math.max(y + 14, ORCHESTRATOR_HELD_PX) : y + 14, parts.join('\n'), alt)
 }
 
 function agentBadge(agent: AgentView): { label: string; kind: 'live' | 'ok' | 'danger' | 'neutral' } {

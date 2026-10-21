@@ -273,6 +273,8 @@ export function heroSvg(view: View): Card {
         ]
       : []),
     `<text x="${x1}" y="270" text-anchor="end" fill="${FAINT}" font-size="11.5">Now</text>`,
+    // The running revision, small in the lower right corner, so a reload shows at once which one loaded.
+    ...(view.version === undefined ? [] : [`<text x="${W - PAD}" y="${HERO_H - 9}" text-anchor="end" fill="${FAINT}" font-size="9.5">v${esc(view.version)}</text>`]),
   )
 
   // One point per QUANT_MS step is drawn: the x axis snaps to it, and the end labels place over the points drawn.

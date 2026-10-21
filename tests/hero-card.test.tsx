@@ -711,3 +711,10 @@ test('labelPx takes M and digits wider than a flat 6.3 px a character, so "600M"
   expect(labelPx('60M')).toBeGreaterThan(labelPx('600'))
   expect(labelPx('1.5k')).toBeLessThan(labelPx('15kk'))
 })
+
+test('the version is drawn small in the lower right corner, and not at all when unknown', () => {
+  const base = buildView([], [], 0)
+  const source = heroSvg({ ...base, version: '0.9.12' }).source
+  expect(source).toMatch(new RegExp(`<text x="\\d+" y="${HERO_H - 9}" text-anchor="end" fill="[^"]+" font-size="9.5">v0\\.9\\.12</text>`))
+  expect(heroSvg(base).source).not.toContain('font-size="9.5"')
+})

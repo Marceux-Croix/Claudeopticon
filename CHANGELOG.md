@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.9.14
+
+### Changes
+
+- The scroll probe is removed: no status line and no `.claude_work/scroll-probe.log` at each scroll. It showed that the desktop pane reports the reader's scrolls to a mod, but gives a mod no way to hold the reader's place.
+- A scroll lock built on `$.ui.scroll` was tried and withdrawn before release: on the desktop app each of its measures scrolled the pane, so the pane jumped to the bottom in a loop.
+- A card taller than 4096 px (a timeline of about 130 agents or more) is drawn without its height again: since 0.9.11 the engine refused the whole pane for it.
+- Two tests from 0.9.10 and 0.9.11 are corrected: an Svg card is found by its alt text, not its key, and the retitle test unmounts the pane between draws.
+- The README states the known limit: content above the part you read (an agent card that starts or finishes) moves what you read; the fix has to come from the desktop app.
+
+## 0.9.13
+
+### Changes
+
+- The scroll probe also writes `.claude_work/scroll-probe.log` in the mod's folder: each scroll event, each button press, and the window each draw of the pane reports, when it changes. It keeps the newest 400 lines.
+
+## 0.9.12
+
+### Features
+
+- The hero card shows the mod's version, small, in its lower right corner. It is read from `plugin.json` at each load, so after a reload you can see at once which revision runs.
+
+## 0.9.11
+
+### Fixes
+
+- On a narrow pane, where Open sits under In progress and Queued, a ticket that Start or Queue moves up leaves no space in Open. The column above grows by its card, so the cards from its place down stay put; before, the board moved down by one card.
+- Every card is drawn with its height, so a new card no longer shows at no height until its image loads.
+- A pane under an older title is reopened with the current one once per load, even if that fails; a failed reopen was tried on every draw.
+
+## 0.9.10
+
+### Fixes
+
+- A press on a ticket button, Stop, the Orchestrator page buttons, Limit UI shift, Show finished agents or Show completed no longer clears the spaces of tickets that left, so the cards below them do not move at the press. Filters, view switches and searches still clear them. Spaces still go after one minute.
+- With Limit UI shift on, the agent area always keeps one trailing empty card, so a row gap no longer comes and goes as card heights change, and the Orchestrator card is drawn empty at its held height before the first call.
+- The recategorize note is one line, cut to fit, so it no longer pushes the board down for its 4 s.
+- The Orchestrator heading has its own key; it shared one with the Orchestrator card.
+- A scroll probe shows each `ui.scroll` move of the pane on the status line and in the debug log.
+
 ## 0.9.9
 
 ### Changes

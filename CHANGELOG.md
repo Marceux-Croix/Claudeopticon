@@ -5,6 +5,7 @@
 ### Fixes
 
 - The status button (`?`) on an open or queued ticket no longer claims it for the main conversation. The claim never ended, because the ticket was never seen in progress, so the board kept the ticket in In progress with the O tag for good. On a ticket whose box is already in progress, the status button still claims it, and that claim ends as before.
+- The README says when a ticket counts as Claude's own, with the `?` button and `move_ticket` cases.
 - `move_ticket` to open or queued on a ticket whose box is already there ends the main conversation's claim on it, so a ticket stuck in In progress goes back to its column. Before, it answered "is already open" and changed nothing.
 
 ## 0.9.14

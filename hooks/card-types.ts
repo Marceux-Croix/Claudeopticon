@@ -18,6 +18,8 @@ export type ItemView = {
   path?: string
   /** Shown in progress only because a live agent works on it: the status its box still holds, open (`- [ ]`) or queued (`- [>]`). */
   heldFrom?: 'pending' | 'queued'
+  /** Held by another live session on this repo (#T008R); `name` is that session's name, absent when it never gave one. Drawn as a tag; no Send. */
+  peer?: { name?: string }
 }
 
 export type FileView = {
@@ -98,4 +100,5 @@ export type View = {
 export type Usage = { tokens: number; atCompact?: number; compactAt?: number; since: number }
 
 /** A drawn card: its SVG and its size in CSS pixels, so the pane sizes its frame to it. */
-export type Card = { source: string; width: number; height: number; alt: string }
+/** `isInteractive` draws the card in the sandboxed frame, where its `<title>` tooltips show. */
+export type Card = { source: string; width: number; height: number; alt: string; isInteractive?: true }

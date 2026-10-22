@@ -217,3 +217,27 @@ test('UCR-210 a ticket whose category is not a string draws with no category chi
   expect(ticketSvg(item, view, 300, { isSent: false, category: 'Work' }).source).toContain('>Work<')
   expect(ticketSvg(item, view, 300, { isSent: false, category: '' }).source).toContain('rx="9.5"')
 })
+
+test('#T008R #T008T a peer tag is a yellow "Peer owned" pill in the bottom row, its hover tip names the owner, the card is interactive, and it is drawn only with a button row and room', () => {
+  const view = buildView([], [], 0)
+  const item: ItemView = { text: '#T1 Ship the parser', status: 'in_progress', owners: [], key: '#t1', peer: { name: 'Fix the board' } }
+  const none = ticketSvg(item, view, 400, { isSent: false, actions: 2 })
+  expect(none.source).not.toContain('Peer owned')
+  expect(none.source).not.toContain('.peer{')
+  expect(none.isInteractive).toBeUndefined()
+  const tagged = ticketSvg(item, view, 400, { isSent: false, actions: 2, peerTag: { name: 'Fix the board <&>', room: 150 } })
+  expect(tagged.source).toContain('>Peer owned</text>')
+  expect(tagged.source).toContain('<title>Fix the board &lt;&amp;&gt; owns this</title>')
+  expect(tagged.source).toContain('class="peer"')
+  expect(tagged.source).toContain('.peer{stroke:#f2c94c}')
+  expect(tagged.isInteractive).toBe(true)
+  // The pill keeps its fixed width, from the card's padding, and the card its height.
+  const widths = [...tagged.source.matchAll(/<rect x="14\.5" y="[\d.]+" width="(\d+)" height="19"/g)].map(match => Number(match[1]))
+  expect(widths).toEqual([80])
+  expect(tagged.height).toBe(none.height)
+  // Too little room, or no button row: no tag, and the card stays an image.
+  const narrow = ticketSvg(item, view, 400, { isSent: false, actions: 2, peerTag: { name: 'x', room: 60 } })
+  expect(narrow.source).not.toContain('Peer owned')
+  expect(narrow.isInteractive).toBeUndefined()
+  expect(ticketSvg(item, view, 400, { isSent: false, peerTag: { name: 'x', room: 300 } }).source).not.toContain('Peer owned')
+})

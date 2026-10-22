@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.16
+
+### Features
+
+- Several sessions on one repo see each other's tickets. A ticket another live session holds (itself or through its agents), that this session does not hold, shows in In progress with a yellow outlined "Peer owned" pill in its bottom row. Pointing at the pill shows a tooltip, "<name of that session> owns this", or "An unnamed peer session owns this" when the session never sent its name; a card with the pill is drawn in an interactive frame for it. The Send button is hidden on it, so a click does not start a second session on the same work; the status and move buttons stay.
+- Each session writes a `presence:<session id>` record to the store (name, repo root, held tickets, time), at most every 5 seconds and at once on a change, and reads its peers' records every 5 seconds. A record older than 2 minutes does not count, which is how an ended session stops marking its tickets.
+- `report_progress` takes an optional `session` field, the session name; the rules ask Claude to send it once, with the name ListAgents shows after "This session is".
+
 ## 0.9.15
 
 ### Fixes

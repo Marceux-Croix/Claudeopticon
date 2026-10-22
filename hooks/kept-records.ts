@@ -175,7 +175,7 @@ export function readKeptWrote(stored: unknown): Map<string, string[][]> {
 /** How many sessions keep their data in the store; the per-session keys of older ones are cleared. */
 export const KEPT_SESSIONS = 20
 /** The per-session store keys pruning removes. `archived` is no longer written (the board has no Done column); old keys of it are still pruned. `reserved`: the reservation key of a session with neither a repo nor a todo folder. */
-export const SESSION_PREFIXES = ['agents', 'agents-base', 'archived', 'series', 'orchestrator', 'orchestrator-title', 'tokens', 'archive-wrote', 'reserved', 'agents-cut'] as const
+export const SESSION_PREFIXES = ['agents', 'agents-base', 'archived', 'series', 'orchestrator', 'orchestrator-title', 'planned', 'tokens', 'archive-wrote', 'reserved', 'agents-cut'] as const
 
 /** How often a running session notes itself in the session list again, and how long a note keeps a session from pruning. */
 export const SESSION_TOUCH_MS = 10 * 60_000

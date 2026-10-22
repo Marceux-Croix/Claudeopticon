@@ -24,7 +24,6 @@ const ITEMS_PER_CARD = 40
 const LINE_H = 18
 
 /** The peer tag's yellow outline, darker on the light card so it stays clear. */
-const OWNS_SUFFIX = ' owns this'
 const PEER_TAG = 'Peer owned'
 const PEER_TAG_PX = 80
 const PEER_TAG_CSS = `\n.peer{stroke:#f2c94c}@media (prefers-color-scheme:light){.peer{stroke:#b8860b}}`
@@ -36,11 +35,11 @@ const PEER_TAG_CSS = `\n.peer{stroke:#f2c94c}@media (prefers-color-scheme:light)
  * COL-1); a ticket an agent works on draws its border and bar in the agent's color instead. When
  * `actions` (a count), a bottom row of its own is kept free for the pane's buttons and their tips.
  * `peerTag` draws a "Peer owned" pill at the left of that row, for a ticket another session
- * holds, when `room` px (the space left of the buttons) fits it; its hover tip is "<name> owns this",
- * and the card is then interactive, so the tip shows.
+ * holds, when `room` px (the space left of the buttons) fits it; its hover tip is `tip` (peerTip), and the card
+ * is then interactive, so the tip shows. `isDim` draws the pill and its text at half opacity: the peer is silent ().
  */
 
-export function ticketSvg(item: ItemView, view: View, width: number, info: { id?: string; category?: string; isSent: boolean; actions?: number; peerTag?: { name: string; room: number } }): Card {
+export function ticketSvg(item: ItemView, view: View, width: number, info: { id?: string; category?: string; isSent: boolean; actions?: number; peerTag?: { tip: string; isDim?: boolean; room: number } }): Card {
   const w = Math.max(200, Math.round(width))
   const pad = 14
   const blinks = new Blinks()
@@ -121,7 +120,7 @@ export function ticketSvg(item: ItemView, view: View, width: number, info: { id?
   // It says only "Peer owned"; its `<title>` names the owner in the browser's own tooltip, shown in the interactive frame.
   const isPeerTagged = info.peerTag !== undefined && (info.actions ?? 0) > 0 && info.peerTag.room >= PEER_TAG_PX
   if (isPeerTagged && info.peerTag !== undefined) {
-    parts.push(`<g><title>${esc(`${info.peerTag.name}${OWNS_SUFFIX}`)}</title><rect x="${pad + 0.5}" y="${h - 36.5}" width="${PEER_TAG_PX}" height="19" rx="9.5" fill="none" pointer-events="all" class="peer" stroke-width="1.5"/>
+    parts.push(`<g${info.peerTag.isDim === true ? ' opacity=".5"' : ''}><title>${esc(info.peerTag.tip)}</title><rect x="${pad + 0.5}" y="${h - 36.5}" width="${PEER_TAG_PX}" height="19" rx="9.5" fill="none" pointer-events="all" class="peer" stroke-width="1.5"/>
 <text x="${pad + PEER_TAG_PX / 2}" y="${h - 23}" text-anchor="middle" fill="${SUB}" font-size="11" font-weight="500">${PEER_TAG}</text></g>`)
   }
   const frame = `<rect x="0.75" y="0.75" width="${w - 1.5}" height="${h - 1.5}" rx="12" fill="${CARD}" stroke="${owner !== undefined ? agentColor(owner) : RULE}" stroke-width="${owner !== undefined ? 1.5 : 1}"/>`

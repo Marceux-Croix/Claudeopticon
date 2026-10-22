@@ -21,6 +21,36 @@ export function ticketPrompt(path: string, text: string): string {
   ].join('\n')
 }
 
+/**
+ * What Claude does when the owner has no name: ask every other session (ListAgents does not show a session's folder, so the
+ * message names this repo's root, and a session in another repo ignores it). `quoteName` keeps the path from being an instruction.
+ */
+export const ASK_ALL = (root: string): string =>
+  `That session sent no name, so it cannot be addressed. Call ListAgents and send one SendMessage to each other session there, naming this ticket's ID and text and this repo's root path ${quoteName(root)}, asking: "Do you claim this ticket? If you do and can give it up, release it with report_progress release; if it is not in your repo, ignore this."`
+
+/**
+ * The prompt Send gives for a ticket another session claims: a peer tag means check in with the owner first, not hands off.
+ * Claude asks the owner with SendMessage (to: its name, as ListAgents shows it), and starts only when the owner agrees and
+ * releases the ticket, or the user says to take it anyway. With no name it asks the user.
+ */
+export function peerSendPrompt(path: string, text: string, name: string | undefined, root: string): string {
+  const owner = name === undefined ? 'an unnamed peer session' : `session ${quoteName(name)}`
+  const ask = name === undefined ? ASK_ALL(root) : `First ask that session with SendMessage (to: ${quoteName(name)}, the name ListAgents shows) whether it can take the ticket.`
+  const start =
+    name === undefined
+      ? 'Start once the "Peer owned" tag on the ticket clears (the owner released it). If every session answered no and the tag is still there, start only when the user tells you to take it anyway. Then mark it [~] while you work on it and [x] when it is done.'
+      : 'Start only when that session agrees and releases the ticket (it calls report_progress with release), or when the user tells you to take it anyway. Then mark it [~] while you work on it and [x] when it is done.'
+
+  return [
+    `This todo item from ${quoteName(path)} is claimed by ${owner}, another Claude Code session on this repo:`,
+    '',
+    lineSafe(text),
+    '',
+    ask,
+    start,
+  ].join('\n')
+}
+
 /** The question the move tool asks the user, in the engine's own dialog. */
 export function moveQuestion(path: string, item: TodoItem, to: ItemStatus, reason: string, isUserMove: boolean): string {
   const from = STATUS_WORDS[item.status]

@@ -9,7 +9,8 @@ import { categoryOf } from './categories'
 import type { CategoryBook } from './categories'
 import { fileId, filePath, itemKey, keptKey, qualifiedKey, storedKey } from './item-keys'
 import { linkAgents } from './links'
-import { ticketId } from './peer-sessions'
+import { PEER_DIM_MS, ticketId } from './peer-sessions'
+import type { PeerClaim } from './peer-sessions'
 import { folderPlace } from './repo-folders'
 import { ticketValue } from './ticket-ids'
 import { count } from './todo-markdown'
@@ -44,7 +45,7 @@ export function orchestratorTitle(title: string | undefined, tickets: readonly s
 }
 
 /** What the pane draws, worked out once for the cards and the terminal alike. */
-export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], now: number, orch?: OrchestratorState, peers: ReadonlyMap<string, string | undefined> = new Map()): View {
+export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], now: number, orch?: OrchestratorState, peers: ReadonlyMap<string, PeerClaim> = new Map()): View {
   const links = linkAgents(list, rows)
   // Every card drawn from this view takes its agent colors from these slots.
   setColorSlots(colorSlots(rows.map(row => ({ startedAt: row.startedAt, endedAt: row.endedAt, idleSince: row.idleSince, isEnded: isEnded(row.status) })), AGENT_COLORS.length))
@@ -77,15 +78,21 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     }
   }
 
-  // A ticket a live peer session holds, that no agent or orchestrator here holds: by file ID and place, to the holder's name.
-  const peerOf = new Map<string, { name?: string }>()
+  // A ticket a peer session claims, that no agent or orchestrator here holds: by file ID and place, to the claim.
+  // A claim stands only while the box is in progress or queued; a queued one is planned work, and stays in Queued.
+  // A record silent past PEER_DIM_MS is dimmed and carries its last time.
+  const peerOf = new Map<string, NonNullable<ItemView['peer']>>()
   if (peers.size > 0) {
     for (const file of list.filter(one => one.isArchived !== true)) {
       file.items.forEach((item, index) => {
         const key = `${fileId(file)}:${index}`
-        const holder = item.status === 'completed' || (itemOwners.get(key) ?? []).length > 0 || !peers.has(ticketId(file, item)) ? undefined : { name: peers.get(ticketId(file, item)) }
-        if (holder !== undefined) {
-          peerOf.set(key, holder.name === undefined ? {} : { name: holder.name })
+        const claim = item.status !== 'in_progress' && item.status !== 'queued' ? undefined : (itemOwners.get(key) ?? []).length > 0 ? undefined : peers.get(ticketId(file, item))
+        if (claim !== undefined) {
+          peerOf.set(key, {
+            ...(claim.name === undefined ? {} : { name: claim.name }),
+            ...(item.status === 'queued' ? { isPlanned: true as const } : {}),
+            ...(now - claim.seenAt > PEER_DIM_MS ? { silentSince: claim.seenAt } : {}),
+          })
         }
       })
     }
@@ -107,7 +114,7 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     const inArchive = file.isArchived === true ? 0 : archiveDone(file)
     const indexed = file.items.map((item, index) => ({ file, item, owners: itemOwners.get(`${fileId(file)}:${index}`) ?? [], peer: peerOf.get(`${fileId(file)}:${index}`) }))
     // An open or queued ticket that an agent holds shows in In progress (ticketColumns), so it counts there.
-    const held = indexed.filter(one => (one.item.status === 'pending' || one.item.status === 'queued') && (one.owners.length > 0 || one.peer !== undefined)).length
+    const held = indexed.filter(one => (one.item.status === 'pending' || one.item.status === 'queued') && one.owners.length > 0).length
     const [done, active, total] = [own.done + inArchive, own.active + held, own.total + inArchive]
     const linked = indexed.filter(one => one.owners.length > 0 || one.peer !== undefined)
     const rest = [
@@ -285,7 +292,7 @@ export function itemIdValue(item: ItemView): number | undefined {
  * column is newest first by ticket ID value instead; a ticket with no ID comes last, in file order.
  */
 export function ticketColumns(given: readonly ItemView[], current: CategoryBook, order: TicketOrder = 'group'): TicketColumn[] {
-  const items = given.map(item => ((item.status === 'pending' || item.status === 'queued') && (item.owners.length > 0 || item.peer !== undefined) ? { ...item, status: 'in_progress' as const, heldFrom: item.status } : item))
+  const items = given.map(item => ((item.status === 'pending' || item.status === 'queued') && item.owners.length > 0 ? { ...item, status: 'in_progress' as const, heldFrom: item.status } : item))
   const rank = (item: ItemView) => {
     const category = categoryOf(current, storedKey(item.key))
     const at = category === undefined ? current.categories.length : current.categories.indexOf(category)

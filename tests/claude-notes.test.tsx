@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { AgentRow, TodoItem } from '../types'
-import { DATA_MARK, deferredNote, endedNote, labelNote, moveLine, movesNote, NEXT_IDS_SHOWN, nextIdsLine, noteName, NUDGE_REPEAT_MS, NUDGE_TICKETS, nudgeList, numberedLine, numberedNote, quoteTicket, removedNote, renameNote, stillOpenNote, stoppedNote, withoutTold } from '../hooks/claude-notes'
+import { claimNotes, DATA_MARK, SESSION_NAME_NOTE, peerClaimedLine, plannedLine, ticketRef, deferredNote, endedNote, labelNote, moveLine, movesNote, NEXT_IDS_SHOWN, nextIdsLine, noteName, NUDGE_REPEAT_MS, NUDGE_TICKETS, nudgeList, numberedLine, numberedNote, quoteTicket, removedNote, renameNote, stillOpenNote, stoppedNote, withoutTold } from '../hooks/claude-notes'
 import { statusPrompt, ticketPrompt } from '../hooks/ticket-prompts'
 import { FUZZ_CODE_POINTS, rawBreaks } from './fixtures/line-terminators'
 
@@ -235,4 +235,20 @@ test('V181 every note builder, fuzzed with each Zl, Zp, Cc and Cf code point, ad
   // The excluded population: LF and CR in a quoted field are escapes (\n, \r), never raw; a tab stays a tab or a space.
   expect(stillOpenNote([item('a\nb\rc')])).toContain('"a\\nb\\rc"')
   expect(rawBreaks(stillOpenNote([item('a\tb')]))).toBe(0)
+})
+
+test('plannedLine and peerClaimedLine name the ticket by ID, or by quoted text; the peer name is quoted', () => {
+  expect(plannedLine('#T9 Ship', 'T9')).toBe('#T9 is now claimed by this session as planned work. If you queued it for another session or only to order the work, release it: report_progress with release: ["#T9"].')
+  expect(plannedLine('Ship "it"', undefined)).toContain('"Ship \\"it\\"" is now claimed')
+  expect(ticketRef('x', 't0009').label).toBe('#T0009')
+  expect(peerClaimedLine('#T9 Ship', 'T9', 'Alpha "x"', '/repo')).toBe('#T9 is claimed by session "Alpha \\"x\\"". Check in with that session (SendMessage) before you work on it; it releases the ticket with report_progress release.')
+  const unnamed = peerClaimedLine('#T9 Ship', 'T9', undefined, '/repo')
+  expect(unnamed).toContain('#T9 is claimed by an unnamed peer session. Before you work on it, call ListAgents and send one SendMessage to each other session')
+  expect(unnamed).toContain('root path "/repo"')
+  expect(unnamed).toContain('if every session said no and the tag stays, start only when the user says to take it anyway')
+  expect(claimNotes(['a\nb'])).toEqual(['a b'])
+})
+
+test('the session name note says how to send the name', () => {
+  expect(SESSION_NAME_NOTE).toContain('report_progress with session set to the name ListAgents shows after "This session is"')
 })

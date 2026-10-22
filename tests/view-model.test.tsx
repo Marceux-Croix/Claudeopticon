@@ -306,3 +306,30 @@ test('columnShare: three to a row at 32%, two at 49%, a column alone in its row 
   expect(columnShare(2)).toBe(0.49)
   expect(columnShare(1)).toBe(1)
 })
+
+// ---------------------------------------------------------------- tickets another session holds
+
+test('a ticket a peer holds is drawn in In progress with the peer tag; this session holdings win; done tickets and unknown tickets are left', () => {
+  const file: TodoFile = { name: 'OPEN.md', folder: '/repo/.claude_todo', mtimeMs: 1, items: parseTodo('- [ ] #T1 Ship the parser\n- [>] #T2 Review the copy\n- [ ] #T3 Third\n- [x] #T4 Done one') }
+  const peers = new Map<string, string | undefined>([
+    ['/repo/.claude_todo/OPEN.md\t#t1', 'Alpha'],
+    ['/repo/.claude_todo/OPEN.md\t#t2', undefined],
+    ['/repo/.claude_todo/OPEN.md\t#t4', 'Alpha'],
+  ])
+  const view = buildView([file], [], 1000, undefined, peers)
+  const items = view.files[0]!.items
+  expect(items.find(one => one.key === '#t1')?.peer).toEqual({ name: 'Alpha' })
+  expect(items.find(one => one.key === '#t2')?.peer).toEqual({})
+  expect(items.find(one => one.key === '#t3')?.peer).toBeUndefined()
+  expect(items.find(one => one.key === '#t4')?.peer).toBeUndefined()
+  const columns = ticketColumns(items, { categories: [], items: {} })
+  expect(columns[0]!.items.map(one => one.key)).toEqual(['#t1', '#t2'])
+  expect(columns[0]!.items.map(one => one.heldFrom)).toEqual(['pending', 'queued'])
+  expect(columns[2]!.items.map(one => one.key)).toEqual(['#t3'])
+  // The count in progress includes them.
+  expect(view.active).toBe(2)
+  // The orchestrator holds #T1: its claim wins, and the ticket carries no peer tag.
+  const mine = buildView([file], [], 1000, { keys: new Set(['#t1']), isRunning: true, toolCalls: 0 }, peers)
+  expect(mine.files[0]!.items.find(one => one.key === '#t1')?.peer).toBeUndefined()
+  expect(mine.files[0]!.items.find(one => one.key === '#t1')?.owners).toEqual([ORCH])
+})

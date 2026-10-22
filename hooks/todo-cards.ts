@@ -23,14 +23,24 @@ function itemMark(x: number, y: number, status: ItemStatus, owners: readonly num
 const ITEMS_PER_CARD = 40
 const LINE_H = 18
 
+/** The peer tag's yellow outline, darker on the light card so it stays clear. */
+const OWNS_SUFFIX = ' owns this'
+const PEER_TAG = 'Peer owned'
+const PEER_TAG_PX = 80
+const PEER_TAG_CSS = `\n.peer{stroke:#f2c94c}@media (prefers-color-scheme:light){.peer{stroke:#b8860b}}`
+
 /**
  * One ticket as a Stage UI card, `width` px wide: a 12 px container on the tonal card fill; a top
  * row with the status mark, an ID chip, a category chip and a status badge; the item's text, up to
  * 4 lines; and the agents on it as colored chips. In progress draws a violet accent bar (progress,
  * COL-1); a ticket an agent works on draws its border and bar in the agent's color instead. When
  * `actions` (a count), a bottom row of its own is kept free for the pane's buttons and their tips.
+ * `peerTag` draws a "Peer owned" pill at the left of that row, for a ticket another session
+ * holds, when `room` px (the space left of the buttons) fits it; its hover tip is "<name> owns this",
+ * and the card is then interactive, so the tip shows.
  */
-export function ticketSvg(item: ItemView, view: View, width: number, info: { id?: string; category?: string; isSent: boolean; actions?: number }): Card {
+
+export function ticketSvg(item: ItemView, view: View, width: number, info: { id?: string; category?: string; isSent: boolean; actions?: number; peerTag?: { name: string; room: number } }): Card {
   const w = Math.max(200, Math.round(width))
   const pad = 14
   const blinks = new Blinks()
@@ -107,6 +117,13 @@ export function ticketSvg(item: ItemView, view: View, width: number, info: { id?
     y += SEND_ROW_PX
   }
   const h = y + 8
+  // The peer tag: a yellow outlined pill in the bottom row, at the left, level with the buttons (raised one row off the edge).
+  // It says only "Peer owned"; its `<title>` names the owner in the browser's own tooltip, shown in the interactive frame.
+  const isPeerTagged = info.peerTag !== undefined && (info.actions ?? 0) > 0 && info.peerTag.room >= PEER_TAG_PX
+  if (isPeerTagged && info.peerTag !== undefined) {
+    parts.push(`<g><title>${esc(`${info.peerTag.name}${OWNS_SUFFIX}`)}</title><rect x="${pad + 0.5}" y="${h - 36.5}" width="${PEER_TAG_PX}" height="19" rx="9.5" fill="none" pointer-events="all" class="peer" stroke-width="1.5"/>
+<text x="${pad + PEER_TAG_PX / 2}" y="${h - 23}" text-anchor="middle" fill="${SUB}" font-size="11" font-weight="500">${PEER_TAG}</text></g>`)
+  }
   const frame = `<rect x="0.75" y="0.75" width="${w - 1.5}" height="${h - 1.5}" rx="12" fill="${CARD}" stroke="${owner !== undefined ? agentColor(owner) : RULE}" stroke-width="${owner !== undefined ? 1.5 : 1}"/>`
   const bar = accent === undefined ? '' : `<rect x="0" y="12" width="3" height="${h - 24}" rx="1.5" fill="${accent}"/>`
   const body = item.status === 'completed' ? `<g opacity=".6">${parts.join('\n')}</g>` : parts.join('\n')
@@ -114,13 +131,13 @@ export function ticketSvg(item: ItemView, view: View, width: number, info: { id?
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
-${LIGHT_CSS}
+${LIGHT_CSS}${isPeerTagged ? PEER_TAG_CSS : ''}
 ${blinks.css()}
 </style>
 ${frame}${bar}
 ${body}</svg>`
 
-  return { source, width: w, height: h, alt: `${status.label}: ${cutText(item.text, 200)}` }
+  return { source, width: w, height: h, alt: `${status.label}: ${cutText(item.text, 200)}`, ...(isPeerTagged ? { isInteractive: true as const } : {}) }
 }
 
 /** The button row's height: a native button, raised one row off the card's bottom edge. */

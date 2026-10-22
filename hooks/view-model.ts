@@ -9,6 +9,7 @@ import { categoryOf } from './categories'
 import type { CategoryBook } from './categories'
 import { fileId, filePath, itemKey, keptKey, qualifiedKey, storedKey } from './item-keys'
 import { linkAgents } from './links'
+import { ticketId } from './peer-sessions'
 import { folderPlace } from './repo-folders'
 import { ticketValue } from './ticket-ids'
 import { count } from './todo-markdown'
@@ -43,7 +44,7 @@ export function orchestratorTitle(title: string | undefined, tickets: readonly s
 }
 
 /** What the pane draws, worked out once for the cards and the terminal alike. */
-export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], now: number, orch?: OrchestratorState): View {
+export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], now: number, orch?: OrchestratorState, peers: ReadonlyMap<string, string | undefined> = new Map()): View {
   const links = linkAgents(list, rows)
   // Every card drawn from this view takes its agent colors from these slots.
   setColorSlots(colorSlots(rows.map(row => ({ startedAt: row.startedAt, endedAt: row.endedAt, idleSince: row.idleSince, isEnded: isEnded(row.status) })), AGENT_COLORS.length))
@@ -76,6 +77,20 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     }
   }
 
+  // A ticket a live peer session holds, that no agent or orchestrator here holds: by file ID and place, to the holder's name.
+  const peerOf = new Map<string, { name?: string }>()
+  if (peers.size > 0) {
+    for (const file of list.filter(one => one.isArchived !== true)) {
+      file.items.forEach((item, index) => {
+        const key = `${fileId(file)}:${index}`
+        const holder = item.status === 'completed' || (itemOwners.get(key) ?? []).length > 0 || !peers.has(ticketId(file, item)) ? undefined : { name: peers.get(ticketId(file, item)) }
+        if (holder !== undefined) {
+          peerOf.set(key, holder.name === undefined ? {} : { name: holder.name })
+        }
+      })
+    }
+  }
+
   // One FileView per file: the ticket board shares its columns across files, and the header card
   // has one row per file. Each item keeps its source (folder, file, path) for the writes and the
   // prompts. Sources run primary folder first, then by folder path, so the order is stable.
@@ -90,17 +105,17 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
   const files: FileView[] = sources.map(file => {
     const own = count(file.items)
     const inArchive = file.isArchived === true ? 0 : archiveDone(file)
-    const indexed = file.items.map((item, index) => ({ file, item, owners: itemOwners.get(`${fileId(file)}:${index}`) ?? [] }))
+    const indexed = file.items.map((item, index) => ({ file, item, owners: itemOwners.get(`${fileId(file)}:${index}`) ?? [], peer: peerOf.get(`${fileId(file)}:${index}`) }))
     // An open or queued ticket that an agent holds shows in In progress (ticketColumns), so it counts there.
-    const held = indexed.filter(one => (one.item.status === 'pending' || one.item.status === 'queued') && one.owners.length > 0).length
+    const held = indexed.filter(one => (one.item.status === 'pending' || one.item.status === 'queued') && (one.owners.length > 0 || one.peer !== undefined)).length
     const [done, active, total] = [own.done + inArchive, own.active + held, own.total + inArchive]
-    const linked = indexed.filter(one => one.owners.length > 0)
+    const linked = indexed.filter(one => one.owners.length > 0 || one.peer !== undefined)
     const rest = [
       ...indexed.filter(one => one.item.status === 'in_progress'),
       ...indexed.filter(one => one.item.status === 'queued'),
       ...indexed.filter(one => one.item.status === 'pending'),
       ...indexed.filter(one => one.item.status === 'completed'),
-    ].filter(one => one.owners.length === 0)
+    ].filter(one => one.owners.length === 0 && one.peer === undefined)
     const shown = [...linked, ...rest]
 
     return {
@@ -120,6 +135,7 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
         folder: one.file.folder,
         file: one.file.name,
         path: filePath(one.file),
+        ...(one.peer === undefined ? {} : { peer: one.peer }),
       })),
       mtimeMs: file.mtimeMs,
       ...(file.isArchived === true ? { isArchived: true } : {}),
@@ -269,12 +285,12 @@ export function itemIdValue(item: ItemView): number | undefined {
  * column is newest first by ticket ID value instead; a ticket with no ID comes last, in file order.
  */
 export function ticketColumns(given: readonly ItemView[], current: CategoryBook, order: TicketOrder = 'group'): TicketColumn[] {
-  const items = given.map(item => ((item.status === 'pending' || item.status === 'queued') && item.owners.length > 0 ? { ...item, status: 'in_progress' as const, heldFrom: item.status } : item))
+  const items = given.map(item => ((item.status === 'pending' || item.status === 'queued') && (item.owners.length > 0 || item.peer !== undefined) ? { ...item, status: 'in_progress' as const, heldFrom: item.status } : item))
   const rank = (item: ItemView) => {
     const category = categoryOf(current, storedKey(item.key))
     const at = category === undefined ? current.categories.length : current.categories.indexOf(category)
 
-    return (item.owners.length > 0 ? 0 : 1) * 100 + (at < 0 ? current.categories.length : at)
+    return (item.owners.length > 0 || item.peer !== undefined ? 0 : 1) * 100 + (at < 0 ? current.categories.length : at)
   }
   const newer = (a: ItemView, b: ItemView) => (itemIdValue(b) ?? -1) - (itemIdValue(a) ?? -1)
   const column = (name: string, status: ItemStatus) => ({

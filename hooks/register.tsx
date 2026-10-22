@@ -56,6 +56,8 @@ import { CLAIM_CHECK_MS, progressReply, readClaims, readProgress, readTitle } fr
 import { DIR, diskSpelling, findTodoDirWith, folderPlace, gitCommonDir, globalDirs, globalParents, isGlobalTodo, isMisspelledTodo, isSameTodo, isTodoOf, MAX_FOLDERS, pickFolders, placeOf, REV_PARSE, repoRoots, sessionFolder, todoFoldersIn } from './repo-folders'
 import type { TodoFolder } from './repo-folders'
 import { sameRows } from './row-equality'
+import { buildPresence, holdings, holderName, peerHolds, peerIds, PEERS_EVERY_MS, PRESENCE_EVERY_MS, presenceKey, readPresence, samePresence, sanitizeSessionName } from './peer-sessions'
+import type { Presence } from './peer-sessions'
 import { withRules } from './rules'
 import { HIDDEN, hideSecretLines, hideSecrets, hideTitle } from './secrets'
 import { addAgents, addCompact, addTokens, emptySeries, readKeptSeries, seedSeries, stepAxes } from './series'
@@ -4655,6 +4657,88 @@ function orchestratorState(): OrchestratorState {
   return { keys: new Set(orchTickets.keys()), isRunning: orchestrator.isActive, toolCalls: callCount, ...(last === undefined ? {} : { doing: last.line }), ...(orchTitle === undefined ? {} : { title: orchTitle }) }
 }
 
+// ---------------------------------------------------------------- peer sessions
+
+/** This session's name as Claude last reported it (report_progress `session`), kept in its presence record. */
+let sessionName: string | undefined
+/** The tickets live peer sessions on this repo hold, by ticketId, to the holder's name (undefined: never named). */
+let peerHeld: ReadonlyMap<string, string | undefined> = new Map()
+/** The last presence record stored, and when it was stored (clock ms). */
+let lastPresence: Presence | undefined
+let presenceAt: number | undefined
+let peersAt: number | undefined
+let isPeerBusy = false
+/** Whether this load has looked in the store for the name an earlier load of this session stored. */
+let isNameRead = false
+
+/**
+ * The repo root that tells which sessions share the board: the main checkout's, so the worktrees of one
+ * repo match; outside git, the primary todo folder's real path, as the reservations do. Undefined when no folder is known.
+ */
+function presenceRoot(): string | undefined {
+  const primary = todoFolders?.find(one => !one.isOther)
+  const root = centralRoot ?? repoRoot ?? primary?.real ?? primary?.path
+
+  // A relative root would match sessions of other folders: no presence without an absolute one.
+  return root !== undefined && /^(\/|[A-Za-z]:[\\/]|\\\\)/.test(root) ? root : undefined
+}
+
+/**
+ * One step of the presence work, run by every tick and guarded against overlap: stores this session's
+ * record when its holdings or name changed, or PRESENCE_EVERY_MS after the last store; reads the
+ * peers' records every PEERS_EVERY_MS and redraws when the tickets they hold changed. The store has
+ * no key listing, so the peers are those in the session list (`sessions-recent`); a session leaves
+ * no end event the mod can see, so a dead session's record just goes stale (PEER_STALE_MS).
+ */
+async function peerStep($: EngineInterface, now: number): Promise<void> {
+  const root = presenceRoot()
+  if (isPeerBusy || root === undefined || !loadedGroups.has('tickets')) {
+    return
+  }
+  isPeerBusy = true
+  try {
+    const me = await sessionOf($)
+    if (!isNameRead) {
+      // A reload of the mod keeps the name an earlier load of this session stored.
+      const got = await tryGet($, presenceKey(me))
+      if (got.ok) {
+        isNameRead = true
+        sessionName ??= readPresence(got.value)?.name
+      }
+    }
+    const held = holdings(todoFiles, agentRows, new Set(orchTickets.keys()))
+    const next = buildPresence(me, sessionName, root, held, now)
+    const sinceWrite = presenceAt === undefined ? Infinity : elapsedSince(presenceAt, now).ms
+    if (!samePresence(lastPresence, next) || sinceWrite >= PRESENCE_EVERY_MS) {
+      presenceAt = now
+      await storeSet($, presenceKey(me), next).then(
+        () => {
+          lastPresence = next
+        },
+        () => undefined,
+      )
+    }
+    const sinceRead = peersAt === undefined ? Infinity : elapsedSince(peersAt, now).ms
+    if (sinceRead < PEERS_EVERY_MS) {
+      return
+    }
+    peersAt = now
+    const list = await tryGet($, 'sessions-recent')
+    if (!list.ok) {
+      return
+    }
+    const records = (await Promise.all(peerIds(list.value, me).map(async id => ({ id, got: await tryGet($, presenceKey(id)) })))).flatMap(one => (one.got.ok ? [{ id: one.id, value: one.got.value }] : []))
+    const own = new Set([...held.tickets, ...held.agentTickets])
+    const found = peerHolds(records, me, root, now, own)
+    if (JSON.stringify([...found]) !== JSON.stringify([...peerHeld])) {
+      peerHeld = found
+      redraw($)
+    }
+  } finally {
+    isPeerBusy = false
+  }
+}
+
 /** A history entry for a main-conversation call: its summary, time and native detail. */
 async function orchestratorEntry($: EngineInterface, input: Record<string, unknown> & { tool: string }): Promise<OrchestratorEntry> {
   const line = callSummary(input.tool, input)
@@ -4839,6 +4923,7 @@ function start($: EngineInterface): void {
         clockMs = Math.max(clockMs, now)
         redraw($)
       }
+      void peerStep($, now).catch(() => undefined)
       if (ticks % RESYNC_EVERY === 0) {
         await resync($)
 
@@ -4919,6 +5004,7 @@ export const register: Register = (on, options) => {
               description: "The .claude_todo items your task covers: each quoted from its line, or its #T ID",
             },
             title: { type: 'string', description: 'A short headline for the whole assignment you work on yourself (main conversation only), a few words' },
+            session: { type: 'string', description: 'Main conversation only, once: your session name, as ListAgents shows it after "This session is", without the bracketed ref. Other sessions on the repo show it as the owner of your tickets' },
           },
           required: ['done', 'total'],
         },
@@ -5005,6 +5091,11 @@ export const register: Register = (on, options) => {
     const progress = readProgress(input)
     const claims = readClaims(input)
     const title = id === undefined ? hideTitle(readTitle(input.title)) : undefined
+    // The main conversation names its session; the last name wins, and the next presence step stores it.
+    const named = id === undefined ? sanitizeSessionName(input.session) : undefined
+    if (named !== undefined) {
+      sessionName = named
+    }
     if (id !== undefined && (progress !== undefined || claims !== undefined)) {
       setRows(agentRows.map(row => (row.id !== id ? row : { ...row, ...(progress === undefined ? {} : { progress }), ...(claims === undefined ? {} : { claims }) })))
       redraw($)
@@ -5300,7 +5391,7 @@ export const register: Register = (on, options) => {
       void Promise.all([loadAgents($), readUsage($)]).then(() => redraw($)).catch(() => undefined)
     }
     axes = stepAxes(axes, series, time)
-    const view = { ...buildView(todoFiles, rows, time, orchestratorState()), ...(usage === undefined ? {} : { usage }), series, axes }
+    const view = { ...buildView(todoFiles, rows, time, orchestratorState(), peerHeld), ...(usage === undefined ? {} : { usage }), series, axes }
 
     const Svg = e.surface !== 'terminal' && 'Svg' in table ? table.Svg : undefined
     if (Svg !== undefined) {
@@ -5315,8 +5406,8 @@ export const register: Register = (on, options) => {
       // Every card reaches the pane here, so its alt is cleaned here, once: one control character
       // in a ticket, a command or a file name would make the engine refuse the whole pane.
       // The height is given too: without it a new card drew at no height until its image loaded, and moved the cards below it twice.
-      const card = (key: string, drawn: { source: string; width: number; height: number; alt: string }) => (
-        <Svg key={keyText(key)} source={drawn.source} alt={altText(drawn.alt)} width={drawn.width} {...(drawn.height <= MAX_SVG_PX ? { height: drawn.height } : {})} />
+      const card = (key: string, drawn: { source: string; width: number; height: number; alt: string; isInteractive?: true }) => (
+        <Svg key={keyText(key)} source={drawn.source} alt={altText(drawn.alt)} width={drawn.width} {...(drawn.height <= MAX_SVG_PX ? { height: drawn.height } : {})} {...(drawn.isInteractive === true ? { isInteractive: true } : {})} />
       )
       const section = (key: string, title: string, detail: string, buttonLabel: string | undefined, toggle: () => void, extra: { key: string; label: string; onPress: () => void }[] = [], showDone?: { label: string; onPress: () => void }) => (
         <Box key={keyText(key)} flexDirection="row" justifyContent="space-between" alignItems="center" marginTop={1}>
@@ -5564,7 +5655,8 @@ export const register: Register = (on, options) => {
               const category = book.categories.length === 0 ? undefined : groupOf(book, storedKey(item.key))
               const id = new RegExp(`#${ID_SRC}\\b`).exec(item.text)?.[0]
               // Every ticket, in every column, ends with the status question mark.
-              const send = isSent ? [] : [SEND_ACTION]
+              // A ticket a peer session holds has no Send: a click would start a second session on the same work.
+              const send = isSent || item.peer !== undefined ? [] : [SEND_ACTION]
               const actions: TicketAction[] =
                 item.status === 'completed'
                   ? [STATUS_ACTION]
@@ -5574,7 +5666,9 @@ export const register: Register = (on, options) => {
                       ? [REOPEN_ACTION, START_ACTION, DONE_ACTION, ...send, STATUS_ACTION]
                       // Back moves one column, in progress to queued; a ticket held only by a live agent has no box to move back.
                       : [...(item.heldFrom === undefined ? [UNSTART_ACTION] : []), DONE_ACTION, STATUS_ACTION]
-              const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, actions: actions.length })
+              // The tag's room: the card width less the buttons' cells (an overestimate, so the tag stays clear of them) and the card's padding.
+              const peerTag = item.peer === undefined ? undefined : { name: holderName(item.peer.name), room: ticketW - (ACTION_RIGHT + actions.length * ACTION_CELLS) * CELL_PX - 14 - 8 }
+              const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, actions: actions.length, ...(peerTag === undefined ? {} : { peerTag }) })
               const one = { sentKey, isSent, actions, drawn }
               prepared.set(item, one)
 

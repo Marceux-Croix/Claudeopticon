@@ -7,6 +7,7 @@
 - **Todo as interactive kanban-style tickets:** your `.claude_todo/` list as a board you can send, ask about and move.
 - **Real time agent output monitoring:** what Claude and each helper agent is doing, step by step.
 - **Global token burn tracking:** every token of the main conversation and all agents, as a live graph of the total since compact and the tokens per minute.
+- **Multi-session support:** several Claude Code sessions on one repo see each other's tickets. A ticket another session holds is marked "Peer owned", and pointing at the mark shows which session owns it, so two sessions do not start the same work.
 
 Claudeopticon is a mod for Claude Code. It adds a work pane next to your conversation which shows your todo list as a ticket board, what Claude is doing, and what its helpers (Claude Code calls them agents) are doing. You can send a ticket to Claude, ask how it is going, or move it yourself.
 
@@ -101,6 +102,8 @@ Finished agents are hidden. **Show finished agents** brings them back, grayed ou
 
 The pane draws one board for all your todo files, with the columns **In progress**, **Queued** and **Open**. Queued (`- [>]`) holds the work slated next: tickets nobody works on yet, but that come before the rest of Open. There is no Done column: a ticket that is done leaves the board and goes to the archive. Above it, one header card has a row for each file: its name, its progress bar, and its own "done of total" count, which includes the file's closed items in the archive. If two files have the same name, the row also shows the folder in dim text. A ticket shows its number, its group, its status, and the tags of the agents working on it. The tags blink in the agent's color while it works, and the **O** tag blinks while Claude works on the ticket itself. When an agent starts on an open or queued ticket, the ticket moves to In progress by itself.
 
+**Several sessions on one repo.** When more than one Claude Code session works on the same repo, each session's board marks the tickets the other sessions hold. A ticket that another live session works on (itself or through its agents), and that this session does not, shows in In progress with a yellow outlined "Peer owned" pill at the left of its bottom row. Pointing at the pill shows a tooltip: "<name of that session> owns this", or "An unnamed peer session owns this" when that session never sent its name (Claude sends it through `report_progress`, see below). A card with the pill is drawn in an interactive frame so the tooltip can show; other cards are plain images. The **⋙** button is hidden on such a ticket, so a click does not start a second session on the same work; the status and move buttons stay. If this session holds the ticket too, its own claim wins and there is no pill. A session counts while it has refreshed its record in the last 2 minutes, so a session that ended stops marking its tickets within that time. Worktrees of one repo share a board; sessions in other repos do not.
+
 Tickets have buttons on the bottom edge:
 
 | Button | On | What it does |
@@ -153,7 +156,7 @@ The mod reads checkbox lines in the Markdown files at the top level of `.claude_
 
 ## Rules for Claude
 
-At the start of each conversation, the mod gives Claude short instructions, about 3,850 characters (roughly 960 tokens). The text is `RULES` in `hooks/rules.ts`. The `rules` option turns it off. Claude is told to:
+At the start of each conversation, the mod gives Claude short instructions, about 4,100 characters (roughly 1,030 tokens). The text is `RULES` in `hooks/rules.ts`. The `rules` option turns it off. Claude is told to:
 
 - keep the items in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's), make the folder when the repo has none, and keep each item in the folder it is in;
 - never make or use the global todo folder, `~/.claude/.claude_todo/` (or `.claude_todo/` in `$CLAUDE_CONFIG_DIR`), because the board never reads it; when the repo root is that folder's parent, use the `.claude_todo/` of the project it works in;
@@ -163,6 +166,7 @@ At the start of each conversation, the mod gives Claude short instructions, abou
 - close an item (`- [x]`) in the same turn its work is done, before its final reply, never leave finished work open or in progress, and close an agent's item when the agent's work is done;
 - never delete a done item and never fold done items into a summary line; the mod moves a done ticket whose subtasks are all done to the archive, and Claude never moves it back;
 - when it works on tickets itself, send a headline for that work with `report_progress` (`title` and `items`), and again when the work changes;
+- send its session name once, in its first `report_progress` call, as `session` (the name ListAgents shows after "This session is", without the bracketed ref), so other sessions on the repo can name it as the owner of its tickets;
 - find or add an item before it starts any work, and do no work that has no item;
 - stop work on an item you moved to open or done;
 - never change the box of an item you moved. If it thinks your move was wrong, it calls the `move_ticket` tool. You get a dialog, and the box changes only if you say yes. If the item is in more than one file, the tool refuses and lists them, and Claude calls it again with `folder` set to the item's folder path. A ticket that shows in In progress only because Claude claimed it, while its box is still open or queued, goes back to its column when Claude calls `move_ticket` to open or queued; the box does not change, so no dialog shows.
@@ -224,6 +228,9 @@ Other values are constants in the module that uses them. To change one, edit tha
 | `CLAIM_MIN_CHARS`, `CLAIM_MIN_WORDS`, `CLAIM_MIN_SHARE` | 12, 3, 0.7 | `claim-score.ts` | How closely a progress report must match a ticket's text to claim it |
 | `CLAIM_CHECK_MS` | 600000 | `progress-report.ts` | Milliseconds a ticket claim stands before the next progress reply asks the agent to confirm it |
 | `TITLE_MAX` | 80 | `progress-report.ts` | Longest Orchestrator headline kept, in characters |
+| `PRESENCE_EVERY_MS`, `PEERS_EVERY_MS` | 5000, 5000 | `peer-sessions.ts` | Milliseconds between the writes of this session's presence record, and between the reads of the peers' records |
+| `PEER_STALE_MS` | 120000 | `peer-sessions.ts` | Milliseconds after which a peer's record no longer counts |
+| `MAX_NAME` | 60 | `peer-sessions.ts` | Longest session name kept, in characters |
 | `DETAIL_MAX` | 300 | `tool-calls.ts` | Longest action detail kept on the Orchestrator card, in characters |
 | `WINDOW_MS` | 1800000 | `series.ts` | Milliseconds of history the top graph shows |
 | `SERIES_CAP` | 2000 | `series.ts` | Points kept per graph line |
@@ -239,7 +246,7 @@ The mod uses Haiku for two small jobs:
 - **Sorting tickets into groups:** once per new ticket, up to 60 per request. Sorting a large todo the first time costs a few thousand tokens. **Recategorize** sorts all open tickets again, the same way, once per press.
 - **Matching a new agent to its tickets:** one request per agent.
 
-Everything else is free or nearly free: the Orchestrator card makes no requests, the instructions to Claude are about 850 tokens per conversation, a progress report is about 40 tokens, and card token counts come from usage Claude Code already reports.
+Everything else is free or nearly free: the Orchestrator card makes no requests, the instructions to Claude are about 1,000 tokens per conversation, a progress report is about 40 tokens, and card token counts come from usage Claude Code already reports.
 
 All requests go through your own Claude Code session. The mod sends nothing anywhere else.
 
@@ -261,6 +268,7 @@ The mod keeps these keys in the engine's store, each per session ID unless noted
 | `series:<session id>` | The graph points, at most 2000 per line, and the compaction marks |
 | `tokens:<session id>` | The session token total and the count at the last compaction |
 | `orchestrator:<session id>`, `orchestrator-title:<session id>` | The tickets Claude works on itself, and its headline |
+| `presence:<session id>` | What the session tells its peers: its name, the repo root, the tickets it and its live agents hold, and the time it last wrote (every 5 seconds, and at once on a change) |
 | `archive-wrote:<record>` | Marks that let a retry of the archive step skip blocks already written |
 | `reserved:<repo root>` | The IDs the mod named and has not yet seen in a file, for 2 hours |
 | `sessions-recent`, `sessions-dropping` | The list of the last 20 sessions, and sessions waiting to be cleared |
@@ -283,6 +291,7 @@ A text that looks like it holds a secret shows as "(hidden)" and is stored that 
 - When a ticket leaves a column or list, its space stays empty for one minute, or until a click that changes the board (a filter, a view switch, a search), so the cards below do not move while you read. On a narrow pane, a ticket you move up from Open to In progress or Queued leaves no space: the column above grows by its card instead, so the tickets below the one you pressed stay where they were.
 - On the desktop app, when a card above the part you are reading grows, shrinks, appears or goes, the content you read moves by that height. The most common cause is an agent card that starts or finishes above the board. The mod cannot hold your place: the desktop pane gives a mod no way to find where a card is without scrolling to it. A fix has to come from the desktop app (scroll anchoring). Until then, **Limit UI shift** reduces it.
 - With **Limit UI shift** on, the agent area keeps the height of three agent cards, with empty gray cards for the slots no agent fills plus one trailing empty card, the timeline drawn empty before the first agent, and the Orchestrator history card the height of five entries, drawn empty before the first call, so the board below them does not move while you read. A fourth agent card, and each one after it, makes the area taller and moves the board down; when those agents leave the area goes back to its held height and the board moves up. The area also grows past its held height when a card gets taller (a progress bar, a Working on line), and keeps that height for the rest of the session. This hold is off by default: press **Limit UI shift** at the right of the Orchestrator heading to turn it on for the session. The button is filled while it is on. Off, the pane draws only the cards it has, which saves screen space but moves the board as agents come and go. Pointing at the button shows what it does.
+- Multi-session marks need the sessions to share the mod's store, so they work for sessions on one machine and one Claude config folder only. A peer is seen only when it is in the store's list of the last 20 sessions and its record is less than 2 minutes old; a session that just started is seen within a few seconds. A session outside git with no absolute folder path neither marks nor is marked. A session that ended keeps its `presence` key in the store; the key is stale and ignored, and is not cleared with the session's other keys. The owner's name comes from Claude, which sends it with its first progress report; until then, and if it never does, the tooltip says "An unnamed peer session owns this". On a ticket card narrower than the pill and the buttons, the pill is left out; the ticket still shows in In progress with no ⋙ button.
 - The pane finds the `.claude_todo/` folders once, when it starts. A new `.claude_todo/` in the session's folder or a folder above it shows at once. One made elsewhere needs `/reload-plugins` (or a new session).
 - **Consolidate todos**, **Delete empty todos** and **Delete duplicate tickets** are off in a repo whose root folder is the home `.claude` folder (`~/.claude`), because there the repo's root `.claude_todo/` is Claude Code's global todo folder, which the mod never writes to. They are also off in a git worktree. In every other repo the central todo is the repo's own root `.claude_todo/`.
 - Delete empty todos uses the system's own trash command: `trash` or Finder on macOS, `gio trash`, `trash-put` or `kioclient5` on Linux, and PowerShell on Windows. A Linux system with none of these keeps the files. On Windows it works only on a local fixed drive whose Recycle Bin is on, because elsewhere Windows deletes the file outright; on any other drive it keeps the file. Only the macOS command has been run on a real system. The Linux and Windows commands are covered by the mod's own tests only.

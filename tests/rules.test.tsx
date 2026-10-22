@@ -79,3 +79,9 @@ test('the rules never send Claude to the global todo folder', () => {
   const at = lines.indexOf(rule!)
   expect(lines[at - 1]).toBe("- Todo items go in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's). Create the folder when the repo has none. Each repo keeps its own items, and only its own. Other `.claude_todo/` folders in the repo also show on the board: keep each item in the folder it is in.")
 })
+
+test('the rules tell Claude to send its session name once, as session, without the ref', () => {
+  expect(RULES).toContain('as `session`')
+  expect(RULES).toContain('This session is')
+  expect(RULES).toContain('without the bracketed ref')
+})

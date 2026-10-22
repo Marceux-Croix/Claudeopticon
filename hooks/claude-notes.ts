@@ -118,10 +118,50 @@ export function stillOpenNote(items: readonly TodoItem[]): string | undefined {
   return items.length === 0 ? undefined : `Still in progress from earlier: ${nudgeList(items)}. Close any whose work is done. ${DATA_MARK}`
 }
 
+// ---------------------------------------------------------------- peer claims (#T008U)
+
+/**
+ * A ticket as a note names it: its ID when it has one (an ID is safe text), else its text quoted (UCR-181).
+ * `json` is the same as a JSON string, for the `release` example.
+ */
+export function ticketRef(text: string, id: string | undefined): { label: string; json: string } {
+  if (id !== undefined && id !== '') {
+    const label = `#${id.toUpperCase()}`
+
+    return { label, json: JSON.stringify(label) }
+  }
+  const quoted = quoteTicket(text, 60)
+
+  return { label: quoted, json: quoted }
+}
+
+/** One note line, told once: the mod recorded a ticket as planned work of this session (the main conversation queued it). */
+export function plannedLine(text: string, id: string | undefined): string {
+  const ref = ticketRef(text, id)
+
+  return `${ref.label} is now claimed by this session as planned work. If you queued it for another session or only to order the work, release it: report_progress with release: [${ref.json}].`
+}
+
+/** One note line, told once per peer claim: a ticket this session claims is claimed by another session too. The name is quoted (it comes from the store). */
+export function peerClaimedLine(text: string, id: string | undefined, name: string | undefined, root: string): string {
+  const ref = ticketRef(text, id).label
+  if (name === undefined) {
+    return `${ref} is claimed by an unnamed peer session. Before you work on it, call ListAgents and send one SendMessage to each other session there, naming the ticket and this repo's root path ${quoteName(root)}, asking: "Do you claim this ticket? If you do and can give it up, release it with report_progress release; if it is not in your repo, ignore this." Start once the Peer owned tag clears; if every session said no and the tag stays, start only when the user says to take it anyway.`
+  }
+
+  return `${ref} is claimed by session ${quoteName(name)}. Check in with that session (SendMessage) before you work on it; it releases the ticket with report_progress release.`
+}
+
+/** The note line for a session that never sent its name (one that started before 0.9.16 never got the rule): told once per load of the mod. */
+export const SESSION_NAME_NOTE = 'Send this session\'s name: call mcp__claudeopticon__report_progress with session set to the name ListAgents shows after "This session is", without the bracketed ref.'
+
+/** The claim notes waiting for Claude: each line is a note of its own. */
+export const claimNotes = (lines: readonly string[]): string[] => lines.map(noteName)
+
 // ---------------------------------------------------------------- the waiting lines
 
 /** The lines of each note waiting for Claude, as the session keeps them. */
-export type PendingNotes = { moves: readonly string[]; renames: readonly string[]; numbered: readonly string[]; removed: readonly string[]; ended: readonly string[]; stopped: readonly string[]; deferred: readonly string[] }
+export type PendingNotes = { moves: readonly string[]; renames: readonly string[]; numbered: readonly string[]; removed: readonly string[]; ended: readonly string[]; stopped: readonly string[]; deferred: readonly string[]; claimed: readonly string[] }
 
 /**
  * `lines` without one copy of each line `told` holds (UCR-245): what is left to tell once a note

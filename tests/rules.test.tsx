@@ -85,3 +85,11 @@ test('#T008R the rules tell Claude to send its session name once, as session, wi
   expect(RULES).toContain('This session is')
   expect(RULES).toContain('without the bracketed ref')
 })
+
+test('#T008U the rules tell Claude to release a ticket it queued for others, and to ask the owner of a claimed ticket first', () => {
+  expect(RULES).toContain('release it: call `mcp__claudeopticon__report_progress` with `release`')
+  expect(RULES).toContain('or only to order or triage the work')
+  expect(RULES).toContain('ask that session with SendMessage before you take it')
+  expect(RULES).toContain('call ListAgents and ask each other session')
+  expect(RULES).toContain('When another session asks you for a ticket you claim and you agree, release it')
+})

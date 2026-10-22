@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.9.17
+
+### Features
+
+- Planned claims. When the main conversation of a session sets a ticket's box to queued (`- [>]`) itself, or the mod queues a ticket after the main conversation took it out of progress, the session records the ticket as planned. A box set by hand on the board, and a helper agent's edit, plan nothing. The planned set is stored per session (`planned:<session id>`), so a reload keeps it.
+- The presence record carries `planned` (a record without it reads as empty). Another session shows a ticket you plan in Queued, with the "Peer owned" pill and the tooltip "<name> plans to work this".
+- A claim, held or planned, lasts as long as the ticket's box is `[~]` or `[>]`, and ends when the box goes to done or open. A planned ticket whose box goes to `[~]` stays claimed.
+
+### Changes
+
+- A peer record not refreshed for 2 minutes still counts, but its pill and text are dimmed to about half opacity and its tooltip adds " (inactive since HH:MM)" in local 24-hour time. A record older than 24 hours is ignored. This replaces the 2 minute cutoff (`PEER_STALE_MS`); the bounds are `PEER_DIM_MS` and `PEER_IGNORE_MS`.
+- A peer's claim on a ticket whose box is open no longer marks it.
+- The Send button (⋙) is back on peer-claimed tickets, held and planned (0.9.16 hid it). It sends a different prompt: Claude is told the ticket is claimed by session "<name>", to ask that session with SendMessage first, and to start only when the owner agrees and releases it, or the user says to take it anyway. For an unnamed owner Claude calls ListAgents and asks each other session, with the ticket and the repo root path, whether it claims the ticket.
+- A `move_ticket` to queued that the main conversation asked for and the user approved plans the ticket too. A move by hand on the board still claims nothing.
+
+### Notes for Claude
+
+- When the mod records a planned claim, one note line tells Claude: "<ID> is now claimed by this session as planned work. If you queued it for another session or only to order the work, release it: report_progress with release: [...]".
+- When this session claims a ticket a peer claims too, one note line per peer claim tells Claude to check in with that session (SendMessage; ListAgents for an unnamed one) before it works on the ticket.
+- A session with no name (one that started before 0.9.16 never got the rule), that holds a ticket or has a peer on its repo, gets one note asking Claude to call `report_progress` with `session`, once per load of the mod.
+- `report_progress` takes `release`, a list of ticket IDs or quoted ticket text (main conversation only). It drops this session's claims, planned and own, on them. Two rules lines are added: release a ticket you queue for another session or only to order the work; ask a session that claims a ticket before you take it, and release a ticket another session asks you for when you agree.
+
 ## 0.9.16
 
 ### Features

@@ -18,8 +18,12 @@ export type ItemView = {
   path?: string
   /** Shown in progress only because a live agent works on it: the status its box still holds, open (`- [ ]`) or queued (`- [>]`). */
   heldFrom?: 'pending' | 'queued'
-  /** Held by another live session on this repo (#T008R); `name` is that session's name, absent when it never gave one. Drawn as a tag; no Send. */
-  peer?: { name?: string }
+  /**
+   * Claimed by another session on this repo (#T008R); `name` is that session's name, absent when it never gave one.
+   * `isPlanned`: the box is queued, so the peer plans the work and the card stays in Queued (#T008U).
+   * `silentSince`: the peer's record is older than PEER_DIM_MS; the time it was last refreshed, clock ms. Drawn as a tag; no Send.
+   */
+  peer?: { name?: string; isPlanned?: true; silentSince?: number }
 }
 
 export type FileView = {

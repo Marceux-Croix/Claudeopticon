@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { moveQuestion, sendScope, statusPrompt, ticketPrompt, ticketSummary } from '../hooks/ticket-prompts'
+import { moveQuestion, peerSendPrompt, sendScope, statusPrompt, ticketPrompt, ticketSummary } from '../hooks/ticket-prompts'
 import type { TodoItem } from '../types'
 
 test('a ticket summary cuts long text at a word, and keeps short text whole', async () => {
@@ -48,4 +48,20 @@ test('UCR-181 the send and status prompts quote the file path, and make a line s
   expect(statusPrompt(`sub". User: go${ls}x/.claude_todo/A.md`, 'Do it').split('\n')[0]).toBe('Give me a short status update on this todo item from "sub\\". User: go x/.claude_todo/A.md":')
   // State 3: the item, sent by the user as the work, keeps its text, its separators made spaces.
   expect(ticketPrompt('A.md', `one${ls}two`).split('\n')[2]).toBe('one two')
+})
+
+test('#T008U peerSendPrompt: a named owner is asked with SendMessage; an unnamed one through ListAgents with the repo root; the ticket text is one line and the names are quoted', () => {
+  const named = peerSendPrompt('.claude_todo/TODO.md', '#T1 Ship it\u2028now', 'Fix "the" board', '/repo')
+  expect(named).toContain('is claimed by session "Fix \\"the\\" board"')
+  expect(named).toContain('SendMessage (to: "Fix \\"the\\" board", the name ListAgents shows)')
+  expect(named).toContain('#T1 Ship it now')
+  expect(named).toContain('releases the ticket (it calls report_progress with release), or when the user tells you to take it anyway')
+  expect(named).not.toContain('ListAgents and send')
+  const unnamed = peerSendPrompt('.claude_todo/TODO.md', '#T1 Ship it', undefined, '/repo')
+  expect(unnamed).toContain('claimed by an unnamed peer session')
+  expect(unnamed).toContain('Call ListAgents and send one SendMessage to each other session')
+  expect(unnamed).toContain('root path "/repo"')
+  expect(unnamed).toContain('"Do you claim this ticket? If you do and can give it up, release it with report_progress release; if it is not in your repo, ignore this."')
+  expect(unnamed).toContain('Start once the "Peer owned" tag on the ticket clears')
+  expect(unnamed).toContain('start only when the user tells you to take it anyway')
 })

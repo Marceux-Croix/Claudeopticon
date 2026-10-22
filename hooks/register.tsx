@@ -29,7 +29,7 @@ import { elapsedSince } from './clock-elapsed'
 import type { ClaimFolder } from './claim-keeping'
 import { bestMatches } from './claim-score'
 import type { PendingNotes } from './claude-notes'
-import { DATA_MARK, deferredNote, endedNote, hasLabel, labelNote, moveLine, movesNote, NEXT_IDS_SHOWN, nextIdsLine, noteName, NUDGE_REPEAT_MS, NUDGE_TICKETS, numberedLine, numberedNote, quoteName, quoteTicket, removedNote, renameNote, stillOpenNote, stoppedNote, withoutTold } from './claude-notes'
+import { claimNotes, DATA_MARK, SESSION_NAME_NOTE, deferredNote, endedNote, hasLabel, labelNote, moveLine, movesNote, NEXT_IDS_SHOWN, nextIdsLine, noteName, NUDGE_REPEAT_MS, NUDGE_TICKETS, numberedLine, numberedNote, peerClaimedLine, plannedLine, quoteName, quoteTicket, removedNote, renameNote, stillOpenNote, stoppedNote, withoutTold } from './claude-notes'
 import { mergeMarks, readKeptMarks, retryStep } from './consolidate-marks'
 import type { CopyMark } from './consolidate-marks'
 import { appendSections, copyLines, destOf, eolOf, isUnsafeHeadingName, itemLines, keepsEveryItem, renameLines, renumberLines, sectionCount, sectionText } from './consolidate-text'
@@ -56,8 +56,8 @@ import { CLAIM_CHECK_MS, progressReply, readClaims, readProgress, readTitle } fr
 import { DIR, diskSpelling, findTodoDirWith, folderPlace, gitCommonDir, globalDirs, globalParents, isGlobalTodo, isMisspelledTodo, isSameTodo, isTodoOf, MAX_FOLDERS, pickFolders, placeOf, REV_PARSE, repoRoots, sessionFolder, todoFoldersIn } from './repo-folders'
 import type { TodoFolder } from './repo-folders'
 import { sameRows } from './row-equality'
-import { buildPresence, holdings, holderName, peerHolds, peerIds, PEERS_EVERY_MS, PRESENCE_EVERY_MS, presenceKey, readPresence, samePresence, sanitizeSessionName } from './peer-sessions'
-import type { Presence } from './peer-sessions'
+import { buildPresence, holdings, newlyQueued, peerHolds, peerIds, peerTip, PEER_DIM_MS, PEER_IGNORE_MS, PEERS_EVERY_MS, plannedKey, PRESENCE_EVERY_MS, presenceKey, prunePlanned, readPlanned, readPresence, samePresence, sanitizeSessionName, ticketId } from './peer-sessions'
+import type { PeerClaim, Presence } from './peer-sessions'
 import { withRules } from './rules'
 import { HIDDEN, hideSecretLines, hideSecrets, hideTitle } from './secrets'
 import { addAgents, addCompact, addTokens, emptySeries, readKeptSeries, seedSeries, stepAxes } from './series'
@@ -72,7 +72,7 @@ import type { DrawnPlace } from './ticket-boxes'
 import { heldBy, highestId, lostIds, RESERVE_MS, ticketValue } from './ticket-ids'
 import type { Reservation } from './ticket-ids'
 import { findTickets, narrowTickets } from './ticket-lookup'
-import { moveQuestion, sendScope, ticketSummary } from './ticket-prompts'
+import { moveQuestion, peerSendPrompt, sendScope, ticketSummary } from './ticket-prompts'
 import { clearSpaces, columnSlots, expireSpaces, newLayout, pressKeepsSpaces } from './ticket-spaces'
 import { boardHead, boardWidth, cardWidth, fileCards, listRowPx, longItems, spaceSvg, ticketSvg } from './todo-cards'
 import { bare, CHECKBOX, exampleMask, ID_SRC, ITEM_ID, leadingId, lineOwnIds, parseTodo, plainText } from './todo-markdown'
@@ -156,6 +156,12 @@ let callCount = 0
  * or back to open after it was seen in progress. A ticket an agent works on may be in here too.
  */
 const orchTickets = new Map<string, boolean>()
+/**
+ * The tickets this session's main conversation planned (#T008U): it set the box to `[>]` itself, or the mod queued a ticket it took
+ * out of progress. By `ticketId`, as the presence record carries them. A planned ticket stays while its box is `[~]` or `[>]` (prunePlanned).
+ * A hand move on the board and a helper's edit never add to it. Saved per session as `planned:<session id>`.
+ */
+let plannedTickets: ReadonlySet<string> = new Set()
 /** The headline Claude gave the assignment it works on itself (report_progress `title`); per session, cleared with the last ticket. */
 let orchTitle: string | undefined
 /** Which page of the history the card shows: 0 the newest. */
@@ -337,6 +343,10 @@ async function orchKey($: EngineInterface): Promise<string> {
   return `orchestrator:${await $.session.id()}`
 }
 
+async function plannedStoreKey($: EngineInterface): Promise<string> {
+  return plannedKey(await $.session.id())
+}
+
 async function orchTitleKey($: EngineInterface): Promise<string> {
   return `orchestrator-title:${await $.session.id()}`
 }
@@ -506,7 +516,7 @@ async function noteSession($: EngineInterface, time: number): Promise<void> {
 
 /** The groups of per-session keys, loaded each on its own (UCR-094): the save names of each group. The rows, their label base and their cut IDs belong together, since the base counts rows. */
 type StoreGroup = 'rows' | 'tickets' | 'title' | 'series'
-const GROUP_NAMES: Record<StoreGroup, readonly string[]> = { rows: ['agents', 'base', 'cut'], tickets: ['tickets'], title: ['title'], series: ['series'] }
+const GROUP_NAMES: Record<StoreGroup, readonly string[]> = { rows: ['agents', 'base', 'cut'], tickets: ['tickets', 'planned'], title: ['title'], series: ['series'] }
 /** The groups whose stored value was read and merged: only these are ever saved, so a key that did not read is never written over. */
 const loadedGroups = new Set<StoreGroup>()
 
@@ -537,7 +547,7 @@ async function readStores($: EngineInterface): Promise<void> {
   const want = (['rows', 'tickets', 'title', 'series'] as const).filter(group => !loadedGroups.has(group))
   const keyOf: Record<StoreGroup, () => Promise<string[]>> = {
     rows: () => Promise.all([agentsKey($), baseKey($), cutKey($)]),
-    tickets: async () => [await orchKey($)],
+    tickets: async () => [await orchKey($), await plannedStoreKey($)],
     title: async () => [await orchTitleKey($)],
     series: async () => [await seriesKey($)],
   }
@@ -602,6 +612,8 @@ function mergeGroup(group: StoreGroup, values: readonly unknown[]): void {
         orchTickets.set(key, seen)
       }
     }
+    // What this load added to the planned set since the read stays; a stored ticket joins it (#T008U).
+    plannedTickets = new Set([...readPlanned(values[1]), ...plannedTickets])
   } else if (group === 'title') {
     // A title kept by an older version is checked again, as a new one is (UCR-115).
     orchTitle ??= hideTitle(readTitle(values[0]))
@@ -716,6 +728,7 @@ function saveAgents($: EngineInterface): void {
   if (loadedGroups.has('tickets')) {
     const tickets = JSON.stringify([...orchTickets])
     saveKey($, 'tickets', 'orchestrator', tickets, [...orchTickets])
+    saveKey($, 'planned', 'planned', JSON.stringify([...plannedTickets]), [...plannedTickets])
   }
   if (loadedGroups.has('title')) {
     saveKey($, 'title', 'orchestrator-title', orchTitle, orchTitle ?? '')
@@ -3445,7 +3458,7 @@ async function scanOnce($: EngineInterface, isFull: boolean): Promise<boolean> {
     todoFiles = kept
     redraw($)
   }
-  if (pruneTickets()) {
+  if (pruneTickets() || prunePlannedTickets()) {
     redraw($)
   }
   const sign = `${hasDupTickets}|${emptyFiles.map(one => one.path).join('|')}`
@@ -4181,7 +4194,7 @@ let pendingMoves: string[] = []
 const userMoves = new Map<string, ItemStatus>()
 
 /** Answers a move_ticket call: asks the user, and writes the box only on a yes. */
-async function moveTicket($: EngineInterface, input: Record<string, unknown>): Promise<string> {
+async function moveTicket($: EngineInterface, input: Record<string, unknown>, isMain = false): Promise<string> {
   const ref = typeof input.item === 'string' ? input.item : ''
   const to = statusNamed(input.to)
   const reason = typeof input.reason === 'string' ? input.reason : ''
@@ -4295,13 +4308,20 @@ async function moveTicket($: EngineInterface, input: Record<string, unknown>): P
   }
   userMoves.delete(key)
   await scan($).catch(() => undefined)
+  // A move to queued the main conversation asked for and the user approved plans the ticket (#T008U); a helper's ask does not.
+  if (isMain && to === 'queued') {
+    const todo = todoFiles.find(one => one.folder === folder && one.name === file)
+    if (todo !== undefined) {
+      planTickets($, [ticketId(todo, item)])
+    }
+  }
 
   return `Moved with the user's approval: ${quoteTicket(item.text, 80)} is now ${STATUS_WORDS[to]} in ${quoted}.`
 }
 
 /** The lists of note lines waiting for Claude, as they are now: what queuedNotes builds from them now. */
 function pendingNotes(): PendingNotes {
-  return { moves: pendingMoves, renames: pendingRenames, numbered: pendingNumbered, removed: pendingRemoved, ended: pendingEnded, stopped: pendingStopped, deferred: pendingDeferred }
+  return { moves: pendingMoves, renames: pendingRenames, numbered: pendingNumbered, removed: pendingRemoved, ended: pendingEnded, stopped: pendingStopped, deferred: pendingDeferred, claimed: pendingClaimed }
 }
 
 /**
@@ -4316,6 +4336,7 @@ function forgetTold(told: PendingNotes): void {
   pendingEnded = withoutTold(pendingEnded, told.ended)
   pendingStopped = withoutTold(pendingStopped, told.stopped)
   pendingDeferred = withoutTold(pendingDeferred, told.deferred)
+  pendingClaimed = withoutTold(pendingClaimed, told.claimed)
 }
 
 /** Puts the lines `told` held back in front of the waiting lists: their note never reached Claude (UCR-245). */
@@ -4327,11 +4348,12 @@ function restoreTold(told: PendingNotes): void {
   pendingEnded = [...told.ended, ...pendingEnded]
   pendingStopped = [...told.stopped, ...pendingStopped]
   pendingDeferred = [...told.deferred, ...pendingDeferred]
+  pendingClaimed = [...told.claimed, ...pendingClaimed]
 }
 
 /** The notes waiting for Claude: the moves made by hand, the IDs a consolidation renumbered, and the agents that ended with tickets left open. */
 function queuedNotes(): string[] {
-  return [movesNote(pendingMoves), stoppedNote(pendingStopped), deferredNote(pendingDeferred), renameNote(pendingRenames), removedNote(pendingRemoved), numberedNote(pendingNumbered), ...pendingEnded].filter((note): note is string => note !== undefined)
+  return [movesNote(pendingMoves), stoppedNote(pendingStopped), deferredNote(pendingDeferred), renameNote(pendingRenames), removedNote(pendingRemoved), numberedNote(pendingNumbered), ...claimNotes(pendingClaimed), ...pendingEnded].filter((note): note is string => note !== undefined)
 }
 
 /** Notes about ended agents, waiting for Claude. Cleared with the other pending notes. */
@@ -4452,6 +4474,8 @@ async function markTicket($: EngineInterface, item: ItemView, status: ItemStatus
 
 /** The tickets the mod queued after Claude took them out of progress, told with the next tool result or prompt. */
 let pendingStopped: string[] = []
+/** The claim lines (#T008U) waiting for Claude: a planned claim the mod recorded, and a ticket this session claims that a peer claims too. Each is told once. */
+let pendingClaimed: string[] = []
 /** The open tickets Claude's text put off until later, told with the next tool result or prompt. */
 let pendingDeferred: string[] = []
 /** The most characters of one model step's text read for deferred tickets: a reply past it is read only to there. */
@@ -4501,6 +4525,8 @@ async function queueStopped($: EngineInterface, path: string, keys: readonly str
   if (written.length > 0) {
     pendingStopped = [...pendingStopped, ...written.map(item => moveLine(item.text, path, STATUS_WORDS.in_progress, STATUS_WORDS.queued))]
     await scan($).catch(() => undefined)
+    // The main conversation took these out of progress and still means to work them: planned (#T008U). After the scan, so a prune never sees the old box.
+    planTickets($, written.map(item => ticketId(file, item)))
   }
 }
 
@@ -4659,15 +4685,98 @@ function orchestratorState(): OrchestratorState {
 
 // ---------------------------------------------------------------- peer sessions (#T008R)
 
+/** Ends the planned claims whose box is no longer `[~]` or `[>]` (#T008U); true when the set changed. Only once the plan set is loaded and a todo file is known. */
+function prunePlannedTickets(): boolean {
+  if (plannedTickets.size === 0 || todoFiles.length === 0 || !loadedGroups.has('tickets')) {
+    return false
+  }
+  const kept = prunePlanned(plannedTickets, todoFiles)
+  if (kept.size === plannedTickets.size) {
+    return false
+  }
+  plannedTickets = kept
+
+  return true
+}
+
+/** The todo item a ticket identity names, in the live files. */
+function itemOfTicket(id: string): TodoItem | undefined {
+  for (const file of todoFiles.filter(one => one.isArchived !== true)) {
+    const item = file.items.find(one => ticketId(file, one) === id)
+    if (item !== undefined) {
+      return item
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * Ends this session's claims, orchestrator and planned, on the tickets `refs` name (IDs or quoted text, matched as `items` are): report_progress `release` (#T008U).
+ * Nothing claims them again until a new move to queued or a new claim. True when a claim ended.
+ */
+function releaseTickets(refs: readonly string[]): boolean {
+  const live = todoFiles.filter(file => file.isArchived !== true)
+  const open = live.flatMap(file => file.items.map(item => ({ key: keptKey(file, item), item, id: ticketId(file, item) })))
+  let isChanged = false
+  for (const hit of bestMatches(open, refs)) {
+    const one = open.find(entry => entry.key === hit.key)
+    const key = storedKey(hit.key)
+    if (orchTickets.delete(key)) {
+      claimMissedAt.delete(key)
+      isChanged = true
+    }
+    if (one !== undefined && plannedTickets.has(one.id)) {
+      plannedTickets = new Set([...plannedTickets].filter(id => id !== one.id))
+      isChanged = true
+    }
+  }
+  if (orchTickets.size === 0 && orchTitle !== undefined) {
+    orchTitle = undefined
+  }
+
+  return isChanged
+}
+
+/** The ticket IDs of the kept keys in the file at `path`. */
+function plannedIdsOf(path: string, keys: readonly string[]): string[] {
+  const wanted = new Set(keys)
+  const file = filesAt(path)[0]
+
+  return file === undefined ? [] : file.items.filter(item => wanted.has(keptKey(file, item))).map(item => ticketId(file, item))
+}
+
+/** Records tickets the main conversation queued as planned, by kept key (an edit) or by item (the mod's own queueing); a new one redraws and is saved. */
+function planTickets($: EngineInterface, ids: readonly string[]): void {
+  const fresh = ids.filter(id => !plannedTickets.has(id))
+  if (fresh.length > 0) {
+    plannedTickets = new Set([...plannedTickets, ...fresh])
+    // A strong hint, not proof: the session may be triaging for others, so Claude is told how to release (#T008U).
+    for (const id of fresh) {
+      const item = itemOfTicket(id)
+      if (item !== undefined) {
+        pendingClaimed = [...pendingClaimed, plannedLine(item.text, item.id)]
+      }
+    }
+    redraw($)
+  }
+}
+
 /** This session's name as Claude last reported it (report_progress `session`), kept in its presence record. */
 let sessionName: string | undefined
-/** The tickets live peer sessions on this repo hold, by ticketId, to the holder's name (undefined: never named). */
-let peerHeld: ReadonlyMap<string, string | undefined> = new Map()
+/** The tickets live peer sessions on this repo claim, by ticketId, to the holder's name and last-seen time. */
+let peerHeld: ReadonlyMap<string, PeerClaim> = new Map()
 /** The last presence record stored, and when it was stored (clock ms). */
 let lastPresence: Presence | undefined
 let presenceAt: number | undefined
 let peersAt: number | undefined
 let isPeerBusy = false
+/** What the last drawn peer claims looked like (names, tickets, silent state), so the next read redraws on a change of any of them. */
+let peerShape = '[]'
+/** Whether the note that asks Claude for this session's name was queued in this load of the mod. */
+let isNameAsked = false
+/** The tickets this session claims that a peer claims too, already told to Claude: told again only after the peer's claim ended. */
+const peerNoted = new Set<string>()
 /** Whether this load has looked in the store for the name an earlier load of this session stored. */
 let isNameRead = false
 
@@ -4688,7 +4797,7 @@ function presenceRoot(): string | undefined {
  * record when its holdings or name changed, or PRESENCE_EVERY_MS after the last store; reads the
  * peers' records every PEERS_EVERY_MS and redraws when the tickets they hold changed. The store has
  * no key listing, so the peers are those in the session list (`sessions-recent`); a session leaves
- * no end event the mod can see, so a dead session's record just goes stale (PEER_STALE_MS).
+ * no end event the mod can see, so a dead session's record just goes stale (PEER_IGNORE_MS).
  */
 async function peerStep($: EngineInterface, now: number): Promise<void> {
   const root = presenceRoot()
@@ -4706,7 +4815,7 @@ async function peerStep($: EngineInterface, now: number): Promise<void> {
         sessionName ??= readPresence(got.value)?.name
       }
     }
-    const held = holdings(todoFiles, agentRows, new Set(orchTickets.keys()))
+    const held = holdings(todoFiles, agentRows, new Set(orchTickets.keys()), plannedTickets)
     const next = buildPresence(me, sessionName, root, held, now)
     const sinceWrite = presenceAt === undefined ? Infinity : elapsedSince(presenceAt, now).ms
     if (!samePresence(lastPresence, next) || sinceWrite >= PRESENCE_EVERY_MS) {
@@ -4728,9 +4837,37 @@ async function peerStep($: EngineInterface, now: number): Promise<void> {
       return
     }
     const records = (await Promise.all(peerIds(list.value, me).map(async id => ({ id, got: await tryGet($, presenceKey(id)) })))).flatMap(one => (one.got.ok ? [{ id: one.id, value: one.got.value }] : []))
-    const own = new Set([...held.tickets, ...held.agentTickets])
+    const own = new Set([...held.tickets, ...held.agentTickets, ...held.planned])
     const found = peerHolds(records, me, root, now, own)
-    if (JSON.stringify([...found]) !== JSON.stringify([...peerHeld])) {
+    // A ticket this session claims that a peer claims too: told once per peer claim (#T008U).
+    const both = peerHolds(records, me, root, now, new Set())
+    for (const id of own) {
+      const claim = both.get(id)
+      if (claim !== undefined && !peerNoted.has(id)) {
+        peerNoted.add(id)
+        const item = itemOfTicket(id)
+        if (item !== undefined) {
+          pendingClaimed = [...pendingClaimed, peerClaimedLine(item.text, item.id, claim.name, root)]
+        }
+      }
+    }
+    // A session with no name (one that started before the rule existed) that holds a ticket or has a peer on its root is asked for it, once per load (#T008U).
+    if (!isNameAsked && isNameRead && sessionName === undefined && (own.size > 0 || records.some(one => readPresence(one.value)?.root === root))) {
+      isNameAsked = true
+      pendingClaimed = [...pendingClaimed, SESSION_NAME_NOTE]
+    }
+    for (const id of [...peerNoted]) {
+      if (!both.has(id)) {
+        peerNoted.delete(id)
+      }
+    }
+    // Compared without seenAt, which moves at each refresh: a redraw is due when the claims, the names or the silent state change.
+    const shape = (claims: ReadonlyMap<string, PeerClaim>) => JSON.stringify([...claims].map(([ticket, claim]) => [ticket, claim.name, now - claim.seenAt > PEER_DIM_MS ? claim.seenAt : 0]))
+    const nextShape = shape(found)
+    if (nextShape !== peerShape) {
+      peerShape = nextShape
+      // The view's time moves up with this change: the silent state is worked out against it.
+      clockMs = Math.max(clockMs, now)
       peerHeld = found
       redraw($)
     }
@@ -5004,6 +5141,7 @@ export const register: Register = (on, options) => {
               description: "The .claude_todo items your task covers: each quoted from its line, or its #T ID",
             },
             title: { type: 'string', description: 'A short headline for the whole assignment you work on yourself (main conversation only), a few words' },
+            release: { type: 'array', items: { type: 'string' }, description: "Main conversation only: tickets to give up, each quoted from its line or its #T ID. Drops this session's claims on them, planned and own. Use it for a ticket you queued for another session or only to order the work, or that another session asked you for and you agree" },
             session: { type: 'string', description: 'Main conversation only, once: your session name, as ListAgents shows it after "This session is", without the bracketed ref. Other sessions on the repo show it as the owner of your tickets' },
           },
           required: ['done', 'total'],
@@ -5100,6 +5238,14 @@ export const register: Register = (on, options) => {
       setRows(agentRows.map(row => (row.id !== id ? row : { ...row, ...(progress === undefined ? {} : { progress }), ...(claims === undefined ? {} : { claims }) })))
       redraw($)
     }
+    // The main conversation gives up claims it holds (#T008U): tickets it queued for another session, or only to order the work.
+    const released = id === undefined ? readClaims({ items: input.release }) : undefined
+    if (released !== undefined) {
+      await scan($).catch(() => undefined)
+      if (releaseTickets(released)) {
+        redraw($)
+      }
+    }
     if (id === undefined && claims !== undefined) {
       // The main conversation names tickets: they are its own. A helper's claim never is.
       await scan($).catch(() => undefined)
@@ -5127,7 +5273,7 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', { tool: MOVE_TOOL }, async ($, e) => {
-    const text = await moveTicket($, e as unknown as Record<string, unknown>)
+    const text = await moveTicket($, e as unknown as Record<string, unknown>, e.agentId === undefined)
 
     // Every answer quotes ticket text or a name from a todo folder: it ends with the data mark (UCR-181).
     return { result: `${text} ${DATA_MARK}` }
@@ -5170,6 +5316,8 @@ export const register: Register = (on, options) => {
         const after = ticketStatuses(path)
         claimTickets($, [...after].filter(([key, status]) => status === 'in_progress' && before.get(key) !== 'in_progress').map(([key]) => key))
         // Work Claude stopped but did not finish is next work: the box goes to queued, not open.
+        // The tickets this edit queued itself are planned (#T008U); the mod's own queueing below adds the ones it queues.
+        planTickets($, plannedIdsOf(path, newlyQueued(before, after)))
         const stopped = stoppedKeys(before, after)
         if (stopped.length > 0) {
           await queueStopped($, path, stopped)
@@ -5381,7 +5529,7 @@ export const register: Register = (on, options) => {
     const Input = 'Input' in table ? table.Input : undefined
     const rows = agentRows
     const time = Math.max(clockMs, ...rows.map(row => row.endedAt ?? row.startedAt))
-    if (pruneTickets()) {
+    if (pruneTickets() || prunePlannedTickets()) {
       saveAgents($)
     }
     // A pane drawn before the kept state is read (a plugin reload, with no session.start and no live
@@ -5655,8 +5803,7 @@ export const register: Register = (on, options) => {
               const category = book.categories.length === 0 ? undefined : groupOf(book, storedKey(item.key))
               const id = new RegExp(`#${ID_SRC}\\b`).exec(item.text)?.[0]
               // Every ticket, in every column, ends with the status question mark.
-              // A ticket a peer session holds has no Send (#T008R): a click would start a second session on the same work.
-              const send = isSent || item.peer !== undefined ? [] : [SEND_ACTION]
+                            const send = isSent ? [] : [SEND_ACTION]
               const actions: TicketAction[] =
                 item.status === 'completed'
                   ? [STATUS_ACTION]
@@ -5665,9 +5812,9 @@ export const register: Register = (on, options) => {
                     : item.status === 'queued'
                       ? [REOPEN_ACTION, START_ACTION, DONE_ACTION, ...send, STATUS_ACTION]
                       // Back moves one column, in progress to queued; a ticket held only by a live agent has no box to move back.
-                      : [...(item.heldFrom === undefined ? [UNSTART_ACTION] : []), DONE_ACTION, STATUS_ACTION]
+                      : [...(item.heldFrom === undefined ? [UNSTART_ACTION] : []), DONE_ACTION, ...(item.peer !== undefined ? send : []), STATUS_ACTION]
               // The tag's room: the card width less the buttons' cells (an overestimate, so the tag stays clear of them) and the card's padding.
-              const peerTag = item.peer === undefined ? undefined : { name: holderName(item.peer.name), room: ticketW - (ACTION_RIGHT + actions.length * ACTION_CELLS) * CELL_PX - 14 - 8 }
+              const peerTag = item.peer === undefined ? undefined : { tip: peerTip(item.peer), isDim: item.peer.silentSince !== undefined, room: ticketW - (ACTION_RIGHT + actions.length * ACTION_CELLS) * CELL_PX - 14 - 8 }
               const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, actions: actions.length, ...(peerTag === undefined ? {} : { peerTag }) })
               const one = { sentKey, isSent, actions, drawn }
               prepared.set(item, one)
@@ -5689,10 +5836,14 @@ export const register: Register = (on, options) => {
                 if (action === SEND_ACTION) {
                   sentTickets.add(sentKey)
                 }
-                if (action === SEND_ACTION || (item.status === 'in_progress' && item.heldFrom === undefined)) {
+                // A ticket a peer claims is sent with a different prompt (#T008U): Claude checks in with the owner first, and claims it only when it starts.
+                const isPeerSend = action === SEND_ACTION && item.peer !== undefined
+                if (!isPeerSend && (action === SEND_ACTION || (item.status === 'in_progress' && item.heldFrom === undefined))) {
                   claimTickets($, [item.key])
                 }
-                void $.prompt.submit({ text: action.prompt(item.path ?? `${DIR}/${item.file ?? file.name}`, item.text), asUser: true }).catch(toastFailure($, `send ${ticketSummary(item.text, 60)}`))
+                const where = item.path ?? `${DIR}/${item.file ?? file.name}`
+                const sent = isPeerSend ? peerSendPrompt(where, item.text, item.peer?.name, presenceRoot() ?? '') : action.prompt(where, item.text)
+                void $.prompt.submit({ text: sent, asUser: true }).catch(toastFailure($, `send ${ticketSummary(item.text, 60)}`))
                 showToast($, `${action.toast}: ${ticketSummary(item.text, 60)}`)
                 redraw($)
               }

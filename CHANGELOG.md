@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.18
+
+### Fixes
+
+- A peer that refreshes its record every 5 seconds no longer shows dimmed after 2 minutes. The board kept the time it first saw each peer and never moved it on while the claims stayed the same, so every peer read as inactive 2 minutes later. It now keeps the latest record at every read.
+- Two sessions on one repo place a peer's ticket alike. A ticket a peer works on (itself or through a live agent) shows in In progress on every board, also when its box is open or queued, as it does on the peer's own board. Before, a peer's agent on a queued ticket showed it in In progress on the peer's board and in Queued, as planned work, on the others. Only a ticket a peer plans, and does not work on, stays in Queued. The claim of work in hand lasts until the ticket is done; a planned claim still ends when the box goes to open.
+- An agent of this session that finished no longer hides a peer's claim on the same ticket. Only a live agent or the main conversation's own claim wins.
+
 ## 0.9.17
 
 ### Features

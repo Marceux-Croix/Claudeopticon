@@ -81,8 +81,9 @@ const isClaimBox = (status: string): boolean => status === 'in_progress' || stat
 /**
  * The tickets this session claims, by `ticketId`: `tickets` for its main conversation (the claims in
  * `orchKeys`, stored keys), `agentTickets` for its live agents' links, `planned` for the tickets its main
- * conversation queued (`plannedIds`, ticket IDs). A claim counts only while the ticket's box is `[~]` or
- * `[>]` (#T008U): done and open tickets and archived files hold nothing.
+ * conversation queued (`plannedIds`, ticket IDs). Work in hand (`tickets`, `agentTickets`) counts on any box
+ * but done, as this session's own board shows it in In progress (#T008Y); a planned claim only while the box
+ * is `[~]` or `[>]` (#T008U). Archived files hold nothing.
  */
 export function holdings(list: readonly TodoFile[], rows: readonly AgentRow[], orchKeys: ReadonlySet<string>, plannedIds: ReadonlySet<string> = new Set()): { tickets: string[]; agentTickets: string[]; planned: string[] } {
   const live = new Set(rows.filter(row => !isEnded(row.status) && row.idleSince === undefined).map(row => row.id))
@@ -92,13 +93,10 @@ export function holdings(list: readonly TodoFile[], rows: readonly AgentRow[], o
   const planned = new Set<string>()
   for (const file of files) {
     for (const item of file.items) {
-      if (!isClaimBox(item.status)) {
-        continue
-      }
-      if (orchKeys.has(keptKey(file, item))) {
+      if (item.status !== 'completed' && orchKeys.has(keptKey(file, item))) {
         tickets.add(ticketId(file, item))
       }
-      if (plannedIds.has(ticketId(file, item))) {
+      if (isClaimBox(item.status) && plannedIds.has(ticketId(file, item))) {
         planned.add(ticketId(file, item))
       }
     }
@@ -109,7 +107,7 @@ export function holdings(list: readonly TodoFile[], rows: readonly AgentRow[], o
     for (const [agent, links] of linkAgents(list, rows)) {
       for (const link of live.has(agent) ? links : []) {
         const file = byId.get(link.file)
-        if (file !== undefined && isClaimBox(link.item.status)) {
+        if (file !== undefined && link.item.status !== 'completed') {
           agentTickets.add(ticketId(file, link.item))
         }
       }
@@ -211,14 +209,16 @@ export function peerIds(sessionList: unknown, me: string): string[] {
 }
 
 /** What a peer's claim on a ticket carries to the board: the holder's name and when its record was last refreshed. */
-export type PeerClaim = { name?: string; seenAt: number }
+/** `isPlanned`: only the peer's planned list names the ticket; a ticket it or its agents hold is not planned. */
+export type PeerClaim = { name?: string; seenAt: number; isPlanned?: true }
 
 /**
  * The tickets peers claim (held, run by an agent, or planned), by `ticketId`. A record counts when it is
  * well formed, names its own key's session, is of another session than `me`, has the same repo root, and
  * was seen within PEER_IGNORE_MS (a time in the future counts as now). A record silent past PEER_DIM_MS
  * still counts; the board dims it. A ticket in `own` is not counted: this session's claim wins. Of two
- * peers on one ticket, the one seen last names it. Whether the box still lets the claim stand is the view's call.
+ * peers on one ticket, the one seen last names it; a ticket one peer works on is held though another plans it, and
+ * `isPlanned` marks a ticket only a planned list names (#T008Y). Whether the box still lets the claim stand is the view's call.
  */
 export function peerHolds(records: readonly { id: string; value: unknown }[], me: string, root: string, now: number, own: ReadonlySet<string>): Map<string, PeerClaim> {
   const live = records
@@ -226,10 +226,13 @@ export function peerHolds(records: readonly { id: string; value: unknown }[], me
     .filter((one): one is { id: string; presence: Presence } => one.presence !== undefined && one.id !== me && one.presence.sessionId === one.id && one.presence.root === root && Math.abs(now - one.presence.seenAt) < PEER_IGNORE_MS)
     .sort((a, b) => b.presence.seenAt - a.presence.seenAt)
   const held = new Map<string, PeerClaim>()
-  for (const { presence } of live) {
-    for (const ticket of [...presence.tickets, ...presence.agentTickets, ...presence.planned]) {
-      if (!own.has(ticket) && !held.has(ticket)) {
-        held.set(ticket, { ...(presence.name === undefined ? {} : { name: presence.name }), seenAt: presence.seenAt })
+  // Held first, from every peer, then planned: a ticket one peer works on is held, though another plans it.
+  for (const isPlanned of [false, true]) {
+    for (const { presence } of live) {
+      for (const ticket of isPlanned ? presence.planned : [...presence.tickets, ...presence.agentTickets]) {
+        if (!own.has(ticket) && !held.has(ticket)) {
+          held.set(ticket, { ...(presence.name === undefined ? {} : { name: presence.name }), seenAt: presence.seenAt, ...(isPlanned ? { isPlanned: true as const } : {}) })
+        }
       }
     }
   }

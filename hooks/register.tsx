@@ -4862,13 +4862,15 @@ async function peerStep($: EngineInterface, now: number): Promise<void> {
       }
     }
     // Compared without seenAt, which moves at each refresh: a redraw is due when the claims, the names or the silent state change.
-    const shape = (claims: ReadonlyMap<string, PeerClaim>) => JSON.stringify([...claims].map(([ticket, claim]) => [ticket, claim.name, now - claim.seenAt > PEER_DIM_MS ? claim.seenAt : 0]))
+    const shape = (claims: ReadonlyMap<string, PeerClaim>) => JSON.stringify([...claims].map(([ticket, claim]) => [ticket, claim.name, claim.isPlanned === true, now - claim.seenAt > PEER_DIM_MS ? claim.seenAt : 0]))
+    // Kept at every read, so each draw judges silence by the latest seenAt; a copy kept only on a change held the
+    // first seenAt, and every peer read as silent 2 minutes later (#T008Y).
+    peerHeld = found
     const nextShape = shape(found)
     if (nextShape !== peerShape) {
       peerShape = nextShape
       // The view's time moves up with this change: the silent state is worked out against it.
       clockMs = Math.max(clockMs, now)
-      peerHeld = found
       redraw($)
     }
   } finally {

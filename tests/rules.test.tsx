@@ -64,6 +64,7 @@ test('the rules tell Claude what queued means, when to queue a ticket, and that 
   expect(RULES).toContain('`- [>]` queued')
   expect(RULES).toContain('Queued column')
   expect(RULES).toContain('set it to `[>]`, not `[ ]`')
+  expect(RULES).toContain('When you add a ticket you plan to work on now, next, or after the next checkpoint, gate, closeout or merge, write it `[>]`')
   expect(RULES).not.toContain('`[>]` as in progress')
 })
 

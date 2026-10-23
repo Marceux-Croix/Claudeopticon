@@ -210,6 +210,7 @@ Other values are constants in the module that uses them. To change one, edit tha
 | `IDLE_DRAW_MS` | 30000 | `register.tsx` | Milliseconds between graph redraws when nothing changes |
 | `NOTE_MS` | 4000 | `register.tsx` | Milliseconds the Recategorize message stays up |
 | `MIN_TICKET_PX` | 300 | `register.tsx` | Narrowest ticket before the board columns stack |
+| `TICKET_GAP_PX` | 8.5 | `register.tsx` | Gap between stacked tickets in a board column, the same as the gap between columns |
 | `MAX_FOLDERS` | 20 | `repo-folders.ts` | Most `.claude_todo/` folders the pane finds in a repo |
 | `MAX_CATEGORIES` | 5 | `categories.ts` | Most category groups |
 | `SORT_MODEL` | `haiku` | `categories.ts` | The model that sorts tickets, matches agents to tickets, and recategorizes |

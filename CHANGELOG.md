@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.20
+
+### Fixes
+
+- A wider pane widens every card. Before, the graph, the agent and timeline cards and the file header stopped at 960 px, while the ticket columns and the buttons kept growing, so a wide pane left the cards short of its right edge.
+- Tickets stacked in a board column are spaced as the columns are, one cell apart. Before, they were one text row apart, about three times the gap between columns. The gap under each column heading is unchanged.
+
 ## 0.9.19
 
 ### Changes

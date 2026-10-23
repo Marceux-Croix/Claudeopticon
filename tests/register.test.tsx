@@ -2610,6 +2610,18 @@ test('the next prompt names the in-progress tickets the orchestrator claimed, an
   expect(contexts[3] ?? '').toContain('Still in progress from earlier: "#T0026 Ship the parser"')
 })
 
+test('tickets stacked in one column have a gap card between each two, and none above the first', async ($, on) => {
+  const { edit } = orchSetup($, on)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  await edit('- [~] #T1 First thing\n- [~] #T2 Second thing\n- [~] #T3 Third thing')
+  await ui.press({ key: 'todo-tickets' })
+  await ui.press({ key: 'todo-tickets' })
+  const svgs = JSON.stringify(await ui.findAll({ type: 'Svg' }))
+  expect(svgs.split('aria-hidden=\\"true\\"').length - 1).toBe(2)
+  expect(svgs.split('role=\\"presentation\\"').length - 1).toBe(0)
+})
+
 test('a ticket leaving In progress keeps its space until the next press, and a space expires after 60 seconds', async ($, on) => {
   const three = (second: string) => `- [~] #T1 First thing\n- [${second}] #T2 Second thing\n- [~] #T3 Third thing`
   const { edit, clock } = orchSetup($, on)

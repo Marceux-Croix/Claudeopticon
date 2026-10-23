@@ -5,7 +5,7 @@ import { AGENT_COLORS } from '../hooks/agent-identity'
 import { ACCENT, setWidth } from '../hooks/card-stage'
 import type { FileView, ItemView } from '../hooks/card-types'
 import { heroSvg } from '../hooks/hero-card'
-import { boardHead, fileCards, listRowPx, spaceSvg, ticketSvg } from '../hooks/todo-cards'
+import { boardHead, fileCards, gapSvg, listRowPx, spaceSvg, ticketSvg } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
 import { buildView, todoLedger } from '../hooks/view-model'
 import type { AgentRow, TodoFile } from '../types'
@@ -251,4 +251,13 @@ test('a silent peer tag is dimmed to half opacity and its tip carries the inacti
   expect(dim.source).toContain('<g opacity=".5"><title>Fix plans to work this (inactive since 07:05)</title>')
   expect(dim.source).toContain('>Peer owned</text>')
   expect(dim.isInteractive).toBe(true)
+})
+
+test('the gap between tickets is an empty card of the column gap, hidden and not a ticket space', () => {
+  const gap = gapSvg(300, 8.5)
+  expect(gap.width).toBe(300)
+  expect(gap.height).toBe(9)
+  expect(gap.source).toContain('aria-hidden="true"')
+  expect(gap.source).not.toContain('role="presentation"')
+  expect(gap.source).not.toContain('<text')
 })

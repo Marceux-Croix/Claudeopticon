@@ -44,6 +44,9 @@ export function orchestratorTitle(title: string | undefined, tickets: readonly s
   return first === undefined ? 'Orchestrator' : tickets.length > 1 ? `${first} and ${tickets.length - 1} more` : first
 }
 
+/** Whether a peer works on the ticket, itself or through its agents, rather than only planning it. */
+const isPeerHeld = (peer: ItemView['peer']): boolean => peer !== undefined && peer.isPlanned !== true
+
 /** What the pane draws, worked out once for the cards and the terminal alike. */
 export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], now: number, orch?: OrchestratorState, peers: ReadonlyMap<string, PeerClaim> = new Map()): View {
   const links = linkAgents(list, rows)
@@ -86,11 +89,15 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     for (const file of list.filter(one => one.isArchived !== true)) {
       file.items.forEach((item, index) => {
         const key = `${fileId(file)}:${index}`
-        const claim = item.status !== 'in_progress' && item.status !== 'queued' ? undefined : (itemOwners.get(key) ?? []).length > 0 ? undefined : peers.get(ticketId(file, item))
+        // Only a live holder here hides the peer's claim: an agent that finished here holds nothing.
+        const isHeldHere = (itemOwners.get(key) ?? []).some(i => i === ORCH || isLive(i))
+        const found = isHeldHere || item.status === 'completed' ? undefined : peers.get(ticketId(file, item))
+        // A ticket the peer works on counts on any open box, as on its own board; planned work only while the box is in progress or queued.
+        const claim = found?.isPlanned === true && item.status === 'pending' ? undefined : found
         if (claim !== undefined) {
           peerOf.set(key, {
             ...(claim.name === undefined ? {} : { name: claim.name }),
-            ...(item.status === 'queued' ? { isPlanned: true as const } : {}),
+            ...(claim.isPlanned === true && item.status === 'queued' ? { isPlanned: true as const } : {}),
             ...(now - claim.seenAt > PEER_DIM_MS ? { silentSince: claim.seenAt } : {}),
           })
         }
@@ -114,7 +121,7 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
     const inArchive = file.isArchived === true ? 0 : archiveDone(file)
     const indexed = file.items.map((item, index) => ({ file, item, owners: itemOwners.get(`${fileId(file)}:${index}`) ?? [], peer: peerOf.get(`${fileId(file)}:${index}`) }))
     // An open or queued ticket that an agent holds shows in In progress (ticketColumns), so it counts there.
-    const held = indexed.filter(one => (one.item.status === 'pending' || one.item.status === 'queued') && one.owners.length > 0).length
+    const held = indexed.filter(one => (one.item.status === 'pending' || one.item.status === 'queued') && (one.owners.length > 0 || isPeerHeld(one.peer))).length
     const [done, active, total] = [own.done + inArchive, own.active + held, own.total + inArchive]
     const linked = indexed.filter(one => one.owners.length > 0 || one.peer !== undefined)
     const rest = [
@@ -292,7 +299,8 @@ export function itemIdValue(item: ItemView): number | undefined {
  * column is newest first by ticket ID value instead; a ticket with no ID comes last, in file order.
  */
 export function ticketColumns(given: readonly ItemView[], current: CategoryBook, order: TicketOrder = 'group'): TicketColumn[] {
-  const items = given.map(item => ((item.status === 'pending' || item.status === 'queued') && item.owners.length > 0 ? { ...item, status: 'in_progress' as const, heldFrom: item.status } : item))
+  // A ticket a peer works on (not only plans) shows in In progress, as it does on that peer's own board.
+  const items = given.map(item => ((item.status === 'pending' || item.status === 'queued') && (item.owners.length > 0 || isPeerHeld(item.peer)) ? { ...item, status: 'in_progress' as const, heldFrom: item.status } : item))
   const rank = (item: ItemView) => {
     const category = categoryOf(current, storedKey(item.key))
     const at = category === undefined ? current.categories.length : current.categories.indexOf(category)

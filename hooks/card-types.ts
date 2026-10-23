@@ -20,7 +20,8 @@ export type ItemView = {
   heldFrom?: 'pending' | 'queued'
   /**
    * Claimed by another session on this repo; `name` is that session's name, absent when it never gave one.
-   * `isPlanned`: the box is queued, so the peer plans the work and the card stays in Queued.
+   * `isPlanned`: the peer only plans the ticket (its planned list) and the box is queued, so the card stays in Queued.
+   *   Without it, the peer works on the ticket and the card shows in In progress, as on the peer's own board.
    * `silentSince`: the peer's record is older than PEER_DIM_MS; the time it was last refreshed, clock ms. Drawn as a tag; no Send.
    */
   peer?: { name?: string; isPlanned?: true; silentSince?: number }

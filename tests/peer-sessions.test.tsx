@@ -120,7 +120,7 @@ test('peerHolds counts planned tickets of a peer, and a silent record still coun
   expect(PEER_IGNORE_MS).toBe(86_400_000)
 })
 
-test('holdings: a claim lives only while the box is in progress or queued; planned tickets are held the same way', () => {
+test(' holdings: work in hand counts on any box but done; a planned claim only while the box is in progress or queued', () => {
   const list = [file({ items: [
     { text: '#T1 one', status: 'queued', id: 'T1' },
     { text: '#T2 two', status: 'pending', id: 'T2' },
@@ -129,7 +129,7 @@ test('holdings: a claim lives only while the box is in progress or queued; plann
   ] })]
   const id = (n: number) => `/repo/.claude_todo/TODO.md\t#t${n}`
   const got = holdings(list, [], new Set(['#t1', '#t2', '#t3']), new Set([id(1), id(2), id(3), id(4), 'gone']))
-  expect(got.tickets).toEqual([id(1)])
+  expect(got.tickets).toEqual([id(1), id(2)])
   expect(got.planned).toEqual([id(1), id(4)])
   expect(holdings(list, [], new Set()).planned).toEqual([])
 })
@@ -165,4 +165,20 @@ test('peerTip says owns, plans to work, and adds the inactive time in local 24-h
   expect(clockText(at)).toBe('07:05')
   expect(peerTip({ name: 'Alpha', silentSince: at })).toBe('Alpha owns this (inactive since 07:05)')
   expect(peerTip({ name: 'Alpha', isPlanned: true, silentSince: new Date(2026, 9, 22, 23, 59).getTime() })).toBe('Alpha plans to work this (inactive since 23:59)')
+})
+
+test('peerHolds marks a ticket planned only when a planned list alone names it; held work wins over a plan, from any peer', () => {
+  const held = peerHolds(
+    [
+      { id: 'a', value: record({ tickets: [], agentTickets: ['ag'], planned: ['p', 'both'] }) },
+      { id: 'b', value: record({ sessionId: 'b', name: 'Beta', tickets: ['both'], seenAt: NOW - 10 }) },
+    ],
+    'me',
+    ROOT,
+    NOW + 1000,
+    new Set(),
+  )
+  expect(held.get('ag')).toEqual({ name: 'Alpha', seenAt: NOW })
+  expect(held.get('p')).toEqual({ name: 'Alpha', seenAt: NOW, isPlanned: true })
+  expect(held.get('both')).toEqual({ name: 'Beta', seenAt: NOW - 10 })
 })

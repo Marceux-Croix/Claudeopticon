@@ -124,7 +124,7 @@ test('a session stores its presence record: root, held tickets and the name Clau
   expect(ui).toBeDefined()
 })
 
-test(' a ticket a peer holds in progress shows in In progress with the owner tag and no Send; the claim ends with the box', async ($, on) => {
+test(' a ticket a peer holds shows in In progress with the owner tag and Send, on an open box too, as on the peer\'s own board; the claim ends when the ticket is done', async ($, on) => {
   const { clock, store } = setup($, on)
   const ui = await open($)
   await run(clock, 6)
@@ -133,13 +133,15 @@ test(' a ticket a peer holds in progress shows in In progress with the owner tag
   // Before the peer: the ticket is open, with its Send button.
   expect((await cards(ui)).find(svg => svg.includes('#T1 Ship'))).toContain('Open: #T1')
   expect(await keys(ui)).toContain('ticket-OPEN.md-#t1')
-  // The peer is in the session list and holds #T1, but the box is open: the claim does not stand.
+  // The peer is in the session list and holds #T1 on an open box: its own board shows it in In progress, and so does this one.
   store.set('sessions-recent', [['peer-a', 1]])
   store.set('presence:peer-a', peerRecord(mine, { seenAt: refresh() }))
   await run(clock, 6)
   store.set('presence:peer-a', peerRecord(mine, { seenAt: refresh() }))
   await run(clock, 6)
-  expect((await cards(ui)).find(svg => svg.includes('#T1 Ship'))).not.toContain('Peer owned')
+  const onOpen = (await cards(ui)).find(svg => svg.includes('#T1 Ship'))!
+  expect(onOpen).toContain('In progress: #T1')
+  expect(onOpen).toContain('Peer owned')
   // The box goes to in progress: the tag, the tip, no Send.
   setTodo('- [~] #T1 Ship the parser\n- [ ] #T2 Review the copy')
   store.set('presence:peer-a', peerRecord(mine, { seenAt: refresh() }))
@@ -163,12 +165,11 @@ test(' a ticket a peer holds in progress shows in In progress with the owner tag
   await run(clock, 6)
   const unnamed = (await cards(ui)).find(svg => svg.includes('#T1 Ship'))!
   expect(unnamed).toContain('An unnamed peer session owns this')
-  // The box goes back to open: the claim ends, with Send again.
-  setTodo('- [ ] #T1 Ship the parser\n- [ ] #T2 Review the copy')
+  // The ticket is done: the claim ends.
+  setTodo('- [x] #T1 Ship the parser\n- [ ] #T2 Review the copy')
   store.set('presence:peer-a', peerRecord(mine, { seenAt: refresh() }))
   await run(clock, 6)
-  expect((await cards(ui)).find(svg => svg.includes('#T1 Ship'))).not.toContain('owns this')
-  expect(await keys(ui)).toContain('ticket-OPEN.md-#t1')
+  expect((await cards(ui)).join('')).not.toContain('owns this')
 })
 
 test('a peer silent past 2 minutes still counts: its tag is dimmed and its tip says when it went inactive; a record older than 24 hours is ignored', async ($, on) => {
@@ -192,6 +193,24 @@ test('a peer silent past 2 minutes still counts: its tag is dimmed and its tip s
   store.set('presence:peer-a', peerRecord(mine, { seenAt: (store.get('presence:sess-1') as Mine).seenAt - PEER_IGNORE_MS - 1 }))
   await run(clock, 6)
   expect((await cards(ui)).find(svg => svg.includes('#T1 Ship'))).not.toContain('owns this')
+})
+
+test('a peer that refreshes its record every 5 seconds is never dimmed, however long it runs', async ($, on) => {
+  const { clock, store } = setup($, on)
+  setTodo('- [~] #T1 Ship the parser\n- [ ] #T2 Review the copy')
+  const ui = await open($)
+  await run(clock, 6)
+  const mine = store.get('presence:sess-1') as Mine
+  store.set('sessions-recent', [['peer-a', 1]])
+  // 3 minutes of refreshes: the claims never change, so only the seenAt moves.
+  for (let i = 0; i < 36; i += 1) {
+    store.set('presence:peer-a', peerRecord(mine, { seenAt: (store.get('presence:sess-1') as Mine).seenAt }))
+    await run(clock, 5)
+  }
+  const card = (await cards(ui)).find(svg => svg.includes('#T1 Ship'))!
+  expect(card).toContain('Fix the board owns this')
+  expect(card).not.toContain('inactive since')
+  expect(card).not.toContain('opacity=\\".5\\"')
 })
 
 test('a ticket a peer plans stays in Queued with the Peer owned tag and "plans to work this", and no Send; it moves to In progress when the box does', async ($, on) => {

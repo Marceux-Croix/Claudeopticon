@@ -311,37 +311,54 @@ test('columnShare: three to a row at 32%, two at 49%, a column alone in its row 
 
 // ---------------------------------------------------------------- tickets another session holds
 
-test(' a ticket a peer claims in progress is drawn in In progress with the peer tag; a queued one stays in Queued, planned; open, done and unknown tickets are left; this session holdings win', () => {
-  const file: TodoFile = { name: 'OPEN.md', folder: '/repo/.claude_todo', mtimeMs: 1, items: parseTodo('- [~] #T1 Ship the parser\n- [>] #T2 Review the copy\n- [ ] #T3 Third\n- [x] #T4 Done one') }
+test(' a ticket a peer works on shows in In progress on any open box, as on its own board; a planned one stays in Queued while queued or in progress; done and unknown tickets are left; this session holdings win', () => {
+  const file: TodoFile = { name: 'OPEN.md', folder: '/repo/.claude_todo', mtimeMs: 1, items: parseTodo('- [~] #T1 Ship the parser\n- [>] #T2 Review the copy\n- [ ] #T3 Third\n- [x] #T4 Done one\n- [>] #T5 Agent on a queued box\n- [ ] #T6 Planned, now open') }
+  const id = (n: number) => `/repo/.claude_todo/OPEN.md\t#t${n}`
   const peers = new Map<string, PeerClaim>([
-    ['/repo/.claude_todo/OPEN.md\t#t1', { name: 'Alpha', seenAt: 1000 }],
-    ['/repo/.claude_todo/OPEN.md\t#t2', { seenAt: 1000 }],
-    ['/repo/.claude_todo/OPEN.md\t#t3', { name: 'Alpha', seenAt: 1000 }],
-    ['/repo/.claude_todo/OPEN.md\t#t4', { name: 'Alpha', seenAt: 1000 }],
+    [id(1), { name: 'Alpha', seenAt: 1000 }],
+    [id(2), { seenAt: 1000, isPlanned: true }],
+    [id(3), { name: 'Alpha', seenAt: 1000 }],
+    [id(4), { name: 'Alpha', seenAt: 1000 }],
+    [id(5), { name: 'Alpha', seenAt: 1000 }],
+    [id(6), { name: 'Alpha', seenAt: 1000, isPlanned: true }],
   ])
   const view = buildView([file], [], 1000, undefined, peers)
   const items = view.files[0]!.items
-  expect(items.find(one => one.key === '#t1')?.peer).toEqual({ name: 'Alpha' })
-  expect(items.find(one => one.key === '#t2')?.peer).toEqual({ isPlanned: true })
-  // A claim ends with the box: an open and a done ticket carry none.
-  expect(items.find(one => one.key === '#t3')?.peer).toBeUndefined()
-  expect(items.find(one => one.key === '#t4')?.peer).toBeUndefined()
+  const peerOf = (n: number) => items.find(one => one.key === `#t${n}`)?.peer
+  expect(peerOf(1)).toEqual({ name: 'Alpha' })
+  expect(peerOf(2)).toEqual({ isPlanned: true })
+  // Held work counts on an open or queued box too; a done ticket and a planned one whose box went open carry none.
+  expect(peerOf(3)).toEqual({ name: 'Alpha' })
+  expect(peerOf(5)).toEqual({ name: 'Alpha' })
+  expect(peerOf(4)).toBeUndefined()
+  expect(peerOf(6)).toBeUndefined()
   const columns = ticketColumns(items, { categories: [], items: {} })
-  expect(columns[0]!.items.map(one => one.key)).toEqual(['#t1'])
+  expect(columns[0]!.items.map(one => one.key).sort()).toEqual(['#t1', '#t3', '#t5'])
+  expect(columns[0]!.items.find(one => one.key === '#t5')!.heldFrom).toBe('queued')
   expect(columns[1]!.items.map(one => one.key)).toEqual(['#t2'])
   expect(columns[1]!.items[0]!.heldFrom).toBeUndefined()
-  expect(columns[2]!.items.map(one => one.key)).toEqual(['#t3'])
-  expect(view.active).toBe(1)
+  expect(columns[2]!.items.map(one => one.key)).toEqual(['#t6'])
+  expect(view.active).toBe(3)
   // The orchestrator holds #T1: its claim wins, and the ticket carries no peer tag.
   const mine = buildView([file], [], 1000, { keys: new Set(['#t1']), isRunning: true, toolCalls: 0 }, peers)
   expect(mine.files[0]!.items.find(one => one.key === '#t1')?.peer).toBeUndefined()
   expect(mine.files[0]!.items.find(one => one.key === '#t1')?.owners).toEqual([ORCH])
 })
 
+test('an agent that finished here does not hide a peer claim; a live one does', () => {
+  const file: TodoFile = { name: 'OPEN.md', folder: '/repo/.claude_todo', mtimeMs: 1, items: parseTodo('- [>] #T1 Ship the parser') }
+  const peers = new Map<string, PeerClaim>([['/repo/.claude_todo/OPEN.md\t#t1', { name: 'Alpha', seenAt: 1000 }]])
+  const ended = buildView([file], [row({ brief: '#t1', status: 'completed', endedAt: 500 })], 1000, undefined, peers).files[0]!.items[0]!
+  expect(ended.peer).toEqual({ name: 'Alpha' })
+  const live = buildView([file], [row({ brief: '#t1' })], 1000, undefined, peers).files[0]!.items[0]!
+  expect(live.owners).toEqual([0])
+  expect(live.peer).toBeUndefined()
+})
+
 test('a peer record silent past PEER_DIM_MS carries silentSince; one just inside does not', () => {
   const file: TodoFile = { name: 'OPEN.md', folder: '/repo/.claude_todo', mtimeMs: 1, items: parseTodo('- [~] #T1 Ship the parser\n- [>] #T2 Review the copy') }
   const id = (n: number) => `/repo/.claude_todo/OPEN.md\t#t${n}`
-  const peers = new Map<string, PeerClaim>([[id(1), { name: 'Alpha', seenAt: 1000 }], [id(2), { name: 'Beta', seenAt: 2000 }]])
+  const peers = new Map<string, PeerClaim>([[id(1), { name: 'Alpha', seenAt: 1000 }], [id(2), { name: 'Beta', seenAt: 2000, isPlanned: true }]])
   const items = buildView([file], [], 1000 + PEER_DIM_MS + 1, undefined, peers).files[0]!.items
   expect(items.find(one => one.key === '#t1')?.peer).toEqual({ name: 'Alpha', silentSince: 1000 })
   expect(items.find(one => one.key === '#t2')?.peer).toEqual({ name: 'Beta', isPlanned: true })

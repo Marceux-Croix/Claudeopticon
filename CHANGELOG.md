@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.19
+
+### Changes
+
+- The rules tell Claude to write a new ticket as queued (`- [>]`) when it plans to work on it now, next, or after the next checkpoint, gate, closeout or merge, and as open (`- [ ]`) only for backlog with no plan. Before, such tickets were written open and were lost in the Open column (#T0091).
+
 ## 0.9.18
 
 ### Fixes

@@ -2610,16 +2610,29 @@ test('the next prompt names the in-progress tickets the orchestrator claimed, an
   expect(contexts[3] ?? '').toContain('Still in progress from earlier: "#T0026 Ship the parser"')
 })
 
-test('#T0093 tickets stacked in one column have a gap card between each two, and none above the first', async ($, on) => {
+test('#T0096 side-by-side tickets are drawn 5 px narrower than their column', async ($, on) => {
   const { edit } = orchSetup($, on)
   await begin($)
-  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
-  await edit('- [~] #T1 First thing\n- [~] #T2 Second thing\n- [~] #T3 Third thing')
-  await ui.press({ key: 'todo-tickets' })
-  await ui.press({ key: 'todo-tickets' })
-  const svgs = JSON.stringify(await ui.findAll({ type: 'Svg' }))
-  expect(svgs.split('aria-hidden=\\"true\\"').length - 1).toBe(2)
-  expect(svgs.split('role=\\"presentation\\"').length - 1).toBe(0)
+  const wide = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE, props: { ...PANE.props, bodyColumns: 240 } } as never)
+  await edit('- [~] #T1 First thing\n- [>] #T2 Second thing\n- [ ] #T3 Third thing')
+  await wide.press({ key: 'todo-tickets' })
+  await wide.press({ key: 'todo-tickets' })
+  // 240 cells of 8.5 px: three columns that fill the pane less two one-cell gaps (#T0097), each ticket 5 px narrower.
+  const sideBySide = JSON.stringify(await wide.findAll({ type: 'Svg' }))
+  expect(sideBySide.split(`"width":${Math.floor((240 * 8.5 - 2 * 8.5) / 3) - 5}`).length - 1).toBe(3)
+})
+
+test('#T0096 stacked tickets take the full width', async ($, on) => {
+  const { edit } = orchSetup($, on)
+  await begin($)
+  await edit('- [~] #T1 First thing\n- [>] #T2 Second thing\n- [ ] #T3 Third thing')
+  const narrow = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  await narrow.press({ key: 'todo-tickets' })
+  await narrow.press({ key: 'todo-tickets' })
+  // 60 cells: the columns stack, and each ticket is the full width.
+  const stacked = JSON.stringify(await narrow.findAll({ type: 'Svg' }))
+  expect(stacked.split(`"width":${60 * 8.5}`).length - 1).toBeGreaterThanOrEqual(3)
+  expect(stacked).not.toContain(`"width":${60 * 8.5 - 5}`)
 })
 
 test('a ticket leaving In progress keeps its space until the next press, and a space expires after 60 seconds', async ($, on) => {

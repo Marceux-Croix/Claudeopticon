@@ -12,12 +12,12 @@ const row = (over: Partial<AgentRow>): AgentRow => ({
   id: 'a1', description: 'x', type: 'Explore', status: 'running', startedAt: 0, toolCalls: 0, brief: '', ...over,
 })
 
-test('the cards take the width they are given, within 300 to 960 px', async () => {
+test('#T0092 the cards take the width they are given, at least 300 px and with no upper cap', async () => {
   const view = buildView([], [row({})], 1000)
   setWidth(720)
   expect(timelineSvg(view, view.agents).width).toBe(720)
   setWidth(5000)
-  expect(timelineSvg(view, view.agents).width).toBe(960)
+  expect(timelineSvg(view, view.agents).width).toBe(5000)
   setWidth(10)
   expect(timelineSvg(view, view.agents).width).toBe(300)
   setWidth(384)
@@ -31,9 +31,9 @@ test('every card carries the light palette, swapped in by the system theme', asy
   }
 })
 
-test('#T0040 setWidth caps the cards at 960 px but keeps the full pane width for the board', () => {
+test('#T0040 #T0092 setWidth gives the cards and the board the full pane width', () => {
   setWidth(2000)
-  expect(W).toBe(960)
+  expect(W).toBe(2000)
   expect(PANE).toBe(2000)
   setWidth(200)
   expect(PANE).toBe(300)

@@ -97,7 +97,7 @@ test('UCR-089 an end label is never put on the Compacted label', () => {
 
 // ---------------------------------------------------------------- #T003B: the verifier's fuzz, kept as a test
 
-const FUZZ_WIDTHS = [300, 384, 520, 720, 960]
+const FUZZ_WIDTHS = [300, 384, 520, 720, 960, 1920]
 /** The sample states and the verifier's 340 fuzz states (fixed seed): 344 states, drawn once per width below. */
 const FUZZ = [...Object.entries(heroStates()), ...fuzzStates()]
 

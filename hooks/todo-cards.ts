@@ -180,6 +180,14 @@ export function listRowPx(item: ItemView, isTextOpen = false): number {
   return 34 + (wrap(item.text, room, 13, item.owners.length > 0 ? 500 : 400, isTextOpen ? Number.POSITIVE_INFINITY : MAX_LINES).length - 1) * LINE_H
 }
 
+/** The empty gap between two tickets in a board column (#T0093): hidden from screen readers, and not a space a ticket left. */
+export function gapSvg(width: number, height: number): Card {
+  const w = Math.max(1, Math.round(width))
+  const h = Math.max(1, Math.round(height))
+
+  return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"></svg>`, width: w, height: h, alt: '' }
+}
+
 /** An empty space `height` px high: a transparent card with no text and no buttons, that holds a ticket's place. */
 export function spaceSvg(width: number, height: number): Card {
   const w = Math.max(1, Math.round(width))

@@ -74,7 +74,7 @@ import type { Reservation } from './ticket-ids'
 import { findTickets, narrowTickets } from './ticket-lookup'
 import { moveQuestion, peerSendPrompt, sendScope, ticketSummary } from './ticket-prompts'
 import { clearSpaces, columnSlots, expireSpaces, newLayout, pressKeepsSpaces } from './ticket-spaces'
-import { boardHead, boardWidth, cardWidth, fileCards, listRowPx, longItems, spaceSvg, ticketSvg } from './todo-cards'
+import { boardHead, boardWidth, cardWidth, fileCards, gapSvg, listRowPx, longItems, spaceSvg, ticketSvg } from './todo-cards'
 import { bare, CHECKBOX, exampleMask, ID_SRC, ITEM_ID, leadingId, lineOwnIds, parseTodo, plainText } from './todo-markdown'
 import { readReason, reasonOf, TodoReadError } from './todo-read'
 import type { TodoRead } from './todo-read'
@@ -122,6 +122,8 @@ const ACTION_CELLS = 5
 const MIN_TICKET_PX = 300
 /** CSS pixels per pane cell on the desktop: a slight overestimate, since a card wider than the pane scales down to fit. */
 const CELL_PX = 8.5
+/** The gap between stacked tickets in a board column, in px: the gap between columns, one cell (#T0093). */
+const TICKET_GAP_PX = CELL_PX
 
 /** The tool names stay in this file: the validator reads the tool filter of a hook only from a constant here. */
 const PROGRESS_TOOL = 'mcp__claudeopticon__report_progress'
@@ -5906,6 +5908,8 @@ export const register: Register = (on, options) => {
                               <Text dimColor bold>{column.name}</Text>
                               <Text dimColor>{String(column.items.length)}</Text>
                             </Box>
+                            {/* No gap here: a spacer of the column gap sits between tickets, so rows and columns are spaced alike (#T0093). */}
+                            <Box flexDirection="column">
                             {(() => {
                               const shown = column.items.slice(0, isExpanded ? column.items.length : ITEMS_SHOWN)
                               // Two tickets with one key get distinct slot IDs.
@@ -5924,10 +5928,12 @@ export const register: Register = (on, options) => {
                               // One that went up from here leaves no space, so the cards below stay put (#T004X).
                               const columnsAbove = [...rowsOf(section.columns, columnCount).slice(0, r).flat(), ...(isStacked ? row.slice(0, row.indexOf(column)) : [])]
                               const above = new Set(columnsAbove.flatMap(one => one.items.slice(0, isExpanded ? one.items.length : ITEMS_SHOWN).map(item => `${item.file ?? file.name}:${item.key}`)))
-                              return columnSlots(layout, `${prefix}-${file.id}-col-${section.name}-${column.name}`, `${isExpanded}:${ticketW}:${isStacked}`, shown.map((item, i) => ({ id: ids[i]!, h: prepare(item, ticketW).drawn.height })), nowSync(), above).map(slot =>
+                              return columnSlots(layout, `${prefix}-${file.id}-col-${section.name}-${column.name}`, `${isExpanded}:${ticketW}:${isStacked}`, shown.map((item, i) => ({ id: ids[i]!, h: prepare(item, ticketW).drawn.height })), nowSync(), above).flatMap((slot, i) => [
+                                ...(i > 0 ? [card(`${prefix}-${file.id}-gap-${slot.id}`, gapSvg(ticketW, TICKET_GAP_PX))] : []),
                                 slot.isSpace === true ? card(`${prefix}-${file.id}-${slot.id}`, spaceSvg(ticketW, slot.h)) : ticket(byId.get(slot.id)!, slot.id, ticketW),
-                              )
+                              ])
                             })()}
+                            </Box>
                           </Box>
                           )
                         })}

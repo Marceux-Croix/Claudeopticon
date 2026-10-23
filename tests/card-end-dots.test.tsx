@@ -36,7 +36,7 @@ test('UCR-112 ends closer than MERGE_PX share a dot, at the limit too; ends MERG
 })
 
 test('UCR-112 the late-compact sample draws no two plain end dots on top of each other, at every width', () => {
-  for (const width of [300, 384, 520, 720, 960]) {
+  for (const width of [300, 384, 520, 720, 960, 1920]) {
     setWidth(width)
     const svg = heroSvg(heroStates()['late-compact']!).source
     const ys = [...svg.matchAll(/<circle cx="[\d.]+" cy="([\d.]+)" r="3.5"/g)].map(match => Number(match[1])).sort((a, b) => a - b)
@@ -54,7 +54,7 @@ test('UCR-112 #T004E a state with the token count and the rate at the same heigh
   // 900k tokens since compact, all in the last minute: the rate is 900k a minute, and both axes top out at 900k.
   const now = 100 * QUANT_MS
   const series: Series = { agents: [[now - 20 * MIN, 2]], tokens: [[now - 20 * MIN, 0], [now - 45_000, 900_000]], compacts: [] }
-  for (const width of [300, 384, 520, 720, 960]) {
+  for (const width of [300, 384, 520, 720, 960, 1920]) {
     setWidth(width)
     const svg = heroSvg({ ...buildView([], [], now), series, axes: stepAxes(undefined, series, now), usage: { tokens: 900_000, since: 0 } }).source
     // The agent end stays a plain dot; the green and blue ends share one ring with a wedge each.

@@ -6,7 +6,7 @@ import type { View } from '../hooks/card-types'
 import { readTitle } from '../hooks/progress-report'
 import { fileCards } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
-import { buildView, columnShare, columnsThatFit, ledger, orchestratorTitle, rowsOf, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
+import { buildView, columnPx, columnShare, columnsThatFit, ledger, orchestratorTitle, rowsOf, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
 import { readBook } from '../hooks/categories'
 import { PEER_DIM_MS } from '../hooks/peer-sessions'
 import type { PeerClaim } from '../hooks/peer-sessions'
@@ -362,4 +362,12 @@ test('a peer record silent past PEER_DIM_MS carries silentSince; one just inside
   const items = buildView([file], [], 1000 + PEER_DIM_MS + 1, undefined, peers).files[0]!.items
   expect(items.find(one => one.key === '#t1')?.peer).toEqual({ name: 'Alpha', silentSince: 1000 })
   expect(items.find(one => one.key === '#t2')?.peer).toEqual({ name: 'Beta', isPlanned: true })
+})
+
+test('columnPx: the columns of a row and their gaps fill the pane', () => {
+  expect(columnPx(1000, 3, 10)).toBe(326)
+  expect(3 * columnPx(1000, 3, 10) + 2 * 10).toBeLessThanOrEqual(1000)
+  expect(columnPx(1000, 2, 10)).toBe(495)
+  expect(columnPx(1000, 1, 10)).toBe(1000)
+  expect(columnPx(1000, 0, 10)).toBe(1000)
 })

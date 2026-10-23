@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.21
+
+### Fixes
+
+- The gap between board columns now matches the gap between stacked tickets, about 15 px each. The 0.9.20 spacer cards between stacked tickets are gone: the desktop draws about 15 px between two stacked cards by itself, and no spacer, margin or explicit `gap={0}` made that smaller. Instead each ticket is drawn 5 px narrower than its column when columns stand side by side, which widens the column gap from about 10 px to about 15 px. Stacked columns keep the full width, and the gap under each column heading is unchanged.
+- The board's columns span the full width of the cards above them. Before, each column was 32 % of the width (49 % in a row of two), so the row stopped about 4 % short of the right edge. The columns now grow to fill their row, and each ticket is drawn from the filled width less the gaps (`columnPx` in `view-model.ts`).
+
 ## 0.9.20
 
 ### Fixes

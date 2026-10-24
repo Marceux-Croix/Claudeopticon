@@ -8,7 +8,7 @@ import type { TodoItem, TodoStatus } from '../types'
 import { itemKey } from './item-keys'
 import { bare, CHECKBOX, exampleMask } from './markdown-blocks'
 
-export { bare, CHECKBOX, exampleMask, expandTabs, FENCE, fenceMask, fenceOpens, fenceStep } from './markdown-blocks'
+export { bare, CHECKBOX, exampleMask, expandTabs, FENCE, fenceOpens, HEADING_LINE } from './markdown-blocks'
 export type { Fence } from './markdown-blocks'
 
 /**

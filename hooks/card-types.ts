@@ -76,7 +76,7 @@ export type View = {
   agents: AgentView[]
   /**
    * The main conversation, when it owns a ticket: drawn as an agent card before A1 (index ORCH),
-   * and not one of `agents`, so no count or timeline holds it. Running during a turn, else idle.
+   * and not one of `agents`, so no count or timeline holds it. It is there only while the main conversation runs a turn.
    */
   orchestrator?: AgentView
   /** Counts over the files at the top of `.claude_todo/` plus the done tickets of every archive file, so moving a ticket to the archive leaves them as they were. */
@@ -104,6 +104,8 @@ export type View = {
  */
 export type Usage = { tokens: number; atCompact?: number; compactAt?: number; since: number }
 
-/** A drawn card: its SVG and its size in CSS pixels, so the pane sizes its frame to it. */
-/** `isInteractive` draws the card in the sandboxed frame, where its `<title>` tooltips show. */
+/**
+ * A drawn card: its SVG and its size in CSS pixels, so the pane sizes its frame to it.
+ * `isInteractive` draws the card in the sandboxed frame, where its `<title>` tooltips show.
+ */
 export type Card = { source: string; width: number; height: number; alt: string; isInteractive?: true }

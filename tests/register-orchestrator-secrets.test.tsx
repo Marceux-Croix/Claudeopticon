@@ -5,7 +5,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 // Hook cases on the orchestrator fakes: a hidden secret through the hooks, and a ticket card that keeps its key.
 {
-// Batch F (UCR loop 1): secrets, SVG validity, code-point cuts, graph labels, counts, keys, link cost.
+// Batch F : secrets, SVG validity, code-point cuts, graph labels, counts, keys, link cost.
 
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 

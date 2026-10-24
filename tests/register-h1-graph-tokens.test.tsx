@@ -5,7 +5,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import type { Series } from '../hooks/series'
 
-// Batch H1 (UCR loop 1 tail): graph, tokens, terminal text.
+// graph, tokens, terminal text.
 {
 const h1FromPs = (script: string) => String.fromCodePoint(...(/\[char\[\]\]\(([\d,]+)\)/.exec(script)![1]!.split(',').map(Number))).replace(/\\/g, '/')
 
@@ -217,7 +217,7 @@ test('B2 a reload with the kept series behind the kept count ends the trace at t
 
 const H1_TERM = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
-// Each control character the verifier found, in each place it reaches a terminal Text: a ticket, a
+// Each control character found, in each place it reaches a terminal Text: a ticket, a
 // todo file name and a Bash command (the defect behind a valid first case: "_" draws; the limits of
 // C0, DEL and C1: \x01, \x1B, \x7F, \x85, \x9B).
 for (const bad of ['\x01', '\x07', '\x0B', '\x1B', '\x7F', '\x85', '\x9B']) {

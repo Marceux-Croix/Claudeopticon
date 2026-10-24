@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { agentCardHeight, AGENT_CARD_MIN_PX, ORCHESTRATOR_HELD_PX, orchestratorSvg, timelineHeight, timelineSvg } from '../hooks/agent-cards'
+import { agentCardHeight, AGENT_CARD_MIN_PX, agentSvg, ORCHESTRATOR_HELD_PX, orchestratorSvg, timelineHeight, timelineSvg } from '../hooks/agent-cards'
 import { buildView } from '../hooks/view-model'
 import type { AgentRow } from '../types'
 
@@ -64,4 +64,40 @@ test('timelineHeight and agentCardHeight are the heights the cards draw at', () 
   expect(timelineHeight(3) - timelineHeight(2)).toBe(30)
   expect(AGENT_CARD_MIN_PX).toBe(agentCardHeight(2, false))
   expect(agentCardHeight(3, true) - agentCardHeight(2, false)).toBe(28)
+})
+
+test('the card of an ended agent is the same markup at two clock readings 30 s apart', () => {
+  const rows = [row({ id: 'a', status: 'completed', startedAt: 0, endedAt: 50_000 }), row({ id: 'b', status: 'failed', startedAt: 0, endedAt: 60_000 })]
+  for (const [i, agentRow] of rows.entries()) {
+    const early = buildView([], [agentRow], 120_000)
+    const late = buildView([], [agentRow], 150_000)
+    expect(agentSvg(late.agents[0]!, late).source, `row ${i}`).toBe(agentSvg(early.agents[0]!, early).source)
+  }
+})
+
+/**
+ * Property: a live agent's Stop key is drawn in its card on the badge's row, at the badge's height, red with a white stop
+ * sign, so the two line up at any scale. An ended agent and the orchestrator draw no key.
+ */
+test('a live agent card draws a red Stop key at the badge row and height; an ended one draws none', () => {
+  const rects = (svg: string) => [...svg.matchAll(/<rect x="[\d.]+" y="([\d.]+)" width="[\d.]+" height="([\d.]+)" rx="4" fill="([^"]+)"\/>/g)].map(m => ({ y: m[1], h: m[2], fill: m[3] }))
+  const live = buildView([], [row({ id: 'a', status: 'running', startedAt: 0 })], 10_000)
+  const drawn = rects(agentSvg(live.agents[0]!, live).source)
+  const key = drawn.find(r => r.fill === '#DC2626')
+  const tag = drawn.find(r => r.fill !== '#DC2626')
+  expect(key).toBeDefined()
+  expect(tag).toBeDefined()
+  expect(key!.y).toBe(tag!.y)
+  expect(key!.h).toBe(tag!.h)
+  // The key takes the right edge, the badge sits left of it.
+  const xs = [...agentSvg(live.agents[0]!, live).source.matchAll(/<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)" height="22" rx="4" fill="([^"]+)"\/>/g)].map(m => ({ x: Number(m[1]), w: Number(m[2]), fill: m[3] }))
+  const keyX = xs.find(r => r.fill === '#DC2626')!
+  const tagX = xs.find(r => r.fill !== '#DC2626')!
+  expect(tagX.x + tagX.w).toBeLessThan(keyX.x)
+  // White in both themes: the light theme turns a `#FFFFFF` stroke dark.
+  const sign = agentSvg(live.agents[0]!, live).source.split('fill="#DC2626"/>')[1]!.split('\n').slice(1, 3).join('\n')
+  expect(sign).toContain('stroke="#FFF"')
+  expect(sign).not.toContain('#FFFFFF')
+  const ended = buildView([], [row({ id: 'a', status: 'completed', startedAt: 0, endedAt: 5_000 })], 10_000)
+  expect(agentSvg(ended.agents[0]!, ended).source).not.toContain('#DC2626')
 })

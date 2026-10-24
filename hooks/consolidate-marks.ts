@@ -1,6 +1,6 @@
 /** The Consolidate retry record: which sources a press copied but did not empty, and what a retry does with each. */
 
-import { applyRenames, sectionBodies, sectionCount, stripIds } from './consolidate-text'
+import { applyRenames, sectionCount, sectionSpans, stripIds } from './consolidate-text'
 import { CHECKBOX, ID_SRC } from './todo-markdown'
 
 /**
@@ -9,7 +9,7 @@ import { CHECKBOX, ID_SRC } from './todo-markdown'
  * `lines`: the lines copied, as read from the source. `sectionsBefore`: how many `## From <heading>`
  * sections the target held right before the copy was written. `told`: the renumbering notes of the
  * copy, and `isTold` once they were queued for Claude. `copied`: the lines as written into the target,
- * renumbered (absent in a mark stored before batch I2: then `lines` with the renames of `told`).
+ * renumbered (absent in a mark stored before then `lines` with the renames of `told`).
  */
 export type CopyMark = { heading: string; lines: string[]; sectionsBefore: number; told: string[]; isTold: boolean; copied?: string[] }
 
@@ -36,14 +36,15 @@ export type RetryStep = 'copy' | 'empty' | 'changed'
  * edit.
  */
 export function retryStep(mark: CopyMark | undefined, heading: string, lines: readonly string[], target: string): RetryStep {
-  const bodies = sectionBodies(target, heading)
+  const bodies = sectionSpans(target, heading)
   if (mark === undefined || mark.heading !== heading) {
     if (bodies.some(body => asLanded(body, lines, false))) {
       return 'empty'
     }
     const bare = lines.map(idless)
 
-    return bodies.some(body => asLanded(body.map(idless), bare, true)) ? 'changed' : 'copy'
+    // An empty body is no copy: a section the archive step emptied must not hold a new source back.
+    return bodies.some(body => body.length > 0 && asLanded(body.map(idless), bare, true)) ? 'changed' : 'copy'
   }
   const copied = mark.copied ?? mark.lines.map(line => applyRenames(line, toldRenames(mark.told)))
   const isThere = sectionCount(target, heading) > mark.sectionsBefore || bodies.some(body => body.length > 0 && asLanded(body, copied, true))

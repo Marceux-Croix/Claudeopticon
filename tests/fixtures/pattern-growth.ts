@@ -3,7 +3,7 @@
  * own words, at a small size and at twice that size, and the ratio of the backtracking steps says
  * whether its work grows faster than the text: about 2 when linear, about 4 when quadratic.
  *
- * Loop 3 replaced the wall-clock ratio of loops 1 and 2. A time ratio failed both ways: under load a
+ * Step counts replaced the wall-clock ratio used before. A time ratio failed both ways: under load a
  * pause that landed on the large run flagged linear patterns, and the quadratic mutant M-V-2 (bearer
  * `\s+["']?\s*`, 29.8 s on a 50k input) passed, as no input put a long run of spaces after its word.
  * The steps come from tests/fixtures/regex-steps.ts: a count that depends on the pattern and the text
@@ -17,7 +17,7 @@ export const SHAPES: readonly string[] = ['a-', 'a.', 'mysql ', 'sshpass ', 'doc
 
 /**
  * The heads of the two-token inputs: a head once, then a long run of one unit. A pattern can be
- * quadratic only after a fixed start (`a://` then `x:` many times: verifier HI's mutant M-HI-1;
+ * quadratic only after a fixed start (`a://` then `x:` many times: mutant M-HI-1;
  * `authorization: bearer` then spaces: R6's M-V-2), and a run of one repeated unit never holds that
  * start once with a long run after it.
  */

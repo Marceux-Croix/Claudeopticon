@@ -86,12 +86,12 @@ test('a live session stays in the list when 20 or more sessions start after it, 
   // The excluded population: a session with no time (older code) or an old time past the last 20 is dropped as before.
   next = nextSessions(['old', 'stale', ...others], { ...seen, stale: 0 }, 'me', now)
   expect(next.dropped).toEqual(['old', 'stale'])
-  // Batch H4: the list holds the times itself, so the old `seen` result is now the time in each entry.
+  // the list holds the times itself, so the old `seen` result is now the time in each entry.
   expect(next.list[next.list.length - 1]).toEqual(['me', now])
   expect(next.list.some(([id]) => id === 'old')).toBe(false)
 })
 
-// ---------------------------------------------------------------- , loop 1 narrowing
+// ---------------------------------------------------------------- , narrowing
 
 test('the stored brief never passes STORED_BRIEF characters, the kept IDs included', () => {
   const ids = (n: number) => Array.from({ length: n }, (_, i) => `#t${String(i).padStart(4, '0')}`).join(' ')
@@ -124,14 +124,14 @@ test('the stored brief holds no secret: in a short brief, across the cut, and in
   expect(storedBrief('ship the parser #t2')).toBe('ship the parser #t2')
 })
 
-// ---------------------------------------------------------------- , batch H4: the times in the list
+// ---------------------------------------------------------------- the times in the list
 
 const MIN = 60_000
 
 /**
  * Property: a live session in the newest part of the list is never dropped, whether or not
  * it has a time. The list holds each time itself, so one write stores both, and two notes that race
- * can lose an entry but never leave one without its time. Ported from the verifier's V77-B (a race
+ * can lose an entry but never leave one without its time. Ported from the V77-B (a race
  * between the two keys) and V77-C (a failed second write), which leave a session listed with no time.
  * Three states: a session with no time at the newest end (behind valid entries), one at the limit
  * of the newest part (the oldest of the last KEPT_SESSIONS), and (excluded) one with no time past
@@ -188,7 +188,7 @@ test('one write holds the times: a race that loses an entry drops nothing, and t
   expect(isOldSessionList(['x', ['y', 1]])).toBe(true)
 })
 
-test('200 live sessions noting one at a time for 24 hours drop nobody (the verifier V77-A)', () => {
+test('200 live sessions noting one at a time for 24 hours drop nobody (V77-A)', () => {
   let list: unknown = []
   const dropped: string[] = []
   const step = SESSION_TOUCH_MS / 200
@@ -217,13 +217,13 @@ test('a live cut row comes back only in a free place or in the place of an ended
   expect(cutReturnSlots(rows(['running', 'running']))).toBe(KEPT_AGENTS - 2)
 })
 
-// ---------------------------------------------------------------- (batch H5): old rows cleaned on load
+// ---------------------------------------------------------------- old rows cleaned on load
 
 test('a row stored by an older version is cleaned on load: its current call, description and brief', () => {
   const [row] = readKeptAgents([
     {
       ...ROW,
-      // The verifier's old row: each field held a secret the old code never checked.
+      // The old row: each field held a secret the old code never checked.
       doing: 'Bash: curl --password Hunter2xyz u',
       description: 'Login PGPASSWORD=Hunter2xyz #T0037',
       // normalize took out the `_` of mysql_pwd, so only the check of the normalized form sees it.
@@ -388,4 +388,17 @@ test('a stored row keeps the progress and claim limits of a report', () => {
   expect(by('zero').progress).toEqual({ done: 0, total: 1 })
   expect(by('long').progress!.step!.length).toBeLessThanOrEqual(120)
   expect(by('long').claims!.length).toBe(20)
+})
+
+test('a stored brief never ends in half a surrogate pair, whichever way the cut falls', () => {
+  // The pair starts at index 599: the cut at 600 would keep its high half alone.
+  const stored = storedBrief(`${'a'.repeat(599)}\u{1F600}${'b'.repeat(80)}`)
+  expect(stored.length).toBeLessThanOrEqual(STORED_BRIEF)
+  expect(/[\ud800-\udbff](?![\udc00-\udfff])/.test(stored)).toBe(false)
+  expect(stored).toBe('a'.repeat(599))
+})
+
+test('liveSessionIds counts a note of the future as live, and a note SESSION_LIVE_MS old as not', () => {
+  const live = liveSessionIds([['future', 5_000_000], ['edge', 1_000_000 - SESSION_LIVE_MS], ['inside', 1_000_000 - SESSION_LIVE_MS + 1]], 1_000_000)
+  expect([...live].sort()).toEqual(['future', 'inside'])
 })

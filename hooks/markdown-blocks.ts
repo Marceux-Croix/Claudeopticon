@@ -8,6 +8,8 @@ import { htmlEnds, htmlStart, isBlankLine, type HtmlEnd } from './html-blocks'
 
 /** A checkbox line: a list marker, a box (` `, `x`, `X`, `~`, `>`), then the text. U+2028 and U+2029 are text in it, never line ends. */
 export const CHECKBOX = /^\s*[-*+] \[([ xX~>])\]\s+([^\r\n]*)$/
+/** An ATX heading line (`## Title`) as the archive and the board read it: up to 3 spaces of indent, 1 to 6 `#`, then white space or the end. Group 1 is the `#` run. */
+export const HEADING_LINE = /^ {0,3}(#{1,6})(?:\s|$)/
 /** A code fence line: up to 3 spaces, then 3+ backticks or 3+ tildes, then the rest. */
 export const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/
 
@@ -34,23 +36,8 @@ function fenceCloses(line: string, open: Fence): boolean {
   return m !== null && m[1]![0] === open.char && m[1]!.length >= open.len && isBlankLine(m[2]!)
 }
 
-/** The fence state after one line: opens, closes or keeps. */
-export const fenceStep = (line: string, open: Fence | undefined): Fence | undefined => (open === undefined ? fenceOpens(line) : fenceCloses(line, open) ? undefined : open)
-
 /** The line without a trailing carriage return: a CRLF file matches like an LF one. */
 export const bare = (line: string): string => line.replace(/\r$/, '')
-
-/** Per line: true for a code fence line and for every line inside a fence. Such lines are never items or headings. */
-export function fenceMask(lines: readonly string[]): boolean[] {
-  let open: Fence | undefined
-
-  return lines.map(line => {
-    const was = open
-    open = fenceStep(line, open)
-
-    return was !== undefined || open !== undefined
-  })
-}
 
 /** The tab stop (CommonMark): a tab moves to the next column that is a multiple of 4. */
 const TAB_STOP = 4
@@ -84,6 +71,14 @@ const SETEXT_LINE = /^ {0,3}(?:=+|-+) *$/
 const THEMATIC_BREAK = /^ {0,3}([-*_])(?: *\1){2,} *$/
 /** A checkbox list item's start on a line cut at its container's content column (the deliberate exception below). */
 const BOX_ITEM = /^ *[-*+] \[[ xX~>]\]\s/
+
+/**
+ * The most containers (list items and block quotes) one line may open or keep. Past it, the rest of
+ * the line is paragraph text. CommonMark has no cap, but a line of `- - - ...` would cost the square of
+ * its length (each level tests the rest of the line), and each later line would walk every open
+ * container. No todo file nests this deep.
+ */
+const MAX_NESTING = 64
 
 /** The indent past a content column that makes a line indented code (CommonMark). */
 const CODE_INDENT = 4
@@ -158,6 +153,8 @@ const isInQuote = (containers: readonly Container[]): boolean => containers.some
  *   an HTML block inside a fence, opens nothing.
  *
  * Deliberate differences from CommonMark, each kept on purpose:
+ * - At most MAX_NESTING containers are open: a line that would open more has the rest as paragraph
+ *   text. It keeps a line of nested markers linear (otherwise the square of its length).
  * - A checkbox item indented 4 or more past its container right under a paragraph line starts an item
  *   (CommonMark: paragraph text). It is how an over-indented subtask is written, and hiding it would
  *   drop a real ticket with no message. It does not hold under a block quote's paragraph: there the
@@ -181,6 +178,12 @@ export function exampleMask(lines: readonly string[]): boolean[] {
     let at = column
     let isPara = isOnParagraph
     for (;;) {
+      if (containers.length >= MAX_NESTING) {
+        // Deliberate departure from CommonMark (see the header): nothing opens past the cap.
+        leaf = { kind: 'paragraph' }
+
+        return false
+      }
       const rest = line.slice(at)
       if (isBlankLine(rest)) {
         // An item or a quote with nothing after its marker: no leaf yet.
@@ -350,4 +353,17 @@ function isLazy(line: string, column: number, isQuoteParagraph: boolean): boolea
     !THEMATIC_BREAK.test(rest) &&
     LIST_ITEM.exec(rest) === null
   )
+}
+
+/**
+ * True when `line` goes on the paragraph that `previous` (the line right above it, in the same block) ends:
+ * a lazy continuation (CommonMark), so a ticket's wrapped text that is not indented still belongs to the
+ * ticket. `previous` must be paragraph text: a blank line, a heading or a thematic break ends the
+ * paragraph. `line` must start no block (`isLazy`). The archive reads a closed ticket's extent with it,
+ * so it agrees with `exampleMask` on where a ticket ends.
+ */
+export function continuesParagraph(previous: string, line: string): boolean {
+  const above = expandTabs(previous)
+
+  return !isBlankLine(above) && !ATX_HEADING.test(above.trimStart()) && !THEMATIC_BREAK.test(above.trimStart()) && !isBlankLine(line) && isLazy(expandTabs(line), 0, false)
 }

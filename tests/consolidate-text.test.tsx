@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { removedNote, renameNote } from '../hooks/claude-notes'
-import { appendSections, applyRefRenames, applyRenames, copyLines, isUnsafeHeadingName, itemLines, keepsEveryItem, renameLines, renumberLines, sectionCount, sectionText } from '../hooks/consolidate-text'
+import { appendSections, applyRefRenames, applyRenames, copyLines, isUnsafeHeadingName, itemLines, keepsEveryItem, pressToast, renameLines, renumberLines, sectionCount, sectionText, TOAST_MAX } from '../hooks/consolidate-text'
 import { foldParts, removeDuplicateTickets, renameRefs } from '../hooks/duplicate-tickets'
 
 test('helpers: renumbering, sections, references and the exact-duplicate rule', async () => {
@@ -29,7 +29,7 @@ test('helpers: renumbering, sections, references and the exact-duplicate rule', 
   expect(owned.map).toEqual({})
 })
 
-// ---------------------------------------------------------------- (batch G2)
+// ---------------------------------------------------------------- 
 
 test('a CRLF line keeps its own leading ID: only its references are renamed', () => {
   expect(applyRefRenames('- [x] #T2 Old one, see #T2\r', { t2: 'T1' })).toBe('- [x] #T2 Old one, see #T1\r')
@@ -50,13 +50,13 @@ test('Consolidate renaming leaves IDs in code fences and HTML comments as they a
   expect(sectionCount('## From a\n- x\r\n## From a\r\n## From ab', 'a')).toBe(2)
 })
 
-// ---------------------------------------------------------------- batch I2: 
+// ---------------------------------------------------------------- 
 
 /** Property: with a source of claimed IDs, every new `T` ID of the renumbering comes from it, and none is picked outside it. */
 test('renumberLines takes each new T ID from the claimed source, never the next one above all IDs', () => {
   const claimed = ['T0040', 'T0041']
   const take = () => claimed.shift()
-  // The verifier's state: a clash renames `#T1` to a claimed ID, not to T0002 (one past the highest).
+  // The state: a clash renames `#T1` to a claimed ID, not to T0002 (one past the highest).
   const out = renumberLines(['- [ ] #T1 Tune the cache', '- see #T1'], new Set(['t1']), new Set(), take)
   expect(out.lines).toEqual(['- [ ] #T0040 Tune the cache', '- see #T0040'])
   // At the limit: the second clash takes the last claimed ID; other letters keep their own rule and take none.
@@ -68,11 +68,11 @@ test('renumberLines takes each new T ID from the claimed source, never the next 
   expect(renumberLines(['- [ ] #T3 c'], new Set(['t3'])).pairs).toEqual([{ from: 'T3', to: 'T0004' }])
 })
 
-// ---------------------------------------------------------------- batch K3: remainder (names in headings, the item check)
+// ---------------------------------------------------------------- remainder (names in headings, the item check)
 
 /** Property: a name that would break its `## From` heading over lines is told apart from every name that cannot. */
 test('VJ-170N isUnsafeHeadingName refuses line breaks and control characters, and sectionText never writes one', () => {
-  // The verifier's names, a carriage return, Unicode line and paragraph separators, NEL, a NUL at the end of the name.
+  // The names, a carriage return, Unicode line and paragraph separators, NEL, a NUL at the end of the name.
   for (const name of ['mods/x/a\n- [ ] #T5 Ghost\n<!--.md', 'mods/y\n- [ ] #T5 Ghost\n<!--/TODO.md', 'a\r- [ ] #T5.md', 'a b.md', 'a b.md', 'a\u0085b.md', 'TODO.md\u0000']) {
     expect(isUnsafeHeadingName(name)).toBe(true)
     expect(() => sectionText(name, ['- [ ] #T1 x'], '\n')).toThrow()
@@ -89,7 +89,7 @@ test('keepsEveryItem refuses a lost item that an added one hides from the count'
   const now = '- [ ] #T1 Fix'
   const sections = [{ place: 'mods/x/TODO.md', lines: ['- [ ] #T2 Docs'] }]
   expect(keepsEveryItem(now, appendSections(now, sections), sections)).toBe(true)
-  // Behind a valid first item: the verifier's state, the count is right (2 = 1 + 1) but #T2 is lost and a ghost added.
+  // Behind a valid first item: the state, the count is right (2 = 1 + 1) but #T2 is lost and a ghost added.
   expect(keepsEveryItem(now, '- [ ] #T1 Fix\n\n## From mods/x/a\n- [ ] #T5 Ghost\n<!--.md\n\n- [ ] #T2 Docs\n', sections)).toBe(false)
   // At the limit: the last item of the last section with another box.
   const two = [...sections, { place: 'mods/y/TODO.md', lines: ['- [ ] #T3 Tests'] }]
@@ -100,7 +100,7 @@ test('keepsEveryItem refuses a lost item that an added one hides from the count'
   expect(keepsEveryItem('- [ ] #T1 Fix\r\n', appendSections('- [ ] #T1 Fix\r\n', sections), sections)).toBe(true)
 })
 
-// ---------------------------------------------------------------- batch L3: (format characters)
+// ---------------------------------------------------------------- (format characters)
 
 /** Property: a name with a Unicode format character (a bidi override, a zero-width joiner) never stands in a `## From` heading. */
 test('L3R3-170X isUnsafeHeadingName refuses format characters', () => {
@@ -113,4 +113,23 @@ test('L3R3-170X isUnsafeHeadingName refuses format characters', () => {
   for (const name of ['mods/عربي/TODO.md', 'mods/éte/TODO.md', 'mods/x/a-b_c (1).md']) {
     expect(isUnsafeHeadingName(name)).toBe(false)
   }
+})
+
+/** Property: a renumbering with the number line used up fails with a readable message, never a TypeError. */
+test('renumberLines with no ticket ID left says so', () => {
+  const used = new Set(['t1', 't1zzzz'])
+  expect(() => renumberLines(['- [ ] #T1 A'], used)).toThrow('no ticket ID left for the renumbering')
+  // The claimed-source path keeps its own message; a letter prefix other than T still numbers on.
+  expect(() => renumberLines(['- [ ] #T1 A'], new Set(['t1']), new Set(), () => undefined)).toThrow('no claimed ticket ID left')
+  expect(renumberLines(['- [ ] #PROJ1 A'], new Set(['proj1', 't1zzzz'])).pairs).toEqual([{ from: 'PROJ1', to: 'PROJ2' }])
+})
+
+/** Property: the result toast of a press holds every note, drops a "Moved 0" summary that a note explains, and stays within the cap. */
+test('pressToast joins the notes into one bounded toast', () => {
+  expect(pressToast(['a.', 'b.'], 'Moved 2 files.', 2)).toBe('a. b. Moved 2 files.')
+  expect(pressToast(['a.', 'b.'], 'Moved 0 files.', 0)).toBe('a. b.')
+  expect(pressToast([], 'Moved 0 files.', 0)).toBe('Moved 0 files.')
+  const long = pressToast(['x'.repeat(5000)], 'Moved 1 file.', 1)
+  expect(long.length).toBe(TOAST_MAX)
+  expect(long.endsWith('...')).toBe(true)
 })

@@ -242,7 +242,7 @@ export function nextSessions(stored: unknown, seenStored: unknown, me: string, t
  */
 export const SESSION_DROP_CONFIRM_MS = 2 * SESSION_TOUCH_MS
 /** The most sessions waiting for their keys to be cleared that the store keeps. */
-const KEPT_DROPPING = 200
+export const KEPT_DROPPING = 200
 
 /** Reads the stored sessions waiting to be cleared back: `[id, first found droppable]` entries, the newest KEPT_DROPPING. */
 export function readDropping(stored: unknown): Map<string, number> {
@@ -294,7 +294,7 @@ export function nextDropping(pending: ReadonlyMap<string, number>, found: readon
 export function liveSessionIds(stored: unknown, time: number): Set<string> {
   const live = new Set<string>()
   for (const one of Array.isArray(stored) ? (stored as unknown[]) : []) {
-    if (Array.isArray(one) && typeof one[0] === 'string' && typeof one[1] === 'number' && Number.isFinite(one[1]) && time - Math.min(one[1], time) < SESSION_LIVE_MS) {
+    if (Array.isArray(one) && typeof one[0] === 'string' && typeof one[1] === 'number' && Number.isFinite(one[1]) && time - one[1] < SESSION_LIVE_MS) {
       live.add(one[0])
     }
   }

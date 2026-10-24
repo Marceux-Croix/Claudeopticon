@@ -5,7 +5,7 @@
  * the common dir is all this reads.
  */
 
-import { isAbsPath, resolveAgainst } from './path-forms'
+import { resolveAgainst } from './path-forms'
 
 /** Where a `.git` entry puts the repo: the common dir, absolute. */
 export type GitWhere = { common: string }
@@ -14,21 +14,20 @@ export type GitWhere = { common: string }
 export const gitDirWhere = (folder: string): GitWhere => ({ common: `${folder}/.git` })
 
 /**
- * The git dir a `.git` file at `folder` names (its text `gitdir: <dir>`), absolute. Undefined for a text with
- * no `gitdir:` line, or one that gives no absolute path.
+ * The git dir a `.git` file at `folder` (an absolute path) names (its text `gitdir: <dir>`), absolute. Undefined for a
+ * text with no `gitdir:` line.
  */
 export function gitFileDir(folder: string, text: string): string | undefined {
   const named = /^gitdir:\s*(.+)$/m.exec(text)?.[1]?.replace(/\r$/, '').trim()
   if (named === undefined || named === '') {
     return undefined
   }
-  const gitdir = resolveAgainst(folder, named).replace(/\/+$/, '')
 
-  return isAbsPath(gitdir) ? gitdir : undefined
+  return resolveAgainst(folder, named).replace(/\/+$/, '')
 }
 
 /**
- * The common dir of a git dir, by git's own rule (`get_common_dir_noenv` in git's setup.c): when
+ * The common dir of a git dir, by git's own rule (`get_common_dir_noenv` in git's source): when
  * `<gitdir>/commondir` exists (a linked worktree's git dir holds one, `../..`), the common dir is its text,
  * line ends cut, resolved against the git dir; when it does not (`commondir` undefined), the git dir is the
  * common dir. A path segment named `worktrees` says nothing: the old cut at the last `/worktrees/` put a

@@ -5,7 +5,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import { psPath } from '../hooks/path-forms'
 
-// Hook cases of batch G5 (UCR loop 1): the guards a mutation got past, on a fake repo
+// Engine cases:the guards a mutation got past, on a fake repo
 // that can change a file right after a read, lose or change a write, fail a write, and fail mkdir.
 {
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }

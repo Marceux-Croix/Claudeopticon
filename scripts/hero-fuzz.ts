@@ -1,8 +1,8 @@
 /**
- * Random top-card states, from a fixed seed: the UCR verifier's fuzz (verify-G4), kept call for call
+ * Random top-card states, from a fixed seed: the fuzz, kept call for call
  * so its names hold (r24 is the 25th random state, tight7 the 8th tight one). The random states have
  * a live-agent step line, a token climb with compactions (a late one in about 30 percent), and the
- * tight states put all three end dots within a few px at the right edge, the owner's crossing case.
+ * tight states put all three end dots within a few px at the right edge, the crossing case.
  */
 
 import type { View } from '../hooks/card-types'
@@ -12,7 +12,7 @@ import { heroView, NOW } from './sample'
 
 const MIN = 60_000
 
-/** A linear congruential source, the verifier's, from `seed`. */
+/** A linear congruential source from `seed`. */
 function source(seed: number): () => number {
   let state = seed
 
@@ -78,7 +78,7 @@ function tightView(rnd: () => number): View {
   return { ...heroView, now, series, axes: { agents: { max: top }, tokens: { max: niceTop(tokens) }, rate: stepAxis(undefined, 'tokens', r) }, usage: { tokens: 9e8, atCompact: 9e8 - tokEnd, since: 0 }, live: agentsAtEnd }
 }
 
-/** `random` random states and `tight` tight ones, named r0... and tight0..., from `seed` (the verifier's 12345 by default). */
+/** `random` random states and `tight` tight ones, named r0... and tight0..., from `seed` (the 12345 by default). */
 export function fuzzStates(random = 300, tight = 40, seed = 12345): [string, View][] {
   const rnd = source(seed)
   const out: [string, View][] = []

@@ -1,5 +1,57 @@
 # Changelog
 
+## 1.0.0
+
+### Changes
+
+- Cards are drawn at the pane's width in cells times 10 px, from 300 to 4096 px. The desktop scales each card down to the pane's exact width. Cards are sent with no height, so a scaled card keeps its proportions. A card over 4096 px high is sent with no height.
+- A live agent's Stop button is drawn in its card at the right edge, red with a white stop sign, on the badge's row and at its height. The status badge sits left of it. A blank pane button over it takes the press. An ended agent has no Stop button.
+- An agent that stays idle (finished, never stopped) for 10 minutes is filed with the finished agents. The headings and the top card count it as finished.
+- The 10 px board gaps scale with the card, so they can draw slightly under 10 px.
+- Only the list view holds spaces for rows that left. A press that keeps spaces is an off-list key, not a ticket button.
+- The board has **Show full text**. **Show all N items** counts open tickets. The Todo heading says "Could not read N todo files" when files fail to read.
+- Each agent keeps the color slot it was first drawn with.
+- A queued ticket is offered to the agent match. Category names are cut to 40 characters, and Uncategorized is never listed as a name.
+- A wrapped line with no indent directly under a closed ticket moves to the archive with it. ATX headings may have 0 to 3 spaces of indent. Setext headings are not read. Nesting is capped at 64 containers per line. An archive retry skips a ticket only when it is already under its own heading.
+- Delete duplicate tickets folds identical tickets only within one `## From` section (or before the first one). The button stays after a failed archive reference fix, and the next press retries it.
+- Consolidate ends with one toast per press that joins every refusal and the result, cut at 1500 characters. "Moved 0 files" is left out when a note explains why.
+- The renumbering, numbering and removal notes are kept in the store (`told-notes:<session id>`) and survive a reload.
+- The ID claim failure text names the blocks scanned and why each was passed over, in place of "every block from N on is claimed".
+- A folder under an ignored directory is not found. An ignored `.claude_todo` is found. A listed todo folder that resolves outside the repo is skipped with a toast and never read.
+- `report_progress` takes `done` and `total` as numbers or numeric text, and caps `total` at 10,000. A title is checked for secrets before the 80-character cut. A tool description is cut to 300 characters.
+- A sort or board refresh that fails 3 times in a row shows one toast. Toasts show for an unreadable repo layout and for five failed session-list notes. Claude is told when the mod could not queue a ticket. A `move_ticket` dialog that cannot be shown tells Claude the user has not decided. A future peer timestamp counts as now.
+
+### Fixes
+
+- File reads (exists, list, stat, todo reads) give up after the call limit and count as a failed read. File writes are not bounded.
+- An agent list that does not answer fails its refresh after 20 seconds, so later refreshes go on. Three such failures in a row show one toast.
+- The dropped-session queue is stored before the session list changes.
+- Archive failures (a symlinked archive, an unwritable archive, a write not on disk, a thrown error) each give one toast per file, and the ticket stays.
+
+### Safety
+
+- The secret rule hides more forms: names with a hyphen or space (`api-key`, `api key`); glued and camelCase long options (`--dbpassword`, `--accessToken`); `redis-cli` `AUTH` and `config set requirepass|masterauth`; `--proxy-user user:password`; `--cert file.pem:password`; the query values `X-Amz-Signature`, `X-Amz-Security-Token` and `X-Goog-Signature`; the `x-functions-key` header; and the token shapes `dckr_pat_`, `ya29.`, `1//0`, Mailgun `key-` and Twilio `SK` plus 32 hex digits. `--maxtoken 5` is a known false positive.
+- A hidden line keeps at most 16 distinct ticket IDs, each once. An ID that is the line's only secret value is not kept.
+- The send, status and peer prompts, the move question and the names in notes show hidden characters (C1 controls, bidirectional, tag and zero-width) as `\uXXXX` escapes. Session names drop format characters. Toasts hide such characters.
+- Wrapped text counts a wide character as twice the width.
+
+### Internals
+
+- New checks: `scripts/check-versions.ts` fails when `plugin.json` and `marketplace.json` name different versions, and `scripts/check-modules.ts` fails when a `hooks/*.ts` file is missing from the module lists. New module `hooks/told-notes.ts`.
+
+## 0.9.26
+
+### Changes
+
+- The board holds no space for a ticket that leaves a column: the tickets below close up at once. Since 0.7.1 the space stayed empty for up to 60 s or until the next click; after the desktop update it drew at no size, and once 0.9.25 drew it again it showed as a blank area in the column. The list view keeps its spaces.
+
+## 0.9.25
+
+### Fixes
+
+- The tickets of every board column start at the same height. When a ticket left the top of a column, the space that holds its place was an empty card, and the desktop now draws an empty card at no size: the space vanished, and the next ticket started one gap lower than the tickets beside it. A space is now part of the margin above the next ticket, and a space after the last ticket draws nothing.
+- The class is closed by a test: in every view (stacked, side by side, with spaces, with the agents' room held), each card the pane draws must draw an element and carry alt text.
+
 ## 0.9.24
 
 ### Changes

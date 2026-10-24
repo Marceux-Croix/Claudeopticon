@@ -22,6 +22,19 @@ function itemMark(x: number, y: number, status: ItemStatus, owners: readonly num
 
 const ITEMS_PER_CARD = 40
 const LINE_H = 18
+/** The lines of text a ticket card shows; `isTextOpen` shows all of it. */
+const TICKET_LINES = 4
+const TICKET_PAD = 14
+
+/** The text a ticket card draws: the item's text, less the ID its chip shows. */
+function ticketText(item: ItemView, id: string | undefined): string {
+  return id === undefined ? item.text : item.text.replace(id, '').replace(/^\s*[:.-]?\s*/, '')
+}
+
+/** Whether a ticket card of `width` px cuts the item's text at its last line: the board then offers the full text. */
+export function isTicketLong(item: ItemView, id: string | undefined, width: number): boolean {
+  return wrap(ticketText(item, id), Math.max(200, Math.round(width)) - TICKET_PAD * 2, 13, 400, TICKET_LINES + 1).length > TICKET_LINES
+}
 
 /** The peer tag's yellow outline, darker on the light card so it stays clear. */
 const PEER_TAG = 'Peer owned'
@@ -31,17 +44,16 @@ const PEER_TAG_CSS = `\n.peer{stroke:#f2c94c}@media (prefers-color-scheme:light)
 /**
  * One ticket as a Stage UI card, `width` px wide: a 12 px container on the tonal card fill; a top
  * row with the status mark, an ID chip, a category chip and a status badge; the item's text, up to
- * 4 lines; and the agents on it as colored chips. In progress draws a violet accent bar (progress,
+ * 4 lines (all of it with `isTextOpen`); and the agents on it as colored chips. In progress draws a violet accent bar (progress,
  * COL-1); a ticket an agent works on draws its border and bar in the agent's color instead. When
  * `actions` (a count), a bottom row of its own is kept free for the pane's buttons and their tips.
  * `peerTag` draws a "Peer owned" pill at the left of that row, for a ticket another session
  * holds, when `room` px (the space left of the buttons) fits it; its hover tip is `tip` (peerTip), and the card
  * is then interactive, so the tip shows. `isDim` draws the pill and its text at half opacity: the peer is silent ().
  */
-
-export function ticketSvg(item: ItemView, view: View, width: number, info: { id?: string; category?: string; isSent: boolean; actions?: number; peerTag?: { tip: string; isDim?: boolean; room: number } }): Card {
+export function ticketSvg(item: ItemView, view: View, width: number, info: { id?: string; category?: string; isSent: boolean; isTextOpen?: boolean; actions?: number; peerTag?: { tip: string; isDim?: boolean; room: number } }): Card {
   const w = Math.max(200, Math.round(width))
-  const pad = 14
+  const pad = TICKET_PAD
   const blinks = new Blinks()
   const owner = item.owners[0]
   const accent = owner !== undefined ? agentColor(owner) : item.status === 'in_progress' ? ACCENT : undefined
@@ -79,8 +91,7 @@ export function ticketSvg(item: ItemView, view: View, width: number, info: { id?
 <text x="${x + cw / 2}" y="${top + 1}" text-anchor="middle" fill="${SUB}" font-size="11" font-weight="500">${esc(label)}</text>`)
   }
   // Body
-  const text = info.id === undefined ? item.text : item.text.replace(info.id, '').replace(/^\s*[:.-]?\s*/, '')
-  const lines = wrap(text, w - pad * 2, 13, 400, 4)
+  const lines = wrap(ticketText(item, info.id), w - pad * 2, 13, 400, info.isTextOpen === true ? Number.POSITIVE_INFINITY : TICKET_LINES)
   let y = top + 26
   const ink = item.status === 'completed' ? FAINT : LABEL
   const strike = item.status === 'completed' ? ' text-decoration="line-through"' : ''
@@ -140,7 +151,7 @@ ${body}</svg>`
 }
 
 /** The button row's height: a native button, raised one row off the card's bottom edge. */
-export const SEND_ROW_PX = 60
+const SEND_ROW_PX = 60
 
 /** The pane's card width, for laying tickets out in columns beside it. */
 export function cardWidth(): number {
@@ -169,8 +180,23 @@ export function longItems(file: FileView, limit: number): number {
   return file.items.slice(0, limit).filter(item => {
     const room = INNER - 24 - listDisks(item.owners.length).used * DISK_PX
 
-    return wrap(item.text, room, 13, item.owners.length > 0 ? 500 : 400, Number.POSITIVE_INFINITY).length > MAX_LINES
+    return wrap(item.text, room, 13, item.owners.length > 0 ? 500 : 400, MAX_LINES + 1).length > MAX_LINES
   }).length
+}
+
+/** The height a group heading takes in the list view. */
+const GROUP_HEAD_PX = 30
+
+/**
+ * The heights of the first `limit` rows of a file in the list view, for the space a row that left
+ * keeps. The row alone in its group takes the group's heading with it, so its height holds that too.
+ */
+export function listRowHeights(file: FileView, limit: number, isTextOpen = false): number[] {
+  return file.items.slice(0, limit).map((item, index) => {
+    const group = file.groups?.find(one => index >= one.from && index < one.from + one.count)
+
+    return listRowPx(item, isTextOpen) + (group !== undefined && group.count === 1 ? GROUP_HEAD_PX : 0)
+  })
 }
 
 /** The height of an item's row in the list view, so a row that left can keep its place. */
@@ -198,18 +224,11 @@ export function padCard<T extends Card>(card: T, left: number, top: number): T {
   return { ...card, source: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${inner}</svg>`, width: w, height: h }
 }
 
-/** An empty space `height` px high: a transparent card with no text and no buttons, that holds a ticket's place. */
-export function spaceSvg(width: number, height: number): Card {
-  const w = Math.max(1, Math.round(width))
-  const h = Math.max(1, Math.round(height))
-
-  return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="presentation"></svg>`, width: w, height: h, alt: '' }
-}
-
 /**
  * One todo file as cards: the first carries its name, count and strip; then up to `limit` of its
- * items in the view's order, 40 to a card, so a file of any length stays inside the SVG limit. An
- * item longer than 8 lines stops there with an ellipsis, unless `isTextOpen` shows every item whole.
+ * items in the view's order, 40 to a card. An item longer than 8 lines stops there with an ellipsis,
+ * unless `isTextOpen` shows every item whole; so a card of 40 items is about 6400 px high at most,
+ * and more than that when `isTextOpen` is on (the pane draws a card past 4096 px with no height).
  * The owners of an item show as the disks that fit, then a "+M" disk.
  *
  * `gaps` holds empty space before an item of the shown list, by its index (the shown length: after
@@ -255,7 +274,7 @@ export function fileCards(file: FileView, view: View, limit: number, isTextOpen 
       parts.push(`<text x="${PAD}" y="${y + 2}" fill="${SUB}" font-size="12" font-weight="500">${esc(fit(group.name, INNER - 40, 12, 500))}</text>
 <text x="${W - PAD}" y="${y + 2}" text-anchor="end" fill="${FAINT}" font-size="11">${group.count}</text>
 <line x1="${PAD}" y1="${y + 9}" x2="${W - PAD}" y2="${y + 9}" stroke="${RULE}"/>`)
-      y += 30
+      y += GROUP_HEAD_PX
     }
     const isMatch = item.owners.length > 0
     const weight = isMatch ? 500 : 400
@@ -266,7 +285,7 @@ export function fileCards(file: FileView, view: View, limit: number, isTextOpen 
       parts.push(`<rect x="${PAD - 8}" y="${y - 17}" width="${INNER + 16}" height="${32 + extra}" rx="8" fill="${SUGGESTED}"/>`)
     }
     parts.push(itemMark(PAD + 6, y - 1, item.status, item.owners, view, blinks))
-    const ink = isMatch || item.status === 'in_progress' ? LABEL : item.status === 'completed' ? FAINT : LABEL
+    const ink = item.status === 'completed' && !isMatch ? FAINT : LABEL
     const strike = item.status === 'completed' ? ' text-decoration="line-through"' : ''
     const tspans = lines.map((line, k) => `<tspan x="${PAD + 22}" dy="${k === 0 ? 0 : LINE_H}">${esc(line)}</tspan>`).join('')
     parts.push(`<text x="${PAD + 22}" y="${y + 3}" fill="${ink}" font-size="13" font-weight="${weight}"${strike}>${tspans}</text>`)

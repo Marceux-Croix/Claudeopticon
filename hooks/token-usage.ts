@@ -41,3 +41,14 @@ export type StepUsage = Parameters<typeof turnTokens>[0]
 export function stepUsage(result: StepUsage | null | undefined, stop: StepUsage | undefined): StepUsage | undefined {
   return result != null && turnTokens(result) > 0 ? result : (stop ?? result ?? undefined)
 }
+
+/** The key of one turn in the turns a load saw: the agent's ID (empty for the main conversation), a colon, the turn's ID. */
+export const turnKey = (agentId: string | undefined, turnId: string): string => `${agentId ?? ''}:${turnId}`
+
+/** Whether the turn at `key` still belongs to something kept: a main-conversation turn, or one of an agent `isAgent` holds. A turn of an agent gone with no turn end would otherwise stay for good. */
+export function isTurnKept(key: string, isAgent: (id: string) => boolean): boolean {
+  const at = key.indexOf(':')
+  const agentId = at < 0 ? key : key.slice(0, at)
+
+  return agentId === '' || isAgent(agentId)
+}

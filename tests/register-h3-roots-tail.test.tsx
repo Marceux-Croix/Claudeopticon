@@ -3,7 +3,7 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
-// Batch H3 (UCR loop 1 tail): the G1 remainder. Fakes copied from the G1 block above.
+// the G1 remainder. Fakes copied from the G1 block above.
 {
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
@@ -107,7 +107,7 @@ function g1Repo(on: On, files: Record<string, string>, opts: G1Opts) {
 
     return key === undefined ? path : `${links[key]}${path.slice(key.length)}`
   }
-  // (batch K1): the session folder exists, so the real path of `.` (the engine's own folder, read back as `cwd`) resolves.
+  // the session folder exists, so the real path of `.` (the engine's own folder, read back as `cwd`) resolves.
   const exists = (path: string) => !isHidden(path) && (path in files || Object.keys(files).some(key => key.startsWith(`${path}/`)) || gitDirs.has(path) || (opts.present ?? []).includes(path) || path === opts.cwd)
   const named = (dir: string) => {
     const names = new Set<string>()

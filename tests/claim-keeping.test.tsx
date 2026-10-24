@@ -11,7 +11,7 @@ const ALL = [PRIMARY, X, Y]
 /**
  * Property: a claim on a ticket the scan did not find stays only while a folder that could
  * hold it did not read, and only for MISSING_CLAIM_MS. Three states where the claim must end: the
- * ticket's own folder reads but another one does not (the verifier's V015), the claim at the limit
+ * ticket's own folder reads but another one does not (the V015), the claim at the limit
  * of the time bound, and (the population the fix keeps) the ticket's own folder unread, which keeps
  * it until the bound.
  */

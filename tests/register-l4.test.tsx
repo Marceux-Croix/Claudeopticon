@@ -1,4 +1,4 @@
-// Engine tests of UCR batch L4 (loop 3): store time limits (219), a re-spawned agent ID (220), the
+// Engine tests store time limits (219), a re-spawned agent ID (220), the
 // still-open note and burn throttles after a clock set back (221), a stopped row the list still
 // shows running (222), stored progress past the write limits (223) and the book keys of an unread
 // folder (127). Each test has its own fakes; nothing here is shared with register.test.tsx.

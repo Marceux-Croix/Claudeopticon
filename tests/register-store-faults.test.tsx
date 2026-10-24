@@ -330,7 +330,7 @@ test('only the last 20 sessions keep their keys; older ones are cleared', async 
   on('agent.list', () => ({ value: [] }))
   on('command.register', () => ({ value: undefined }) as never)
   await $.session.start({ cwd: '/repo' } as never).catch(() => undefined)
-  // Batch H4: each entry is [ID, time].
+  // each entry is [ID, time].
   const list = (store.get('sessions-recent') as [string, number][]).map(([id]) => id)
   expect(list.length).toBe(KEPT_SESSIONS)
   expect(list[list.length - 1]).toBe('sess-new')
@@ -351,7 +351,7 @@ test('a session already in the list is moved to the end, not added twice, and no
   on('agent.list', () => ({ value: [] }))
   on('command.register', () => ({ value: undefined }) as never)
   await $.session.start({ cwd: '/repo' } as never).catch(() => undefined)
-  // Batch H4: each entry is [ID, time].
+  // each entry is [ID, time].
   const list = (store.get('sessions-recent') as [string, number][]).map(([id]) => id)
   expect(list.length).toBe(KEPT_SESSIONS)
   expect(list[list.length - 1]).toBe('s1')

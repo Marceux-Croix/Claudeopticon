@@ -1,6 +1,6 @@
 /**
  * The end-label geometry of a drawn top card, read back from its SVG: each end label's ink box (from
- * Helvetica Neue glyph widths, the UCR verifier's, independent of the code's estimate) and the box
+ * Helvetica Neue glyph widths, independent of the code's estimate) and the box
  * the code places by (labelBox, endLabelWidth), the dots, the Compacted label and the trace segments;
  * what overlaps; and whether a clear place for every label existed in the home column.
  */
@@ -14,7 +14,7 @@ type Named = Box & { what: string }
 type Seg = [number, number, number, number, string]
 export type HeroGeometry = { labels: (Named & { code: Box; cls: string })[]; dots: Named[]; marks: Named[]; segs: Seg[]; top: number; right?: number }
 
-// Helvetica Neue widths at 12 px, in em (the verifier's).
+// Helvetica Neue widths at 12 px, in em (independent of the code).
 const BOLD: Record<string, number> = { '.': 0.278, k: 0.574, M: 0.87, '0': 0.556 }
 const REG: Record<string, number> = { ' ': 0.278, l: 0.222, i: 0.222, v: 0.5, e: 0.556, '/': 0.278, m: 0.833, n: 0.556 }
 const wBold = (s: string) => [...s].reduce((a, c) => a + 12 * (BOLD[c] ?? 0.556), 0)
@@ -90,7 +90,7 @@ export function heroGeometry(svg: string): HeroGeometry {
   return { labels, dots, marks, segs, top, ...(right === undefined ? {} : { right }) }
 }
 
-/** Liang-Barsky: does the segment meet the box? The verifier's, kept apart from the code's own. */
+/** Liang-Barsky: does the segment meet the box? Kept apart from the code's own. */
 export function hits(s: Seg, b: Box): boolean {
   const [x0, y0, x1, y1] = s
   const dx = x1 - x0
@@ -158,7 +158,7 @@ export function overlaps(svg: string): { soft: string[]; hard: string[]; geometr
 /**
  * Whether a clear place existed for every label: a baseline anywhere in the band (each px), in the
  * home column (right edge 10 px left of the dots), whose code box meets no trace, dot or Compacted
- * label, the labels' baselines 14 px apart. This is a superset of the verifier's places (dot - 9 - 14k
+ * label, the labels' baselines 14 px apart. This is a superset of the places (dot - 9 - 14k
  * and dot + 19 + 14k, k up to 4), and a subset of the code's (which also tries columns to the left).
  */
 export function clearPlaceExists(g: HeroGeometry): boolean {

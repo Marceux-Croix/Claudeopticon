@@ -2,7 +2,7 @@
 
 import type { ItemStatus } from './card-types'
 import { itemKey, storedKey } from './item-keys'
-import { bare, exampleMask, itemsAt } from './todo-markdown'
+import { bare, exampleMask, HEADING_LINE, itemsAt } from './todo-markdown'
 
 const BOXES: Record<ItemStatus, string> = { pending: ' ', queued: '>', in_progress: '~', completed: 'x' }
 export const STATUS_WORDS: Record<ItemStatus, string> = { pending: 'open', queued: 'queued', in_progress: 'in progress', completed: 'done' }
@@ -19,6 +19,7 @@ export type DrawnItem = { text: string; status: ItemStatus; place?: string; sum?
 export type DrawnPlace = { place: string; sum?: string }
 
 /**
+ * Test only: the board reads the sum through `drawnPlaces`.
  * A short hash of a text (FNV-1a, 32 bits, and the length), with every checkbox read as open: tells the
  * text the board read from one where a line moved. A box set by a press on one of two identical
  * lines does not change it, so the other line stays pressable before the next scan.
@@ -34,9 +35,8 @@ export function textSum(markdown: string): string {
   return `${hash.toString(16)}:${text.length}`
 }
 
-const HEADING = /^(#{1,6})\s/
-
 /**
+ * Exported for the tests; the board reads the same places through `drawnPlaces`.
  * The place of each item line by its key: the full path of headings above it
  * outside code fences and HTML comments (empty before the first heading), with the index of that
  * path's occurrence in the file, so two sections under the same heading text differ; its rank among
@@ -57,14 +57,14 @@ export function linePlaces(markdown: string): Map<string, string> {
   const opened = new Map<string, number>()
   let section = ''
   lines.forEach((line, at) => {
-    const m = isExample[at] === true ? null : HEADING.exec(line)
+    const m = isExample[at] === true ? null : HEADING_LINE.exec(line)
     if (m !== null) {
       const level = m[1]!.length
       path.length = Math.min(path.length, level - 1)
       while (path.length < level - 1) {
         path.push('')
       }
-      path.push(line.trimEnd())
+      path.push(line.trim())
       const name = path.join('\u0001')
       const nth = (opened.get(name) ?? 0) + 1
       opened.set(name, nth)

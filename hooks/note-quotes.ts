@@ -16,13 +16,6 @@ const LINE_TERMINATORS = /[\v\f\u0085\u2028\u2029]/g
 export const lineSafe = (text: string): string => text.replace(LINE_TERMINATORS, ' ')
 
 /**
- * A file or folder name, or any other text, as a note line takes it: each run of control characters
- * one space, and each line terminator one space, so a line break, a tab or a separator in a
- * name cannot start a line of its own in the note.
- */
-export const noteName = (name: string): string => lineSafe(controlFree(name))
-
-/**
  * The C1 controls (U+0080 to U+009F; NEL is a space by then) and the format characters (class Cf:
  * the bidi overrides such as U+202E, the tag characters U+E0000 to U+E007F), which JSON.stringify
  * leaves raw and a reader cannot see.
@@ -30,10 +23,25 @@ export const noteName = (name: string): string => lineSafe(controlFree(name))
 const HIDDEN_CHARS = /[\u0080-\u009f\p{Cf}]/gu
 
 /** Each code unit of a hidden character as a JSON `\uXXXX` escape, so the note shows it and still parses. */
-const escapeHidden = (json: string): string => json.replace(HIDDEN_CHARS, ch => Array.from({ length: ch.length }, (_, i) => `\\u${ch.charCodeAt(i).toString(16).padStart(4, '0')}`).join(''))
+const escapeHidden = (text: string): string => text.replace(HIDDEN_CHARS, ch => Array.from({ length: ch.length }, (_, i) => `\\u${ch.charCodeAt(i).toString(16).padStart(4, '0')}`).join(''))
+
+/**
+ * Text as Claude or the user reads it unquoted (a prompt sent as the user, a consent question): each
+ * line terminator but LF and CR one space, and each hidden character a `\uXXXX` escape, so text the
+ * card does not show (tag characters, a bidi override) cannot reach the reader unseen.
+ */
+export const visibleText = (text: string): string => escapeHidden(lineSafe(text))
+
+/**
+ * A file or folder name, or any other text, as a note line takes it: each run of control characters
+ * one space, each line terminator one space, and each hidden character an escape, so a line
+ * break, a tab or a separator in a name cannot start a line of its own in the note, and a bidi override
+ * cannot reorder it.
+ */
+export const noteName = (name: string): string => visibleText(controlFree(name))
 
 /** Text as a JSON string with no raw line terminator or hidden character: a quote, a line break or a tab stays inside the quotes as `\"`, `\n` or `\t`. */
 export const quoteText = (text: string): string => escapeHidden(JSON.stringify(lineSafe(text)))
 
-/** A name (a path, a heading, an agent type) as a note quotes it: noteName, then a JSON string, so a quote in it cannot close the quotes. */
-export const quoteName = (name: string): string => quoteText(noteName(name))
+/** A name (a path, a heading, an agent type) as a note quotes it: controls and line terminators a space, then a JSON string (which escapes the hidden characters once), so a quote in it cannot close the quotes. */
+export const quoteName = (name: string): string => quoteText(lineSafe(controlFree(name)))

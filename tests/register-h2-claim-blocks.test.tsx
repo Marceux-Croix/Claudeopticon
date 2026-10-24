@@ -6,9 +6,9 @@ import { expect, mock, test } from 'claude-code/testing'
 import { blockIds, CLAIM_MS } from '../hooks/id-blocks'
 import { ticketValue } from '../hooks/ticket-ids'
 
-// Hook cases of batch H2 (UCR loop 1, tail): ID block claims, files that never read,
+// Engine cases:ID block claims, files that never read,
 // the cut folders' IDs, Delete duplicate tickets after numbering, the Consolidate record
-//, and the read layer. Fakes of their own, ported from the verifier's G2 probes.
+//, and the read layer. Fakes of their own, ported from the G2 probes.
 {
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 type TestApi = Parameters<Parameters<typeof test>[1]>[0]

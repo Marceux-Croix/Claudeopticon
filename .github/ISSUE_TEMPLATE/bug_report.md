@@ -16,6 +16,7 @@ labels: bug
 
 **Where you saw it**
 
+- Claudeopticon version (the `version` in `.claude-plugin/plugin.json`):
 - Claude Code version (`claude --version`):
 - Surface: desktop app, VS Code, or terminal
 - Operating system:

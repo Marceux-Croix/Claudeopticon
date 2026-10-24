@@ -2,7 +2,6 @@
 
 import { endDots } from './card-end-dots'
 import { boxesMeet, endLabelWidth, labelBox, leaderLine, placeEndLabels } from './card-end-labels'
-export { LEADER_PX, leaderLine } from './card-end-labels'
 import type { Box, Trace } from './card-end-labels'
 import { tokens } from './card-format'
 import { ACCENT, FAINT, LABEL, PAD, RULE, stage, STAGE_BG, SUB, W } from './card-stage'
@@ -10,6 +9,7 @@ import { esc } from './card-text'
 import type { Card, View } from './card-types'
 import { emptySeries, onePerStep, QUANT_MS, stepAxes, tokenRate, WINDOW_MS, windowed } from './series'
 import type { Point } from './series'
+import { ledger } from './view-model'
 
 /** The top card's fixed height, in px. */
 export const HERO_H = 300
@@ -28,7 +28,7 @@ export const RATE_LINE_LIGHT = '#2563EB'
  */
 const HERO_LIGHT_CSS = `@media (prefers-color-scheme:light){.fa{fill:${AGENT_LINE_LIGHT}}.sa{stroke:${AGENT_LINE_LIGHT}}.ft{fill:${TOKEN_LINE_LIGHT}}.st{stroke:${TOKEN_LINE_LIGHT}}.pt{stop-color:${TOKEN_LINE_LIGHT}}.fr{fill:${RATE_LINE_LIGHT}}.sr{stroke:${RATE_LINE_LIGHT}}}`
 
-/** An axis label: integers for agents; for tokens 6B, 15M, 3.75M, 450k, and zero as a plain "0", as in the approved sample. */
+/** An axis label: integers for agents; for tokens 6B, 15M, 3.75M, 450k, and zero as a plain "0", as in the sample. */
 function axisLabel(value: number): string {
   // Up to 3 decimals, so 1.125M is not drawn as 1.13M.
   const trim = (n: number) => String(Math.round(n * 1000) / 1000)
@@ -38,7 +38,8 @@ function axisLabel(value: number): string {
 
 /** The agents that ended. An idle agent is neither live nor finished, as the Agents heading counts it. */
 export function finishedCount(view: View): number {
-  return view.agents.filter(agent => agent.isEnded).length
+  // The board's count: an agent idle past IDLE_CLEAR_MS counts as finished.
+  return ledger(view, false).finished.length
 }
 
 /** One line for the terminal and the card's alt text: agents, then tokens. */
@@ -58,7 +59,7 @@ export type TotalsPart = { text: string; ink: 'label' | 'sub' | 'faint' }
  * The totals line, with words dropped where the card is narrow: the longest form whose estimated
  * width (about 6.5 px a character at 13 px) fits `room` px at `size`, else the shortest form. The
  * agent count goes shorter, then goes, before "total session tokens" loses a word: the
- * owner's phrase stays at every width where it fits alone.
+ * title phrase stays at every width where it fits alone.
  */
 export function totalsLine(total: string, done: number, n: number, size: number, room: number): { parts: TotalsPart[]; chars: number } {
   const dot: TotalsPart = { text: '  ·  ', ink: 'faint' }
@@ -163,7 +164,7 @@ export function labelPx(label: string): number {
   return [...label].reduce((sum, ch) => sum + (ch === 'M' ? 9.9 : ch === 'B' ? 7.4 : ch === 'k' ? 6.1 : ch === '.' ? 3.1 : 6.9), 0)
 }
 
-/** The right axis title's center from the plot's right edge, in px, as in the approved sample. */
+/** The right axis title's center from the plot's right edge, in px, as in the sample. */
 export const TITLE_DX = 63
 
 const INK = { label: `fill="${LABEL}" font-weight="600"`, sub: `fill="${SUB}"`, faint: `fill="${FAINT}"` } as const
@@ -186,7 +187,7 @@ export function heroSvg(view: View): Card {
   const usage = view.usage
   // The right margin holds the right axis labels (labelPx wide) from x1 + RIGHT_DX, then the
   // axis title, its glyphs 9 px right of its center, and 8 px to the edge. The title's center sits
-  // 63 px right of the plot, as in the approved sample (x1 + 63 at 900 px), at every width; a widest
+  // 63 px right of the plot, as in the sample (x1 + 63 at 900 px), at every width; a widest
   // label longer than the sample's six characters pushes it on, so it stays 15 px clear of them.
   // Two left-aligned columns from x1 + RIGHT_DX: all tokens since compact in the token color, and
   // tokens per minute in the rate color, on its own axis, RATE_GAP px after it.
@@ -216,7 +217,7 @@ export function heroSvg(view: View): Card {
   const isInline = inlineLeft + KEY.reduce((sum, entry) => sum + keyWidth(entry) + KEY_GAP, -KEY_GAP) <= W - PAD - 14 - 40
   const rows = isInline ? keyRows(inlineLeft, Infinity) : keyRows(24, W - 24)
   const keyY = isInline ? 25.5 : 47
-  // KEY_SPACE px more under the key than the approved sample had.
+  // KEY_SPACE px more under the key than the sample had.
   const top = (isInline ? 56 : 62 + 16 * (rows.length - 1)) + KEY_SPACE
   const bottom = 250
   const height = bottom - top
@@ -433,4 +434,22 @@ export function heroSvg(view: View): Card {
   const alt = `Last 30 minutes: live agents, all tokens since compact, and tokens per minute. ${heroText(view)}${rate === undefined ? '' : ` Tokens per minute: ${tokens(rate[1])}.`}`
 
   return stage(HERO_H, parts.join('\n'), alt, HERO_LIGHT_CSS)
+}
+
+/** The last hero card drawn, with the inputs it was drawn from. */
+let lastHero: { key: string; card: Card } | undefined
+
+/**
+ * The hero card for `view`, drawn once for equal inputs: the pane draws on every press and tick, and
+ * placing the end labels over a busy trace takes tens to hundreds of milliseconds. Every input the
+ * card reads is in the key (the width, the time, the series, the axes, the usage, the agent counts
+ * and the version), so a draw with any of them changed draws anew.
+ */
+export function heroCard(view: View): Card {
+  const key = JSON.stringify([W, view.now, view.series, view.axes, view.usage, view.live, view.version, view.agents.length, finishedCount(view)])
+  if (lastHero?.key !== key) {
+    lastHero = { key, card: heroSvg(view) }
+  }
+
+  return lastHero.card
 }

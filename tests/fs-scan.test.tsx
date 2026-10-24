@@ -19,7 +19,7 @@ test('codeOnly blanks every comment and string text, and keeps all code where it
  */
 test('the read scan has no gap for optional chaining, other handle names, block comments, star lines and split calls', () => {
   const scan = (body: string) => unroutedReads({ 'register.tsx': `async function markTicket($, e) {\n${body}\n}` })
-  // The verifier's p121 forms, each behind a valid first line.
+  // The p121 forms, each behind a valid first line.
   expect(scan('  await $.fs.exists(p)\n  return $?.fs?.read(p)')).toEqual(['register.tsx:3: a read outside readTodo (in markTicket)'])
   expect(scan('  const f = e.fs\n  return f.read(p)')).toEqual(['register.tsx:2: the engine fs taken whole (an alias, a destructure or an argument) (in markTicket)'])
   expect(scan("  /* todo */ const t = await $.fs.read(p).catch(() => '')")).toEqual(['register.tsx:2: a failed read caught into an empty value outside readTodo (in markTicket)'])
@@ -51,7 +51,7 @@ test('the write scan finds every write outside writeIfUnchanged', () => {
   expect(unroutedWrites({ 'register.tsx': 'async function backUpBookNow($) {\n  await $.fs.write(name, raw)\n}\nasync function x($) {\n  // $.fs.write(p, t)\n  await $.fs.read(p)\n}' })).toEqual([])
 })
 
-// ---------------------------------------------------------------- batch K3: remainder (8 bypass forms of verify J3/J4)
+// ---------------------------------------------------------------- remainder (8 bypass forms of verify J3/J4)
 
 /**
  * Property: a call that reaches the engine fs by Reflect, by a computed or escaped name, or
@@ -91,7 +91,7 @@ test('VJ-121 Reflect, computed keys, escaped names and column-0 comments are fou
   expect(unroutedReads({ 'register.tsx': fn('  const v = $[key]') }, allowed)).toEqual([])
 })
 
-// ---------------------------------------------------------------- batch L3: (scope by brackets, nested destructure, all sources)
+// ---------------------------------------------------------------- (scope by brackets, nested destructure, all sources)
 
 const LAYER_FN = "async function writeIfUnchanged($: EngineInterface, path: string, expected: string, next: string, opts: { folder?: string } = {}): Promise<WriteOutcome> {\n  if (expected !== next) {\n    await $.fs.write(path, next)\n  }\n\n  return { kind: 'written' }\n}\n"
 const EVIL_BODY = "  const t = await $.fs.read(p)\n  await $.fs.write(p, t + 'x')\n}"
@@ -152,7 +152,7 @@ test('a JSX closing tag or self-closing tag keeps the brackets of the line', () 
 /**
  * Property (batch M): in a .tsx file, the text of a JSX element is text, as a string's is: a backtick, a
  * quote, `//` or `/*` in it opens no template, string or comment, so a raw call after it is found by both scans. The
- * verifier's final-v1 H2, H3 and H4 injections, and H1 and H5.
+ * final-v1 H2, H3 and H4 injections, and H1 and H5.
  */
 test('run4 H2, H3, H4 a backtick, // or /* in JSX text hides no raw write or read from either scan', () => {
   const evil = (body: string) => `export function evil($: EngineInterface, p: string) {\n${body}\n}`

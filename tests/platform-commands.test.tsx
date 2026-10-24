@@ -43,3 +43,11 @@ test('MAC_SIGNS holds only files macOS ships, never /usr/bin/trash (trash-cli pu
   expect(MAC_SIGNS).toEqual(['/usr/bin/sw_vers', '/usr/bin/osascript'])
   expect(MAC_SIGNS).not.toContain('/usr/bin/trash')
 })
+
+test('trashReason suggests installing gio or trash-cli when no command was found, except on macOS, which ships its own', () => {
+  const tried = ['gio: not found', 'trash-put: not found']
+  expect(trashReason(tried, false, 'Linux')).toContain('install gio or trash-cli')
+  expect(trashReason(tried, false, 'Darwin')).not.toContain('install gio or trash-cli')
+  // A command that was found but failed is no missing command.
+  expect(trashReason(['gio: exit 1'], false, 'Linux')).not.toContain('install gio or trash-cli')
+})

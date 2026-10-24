@@ -112,7 +112,7 @@ const ROW_STEP = 1
  * A label may move left of its home column by up to SHIFTS columns SHIFT_PX apart. When no set of
  * places there keeps every label off the traces and marks, and `area.left` is given, the search
  * runs again over the whole width to `left`, a column every WIDE_STEP px (at 300
- * px three states of the reviewer's fuzz had no clear place in four columns, but one 96 px or more
+ * px three states of the fuzz had no clear place in four columns, but one 96 px or more
  * to the left). A px moved costs PER_SHIFT_PX, so a far column wins only over a place on a trace.
  */
 const SHIFTS = 3

@@ -9,7 +9,7 @@
  */
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { hookSources } from './hook-sources.ts'
+import { hookSources } from './node-sources.ts'
 import { unroutedReads } from '../tests/read-scan.ts'
 
 const mod = resolve(dirname(fileURLToPath(import.meta.url)), '..')

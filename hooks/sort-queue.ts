@@ -30,7 +30,7 @@ export function nextSortBatch(queue: readonly Queued[], alone: ReadonlyMap<strin
 }
 
 /** What a model reply to a sort call means for the queue. */
-export type SortReplyKind = 'text' | 'failed' | 'empty'
+type SortReplyKind = 'text' | 'failed' | 'empty'
 
 /**
  * Tells the three kinds of reply apart. `text`: the model answered; the text may still not parse.
@@ -72,7 +72,7 @@ export function addAloneTry(tried: { text: string; count: number } | undefined, 
 /**
  * True when a failed sort call may be the items' fault, so the second such failure in a
  * row for the same batch halves it (see nextThrows); false for a transport or capacity failure,
- * which only waits. Read from the engine's own contract (the pinned 2.1.295 binary): `$.model.complete`
+ * which only waits. Read from the engine's own contract (checked against the 2.1.308 binary): `$.model.complete`
  * does not throw for an API or network failure; it answers `{ isAnswered: false, reason: 'api-error',
  * status, error }`, with `status` the HTTP status or null when no response came, and `reason:
  * 'aborted'` for a timeout or an abort. So:

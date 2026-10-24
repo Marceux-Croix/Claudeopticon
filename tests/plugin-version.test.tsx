@@ -13,3 +13,8 @@ test('manifestVersion gives nothing for a missing, odd or unreadable version', (
   expect(manifestVersion('{ "version": "<b>1</b>" }')).toBeUndefined()
   expect(manifestVersion('not json')).toBeUndefined()
 })
+
+test('manifestVersion accepts a version of 32 characters and refuses one of 33', () => {
+  expect(manifestVersion(`{ "version": "${'1'.repeat(32)}" }`)).toBe('1'.repeat(32))
+  expect(manifestVersion(`{ "version": "${'1'.repeat(33)}" }`)).toBeUndefined()
+})

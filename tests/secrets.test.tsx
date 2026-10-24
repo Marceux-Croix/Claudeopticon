@@ -1,11 +1,11 @@
 import { expect, test } from 'claude-code/testing'
 
 import { readClaims, readProgress } from '../hooks/progress-report'
-import { hasSecret, HIDDEN, hideNormalizedSecretLines, hideSecretLines, hideSecrets, hideTitle, SECRET_PATTERNS } from '../hooks/secrets'
+import { hasSecret, HIDDEN, hideNormalizedSecretLines, hideSecretLines, hideSecrets, hideTitle, KEPT_ID, KEPT_NORMALIZED_ID, keptIds, SECRET_PATTERNS } from '../hooks/secrets'
 import { callDetail, callSummary, describeCall } from '../hooks/tool-calls'
 import { EXTRA_RUNS, inputsOf, LARGE, RATIO_MAX, SMALL, stepRatio, superlinear, unitsOf } from './fixtures/pattern-growth'
 import { stepCounter } from './fixtures/regex-steps'
-import { J6_PLAIN, J6_SECRET, KEY_BODY, KEY_SECRET, L2_PLAIN, L2_SECRET, L3_PLAIN, L3_SECRET, M_PLAIN, M_SECRET, MORE_PLAIN, MORE_SECRET, PLAIN, SECRET } from './fixtures/secret-corpus'
+import { J6_PLAIN, J6_SECRET, KEY_BODY, KEY_SECRET, L2_PLAIN, L2_SECRET, L3_PLAIN, L3_SECRET, M_PLAIN, M_SECRET, MORE_PLAIN, MORE_SECRET, N_PLAIN, N_SECRET, PLAIN, SECRET } from './fixtures/secret-corpus'
 
 test('hideSecrets keeps the orchestrator detail rule', () => {
   expect(hideSecrets('ls -la')).toBe('ls -la')
@@ -54,9 +54,9 @@ test('hideSecrets hides every secret form and keeps plain text', () => {
   }
 })
 
-// ---------------------------------------------------------------- , loop 1 narrowing
+// ---------------------------------------------------------------- , narrowing
 
-/** The forms verifier F found still shown in clear, and a few of their kin; see the rule in secrets.ts. */
+/** The forms still shown in clear, and a few of their kin; see the rule in secrets.ts. */
 const NARROWED_SECRETS = [
   // Short options of their own tools.
   'docker login -u bob -p hunter2',
@@ -160,10 +160,10 @@ test('hideSecretLines hides only the lines with a secret, and keeps their #IDs',
   expect(hideSecretLines('plain text')).toBe('plain text')
 })
 
-// ---------------------------------------------------------------- , the corpus (batch H5)
+// ---------------------------------------------------------------- , the corpus
 
 test('every command of the secret corpus is hidden, in the detail and the title lines', () => {
-  const secrets = [...SECRET, ...MORE_SECRET, ...L2_SECRET, ...J6_SECRET, ...L3_SECRET, ...M_SECRET, ...KEY_SECRET]
+  const secrets = [...SECRET, ...MORE_SECRET, ...L2_SECRET, ...J6_SECRET, ...L3_SECRET, ...M_SECRET, ...N_SECRET, ...KEY_SECRET]
   expect(secrets.length).toBeGreaterThanOrEqual(413)
   expect(secrets.filter(command => !hasSecret(command))).toEqual([])
   // Each view of a Bash call: its detail, its summary and its few words.
@@ -172,14 +172,14 @@ test('every command of the secret corpus is hidden, in the detail and the title 
 })
 
 test('every ordinary command of the corpus is shown as it is', () => {
-  const plain = [...PLAIN, ...MORE_PLAIN, ...L2_PLAIN, ...J6_PLAIN, ...L3_PLAIN, ...M_PLAIN]
+  const plain = [...PLAIN, ...MORE_PLAIN, ...L2_PLAIN, ...J6_PLAIN, ...L3_PLAIN, ...M_PLAIN, ...N_PLAIN]
   expect(plain.length).toBeGreaterThanOrEqual(425)
   expect(plain.filter(command => hasSecret(command))).toEqual([])
   expect(plain.filter(command => hideSecrets(command) !== command)).toEqual([])
 })
 
 /**
- * Property (batch M): the verifier's final-v1 misses are hidden on every surface (expdp user/pw@db, yarn
+ * Property (batch M): the final-v1 misses are hidden on every surface (expdp user/pw@db, yarn
  * npmAuthToken, security unlock-keychain -p, Sybase isql -P), and their ordinary neighbors stay shown.
  */
 test('c001 expdp user/pw@db, yarn npmAuthToken, security unlock-keychain -p and isql -P are hidden; their neighbors shown', () => {
@@ -225,9 +225,9 @@ test('the word secret, bearer, a key name and a flag value are shown, but a valu
   expect(hasSecret('docker run --user node:node app && curl --user bob:pw u')).toBe(true)
 })
 
-// ---------------------------------------------------------------- , step ratios (loop 3; time ratios in batch H5)
+// ---------------------------------------------------------------- , step ratios (the earlier time ratios failed under load)
 
-// Loop 3 replaced the time ratios of these tests with step counts (tests/fixtures/pattern-growth.ts):
+// Step counts replaced the time ratios of these tests with step counts (tests/fixtures/pattern-growth.ts):
 // the same checks and the same states, at sizes a step counter runs in seconds (1.5k and 3k, twice
 // the text, where the time test used 10 times), so no load can fail or pass them.
 test('no secret pattern grows faster than its text: steps(3k) / steps(1.5k) stays under RATIO_MAX on inputs built from each pattern\'s words', { timeoutMs: 120_000 }, () => {
@@ -235,9 +235,9 @@ test('no secret pattern grows faster than its text: steps(3k) / steps(1.5k) stay
   expect(LARGE).toBe(3_000)
   // Each pattern gets inputs from its own start words and tool names, not only the shared shapes.
   expect(unitsOf(SECRET_PATTERNS.find(re => re.source.includes('sudo'))!)).toContain('sudo ')
-  // Two-token inputs: a URL start once, then a long run (loop 2, verifier HI's M-HI-1).
+  // Two-token inputs: a URL start once, then a long run (mutant M-HI-1).
   expect(inputsOf(SECRET_PATTERNS[0]!)).toContainEqual({ head: 'a://', unit: 'x:' })
-  // A word pair of the pattern as a head, then a run of spaces (loop 3, R6's M-V-2).
+  // A word pair of the pattern as a head, then a run of spaces (M-V-2).
   expect(inputsOf(SECRET_PATTERNS.find(re => re.source.includes('authorization'))!)).toContainEqual({ head: 'authorization: bearer', unit: ' ' })
   expect(superlinear(SECRET_PATTERNS)).toEqual([])
 })
@@ -250,7 +250,7 @@ function mutant(find: string, from: string, to: string): RegExp {
   return new RegExp(re.source.split(from).join(to), re.flags)
 }
 
-/** R6's M-V-2 (loop 3): the bearer value after `\s+["']?\s*`, 29.8 s on a 50k input, which the time ratio passed. */
+/** M-V-2: the bearer value after `\s+["']?\s*`, 29.8 s on a 50k input, which the time ratio passed. */
 const bearerMutant = (): RegExp => mutant('authorization', `(?:bearer|basic|token|digest|bot|negotiate|ntlm)\\s{1,5}["']?[^\\s"']|`, `(?:bearer|basic|token|digest|bot|negotiate|ntlm)\\s+["']?\\s*[^\\s"']|`)
 
 test('the step check catches each quadratic mutant the fixed budget and the time ratio let pass', { timeoutMs: 120_000 }, () => {
@@ -267,7 +267,7 @@ test('the step check catches each quadratic mutant the fixed budget and the time
   for (const [name, re] of mutants) {
     expect([name, superlinear([re], SMALL, LARGE, true).length]).toEqual([name, 1])
   }
-  // M-V-2 is caught on the head-plus-space input loop 3 added, the input no earlier list had.
+  // M-V-2 is caught on the head-plus-space input added later, the input no earlier list had.
   expect(superlinear([bearerMutant()], SMALL, LARGE, true)[0]).toContain('"authorization: bearer" + " "')
   // A linear pattern on the same sizes passes.
   expect(superlinear([SECRET_PATTERNS.find(re => re.source.includes('eyJ'))!])).toEqual([])
@@ -275,7 +275,7 @@ test('the step check catches each quadratic mutant the fixed budget and the time
 
 /**
  * Property (batch M): the step gate sees a pattern that is quadratic on a run of digits or of quotes after
- * its own start: the verifier's final-v1 mutants M-D (`\d+\d*` in a --pin pattern) and M-Q (`["']*["']*` in a
+ * its own start: the final-v1 mutants M-D (`\d+\d*` in a --pin pattern) and M-Q (`["']*["']*` in a
  * password pattern), 458 ms on a 20k run, which passed every earlier input. And on a run of any ASCII punctuation.
  */
 test('m087 the step check catches the digit-run and quote-run mutants, and a run of any ASCII punctuation', { timeoutMs: 120_000 }, () => {
@@ -305,12 +305,12 @@ test('m087 the step check catches the digit-run and quote-run mutants, and a run
 // ---------------------------------------------------------------- , the IDs a hidden line keeps
 
 test('a hidden line keeps only its ticket IDs, not a #word of the secret', () => {
-  // The verifier's two cases: a secret that starts with #.
+  // The two cases: a secret that starts with #.
   expect(hideSecretLines('mysql -u root -p#Hunter2xyz #T12')).toBe('(hidden) #T12')
   expect(hideSecretLines('export db_password=#hunter2xyz')).toBe('(hidden)')
   // State 1: a valid ID first, then a secret #word.
   expect(hideSecretLines('#T0037 PGPASSWORD=x #abcdefgh psql')).toBe('(hidden) #T0037')
-  // State 2: IDs at the line's limits, first and last, and in brackets. Loop 2: only the mod's #T form is kept, so `#PROJ7` goes.
+  // State 2: IDs at the line's limits, first and last, and in brackets. Only the mod's #T form is kept, so `#PROJ7` goes.
   expect(hideSecretLines('#T0001 curl --password x (#T0002) #PROJ7')).toBe('(hidden) #T0001 #T0002')
   // State 3: inside the IDs: a # glued to the secret, even of an ID's form, and a word that is no ID.
   expect(hideSecretLines('pw=#T0042 #TODO #t2a export PW=x')).toBe('(hidden)')
@@ -325,7 +325,7 @@ test('a title is hidden when it holds a secret, its ticket IDs kept', () => {
 })
 
 test('a normalized line is hidden when normalize took out the _ its secret name had', () => {
-  // The verifier's old stored briefs.
+  // The old stored briefs.
   expect(hideNormalizedSecretLines('fix #t0037 with mysqlpwd=hunter2xyz')).toBe('(hidden) #t0037')
   expect(hideNormalizedSecretLines('export dbpass=hunter2xyz')).toBe('(hidden)')
   // The forms hideSecretLines already sees stay hidden; a word that only ends like one does not.
@@ -365,9 +365,9 @@ test('the step counter agrees with RegExp.test for every pattern on every corpus
   }
 })
 
-// ---------------------------------------------------------------- , loop 2 secret forms
+// ---------------------------------------------------------------- , secret forms
 
-test('every loop-2 secret form is hidden, and every plain neighbor shown', () => {
+test('every secret form of the second corpus is hidden, and every plain neighbor shown', () => {
   expect(L2_SECRET.filter(command => !hasSecret(command))).toEqual([])
   expect(L2_PLAIN.filter(command => hasSecret(command))).toEqual([])
 })
@@ -415,7 +415,7 @@ test('a flag value after a secret name is shown, and a real value next to it is 
 })
 
 test('a #word after a space, a bracket or a comma on a hidden line is dropped unless it is a #T ID', () => {
-  // The reviewer's and the verifier's cases.
+  // More cases.
   expect(hideSecretLines('mysql -u root --password #Hunter2')).toBe('(hidden)')
   expect(hideSecretLines('docker login -u bob -p #Summer2024')).toBe('(hidden)')
   expect(hideSecretLines('sshpass -p #Winter99 ssh host')).toBe('(hidden)')
@@ -429,7 +429,7 @@ test('a #word after a space, a bracket or a comma on a hidden line is dropped un
   expect(hideNormalizedSecretLines('fix #t0037 #t1 with mysqlpwd=hunter2xyz #hunter2')).toBe('(hidden) #t0037 #t1')
 })
 
-// ---------------------------------------------------------------- loop 3 (batch L6): R6's corpus, attached options, continued lines
+// ---------------------------------------------------------------- R6's corpus, attached options, continued lines
 
 const PW3 = 'Zebra9Quill'
 
@@ -460,7 +460,7 @@ test('an attached option is hidden behind a valid first command, at the far end 
   expect(hasSecret('curl -bsid=abc123 https://x')).toBe(true)
 })
 
-test('every form of the J6 and loop-3 corpora is hidden, and every ordinary neighbor shown', () => {
+test('every form of the earlier and later corpora is hidden, and every ordinary neighbor shown', () => {
   expect(J6_SECRET.length).toBe(40)
   expect(L3_SECRET.length).toBe(40)
   expect([...J6_SECRET, ...L3_SECRET].filter(command => !hasSecret(command))).toEqual([])
@@ -525,7 +525,7 @@ test('a command continued with a backslash is checked as one line, in steps, cla
 })
 
 test('a .pgpass line is hidden only as a whole token of five fields: MAC addresses, IPv6 and times stay shown', () => {
-  // The verifier's and R6's ordinary commands (fp3.ts).
+  // The and R6's ordinary commands (fp3.ts).
   for (const text of ['sudo ifconfig en0 ether 00:11:22:33:44:55', 'ip link set dev eth0 address 02:42:ac:11:00:02', 'ping6 2001:4860:4860:0000:0000:0000:0000:8888', 'arp -s 10.0.0.9 00:1a:2b:3c:4d:5e', 'echo 12:30:45:67:89', 'ping6 fe80:0:0:0:200:f8ff:fe21:67cf%en0']) {
     expect([text, hasSecret(text)]).toEqual([text, false])
   }
@@ -594,4 +594,110 @@ test('an ID that is the secret value is not kept on the hidden line; the other I
   expect(hideNormalizedSecretLines('dbpass=#t0037ab #t0001')).toBe('(hidden) #t0001')
   // A control: IDs next to a secret stay.
   expect(hideSecretLines('#T0001 curl --password x (#T0002)')).toBe('(hidden) #T0001 #T0002')
+})
+
+// ---------------------------------------------------------------- hyphen and space names, glued options, more credential forms
+
+/** Property: a secret name written with a hyphen or a space between its words (`api-key`, `api key`) is a secret name, as `api_key` is. */
+test('a secret name with a hyphen or a space between its words is hidden: behind a valid first part, at the end of the text, and next to the settings that stay shown', () => {
+  for (const text of ['api-key = "v1"', '"api-key": "v1"', 'access-key=v1', 'private-key=v1', 'api key: v1', 'API-KEY=v1']) {
+    expect([text, hasSecret(text)]).toEqual([text, true])
+  }
+  // State 1: behind a valid first assignment.
+  expect(hasSecret('export REGION=us-east-1 access-key=v1')).toBe(true)
+  // State 2: at the end of the text, a value of one character.
+  expect(hasSecret('set private key: v')).toBe(true)
+  // State 3: inside the forms that stay shown: a setting about the key and prose, and a real value after them.
+  expect(hasSecret('api-key-file=k.txt')).toBe(false)
+  expect(hasSecret('the api key: see vault')).toBe(false)
+  expect(hasSecret('api-key-file=k.txt api-key=v1')).toBe(true)
+})
+
+/** Property: a long option whose name ends in a secret word, glued on or in camelCase, is a secret option, as `--api-token` is. */
+test('a long option with a glued or camelCase secret word is hidden: behind a valid first option, at the end of the text, and next to the options that stay shown', () => {
+  for (const text of ['--accessToken', '--authToken', '--authtoken', '--clientSecret', '--secretKey', '--bearerToken', '--adminPassword', '--dbpassword']) {
+    expect([text, hasSecret(`app ${text} v1`)]).toEqual([text, true])
+  }
+  // State 1: behind a valid first option.
+  expect(hasSecret('app --max-tokens 5 --clientSecret v1')).toBe(true)
+  // State 2: at the end of the text, the option alone.
+  expect(hasSecret('app --dbpassword')).toBe(true)
+  // State 3: inside the options that stay shown, and a secret option after them.
+  for (const text of ['--tokenizer', '--bypass', '--compass', '--passthrough', '--max-tokens', '--tokens', '--sortKey', '--publicKey', '--keyPassword-file f']) {
+    expect([text, hasSecret(`app ${text}`)]).toEqual([text, false])
+  }
+  expect(hasSecret('app --tokenizer bpe --accessToken v1')).toBe(true)
+})
+
+/** Property: curl's proxy user and certificate passwords, Redis AUTH and requirepass, presigned AWS URLs, the Azure Functions key header and the Docker Hub, Google OAuth, Mailgun and Twilio token shapes are secrets. */
+test('the curl, Redis, AWS URL, Azure Functions header and token-shape forms are hidden: behind a valid first part, at the end of the text, and next to the forms that stay shown', () => {
+  for (const text of N_SECRET.slice(14)) {
+    expect([text, hasSecret(text)]).toEqual([text, true])
+  }
+  // State 1: behind a valid first part of the same command.
+  expect(hasSecret('curl --cert client.pem --proxy-user bob:v1 https://x.example')).toBe(true)
+  expect(hasSecret('redis-cli -h db PING && redis-cli -h db AUTH v1')).toBe(true)
+  // State 2: at the end of the text: one character of value, or the last character of a fixed-length token.
+  expect(hasSecret('curl --proxy-user bob:v')).toBe(true)
+  expect(hasSecret('redis-cli config set requirepass v')).toBe(true)
+  // Built at run time: a literal 32-hex key reads as a real Mailgun key to a host's secret scanning.
+  const hex32 = '0123456789abcdef'.repeat(2)
+  expect(hasSecret(`echo key-${hex32}`)).toBe(true)
+  expect(hasSecret(`echo key-${hex32.slice(0, 31)}`)).toBe(false)
+  // State 3: inside the forms that stay shown: no value, no password part, a short key, and a real value after them.
+  for (const text of ['curl --proxy-user', 'curl --proxy-user bob https://x.example', 'redis-cli config get requirepass', 'curl --cert client.pem https://x.example', 'echo key-short', 'curl -H "x-functions-name: list" https://f']) {
+    expect([text, hasSecret(text)]).toEqual([text, false])
+  }
+  expect(hasSecret('curl --cert client.pem --cert c.pem:v1')).toBe(true)
+})
+
+// ---------------------------------------------------------------- the IDs a hidden line keeps: cost and rule
+
+/**
+ * The characters the secret check reads while `keptIds` works on `line`: the check is counted, adding
+ * the length of each text it gets. A count of the work that depends on the code and the input only.
+ */
+function scannedChars(line: string, kept: RegExp): number {
+  let total = 0
+  keptIds(line, kept, text => {
+    total += text.length
+
+    return hasSecret(text)
+  })
+
+  return total
+}
+
+/** A hidden line: a secret, then `count` distinct ticket IDs. */
+const idLine = (count: number): string => `PASSWORD=hunter2 ${Array.from({ length: count }, (_, i) => `#T${String(i + 1).padStart(4, '0')}`).join(' ')}`
+
+/** Property: the IDs check of a hidden line costs a fixed number of passes over the line, whatever the number of IDs it holds. */
+test('the kept-ID check of a hidden line reads the line a fixed number of times, not once per ID, on both paths', () => {
+  for (const [kept, line] of [[KEPT_ID, idLine], [KEPT_NORMALIZED_ID, (n: number) => idLine(n).toLowerCase()]] as const) {
+    const small = scannedChars(line(300), kept)
+    const large = scannedChars(line(1200), kept)
+    // Four times the text: about four times the work when linear, sixteen when each ID reads the whole line.
+    expect(large / small).toBeLessThan(6)
+  }
+})
+
+test('a hidden line keeps its first 16 distinct ticket IDs, in their order, and each once', () => {
+  const ids = Array.from({ length: 20 }, (_, i) => `#T${String(i + 1).padStart(4, '0')}`)
+  expect(hideSecretLines(idLine(20))).toBe([HIDDEN, ...ids.slice(0, 16)].join(' '))
+  expect(hideSecretLines('PW=x #T0001 #T0002 #T0001')).toBe(`${HIDDEN} #T0001 #T0002`)
+  expect(hideNormalizedSecretLines(idLine(20).toLowerCase())).toBe([HIDDEN, ...ids.slice(0, 16).map(id => id.toLowerCase())].join(' '))
+})
+
+/** Property: a ticket ID that is the only secret value of a hidden line is not shown; an ID beside another secret is. */
+test('an ID that is the line\'s only secret value is dropped: behind a valid first ID, at the end of the line, and not when another secret stands beside it', () => {
+  // The value forms: a YAML key, and a normalized one.
+  expect(hideSecretLines('token: #T0037')).toBe(HIDDEN)
+  expect(hideNormalizedSecretLines('token: #t0037')).toBe(HIDDEN)
+  // State 1: behind a valid first ID, the value ID goes and the first stays.
+  expect(hideSecretLines('#T0001 token: #T0037')).toBe(`${HIDDEN} #T0001`)
+  // State 2: at the end of the line, the last ID it holds.
+  expect(hideSecretLines('see #T0001 then api_key: #T0037')).toBe(`${HIDDEN} #T0001`)
+  // State 3: inside the IDs that are kept: one next to another secret (an option that is a secret alone), as the check cannot tell it from a reference.
+  expect(hideSecretLines('token: #T0037 PGPASSWORD=Hunter2xyz')).toBe(`${HIDDEN} #T0037`)
+  expect(hideSecretLines('curl --password #T0037')).toBe(`${HIDDEN} #T0037`)
 })

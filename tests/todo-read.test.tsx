@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import { readReason, reasonOf, TodoReadError } from '../hooks/todo-read'
 import { ALLOWED, unroutedReads } from './read-scan'
 
-// ---------------------------------------------------------------- structural closure (batch H2)
+// ---------------------------------------------------------------- read-layer closure
 
 test('a todo read that failed names its file and its reason', () => {
   const error = new TodoReadError('/repo/.claude_todo/C.md', 'EACCES')
@@ -45,7 +45,7 @@ test('the read-layer scan finds every read outside readTodo, and only the allowe
   expect(ALLOWED.every(one => one.reason.includes('no todo file'))).toBe(true)
 })
 
-// ---------------------------------------------------------------- batch I2: 
+// ---------------------------------------------------------------- 
 
 /**
  * Property: the scan sees every read of the engine fs, also those that do not use the `fs.read(` text:
@@ -53,7 +53,7 @@ test('the read-layer scan finds every read outside readTodo, and only the allowe
  */
 test('the read scan finds reads that do not use the fs.read( text', () => {
   const scan = (body: string) => unroutedReads({ 'register.tsx': `async function markTicket($) {\n${body}\n}` })
-  // The verifier's state: an alias of $.fs, then a read through it under another name.
+  // The state: an alias of $.fs, then a read through it under another name.
   expect(scan('  const f = $.fs\n  const text = await f.read(path)')).toEqual(['register.tsx:2: the engine fs taken whole (an alias, a destructure or an argument) (in markTicket)'])
   // A destructured read, a bound read, and a lookup by name.
   expect(scan('  const { read } = $.fs')).toEqual(['register.tsx:2: the engine fs taken whole (an alias, a destructure or an argument) (in markTicket)'])

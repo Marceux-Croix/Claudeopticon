@@ -1,4 +1,4 @@
-// Fault injection of the todo writes (from the reviewer's R3-G and R3-H runners): each fs
+// Fault injection of the todo writes (from the R3-G and R3-H runners): each fs
 // call (stat, read, write) and each store call of one archive pass, and of one Consolidate press, fails in
 // turn; the retries then run with no fault. Engine tests of register.tsx, in a file of their own: the 150
 // runs would push register.test.tsx further past the 600 s limit of one test file.
@@ -169,7 +169,7 @@ function injector(on: Parameters<Parameters<typeof test>[1]>[1], failAt: number 
 
 const count = (text: string, part: string) => text.split(part).length - 1
 
-/** Past the calls of one pass (70 after loop 3: the L3 rollback re-read and mkdir re-check add calls): the run with no fault checks the margin, so a sweep never stops short of the last call. */
+/** Past the calls of one pass (70 since the rollback re-read and mkdir re-check add calls): the run with no fault checks the margin, so a sweep never stops short of the last call. */
 const ARCH_N = 90
 for (let k = 0; k <= ARCH_N; k += 1) {
   test(`the archive move ends with each block once in the archive and gone from the live file, a failure at call ${k}`, async ($, on) => {

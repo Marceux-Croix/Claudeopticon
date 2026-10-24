@@ -237,8 +237,8 @@ const claimMkdirs = (calls: readonly string[]) => calls.filter(one => one.starts
 const offered = (line: string | undefined): string[] => (line === undefined ? [] : [...line.matchAll(/#(T\w+)/g)].map(m => m[1]!))
 
 
-// ---------------------------------------------------------------- batch L2: the engine paths of to 
-// The rig above is the reviewer's (l3-R2, `zz-l3r2.test.tsx`), a copy of the K1 rig; these tests own it.
+// ---------------------------------------------------------------- the engine paths of to 
+// The rig above is a copy of the claim-folder rig; these tests own it.
 
 const T = '/repo/.claude_todo/TODO.md'
 /** A session in `/repo` with one todo file holding `text`, after the scans and numbering have run. */
@@ -254,7 +254,7 @@ const run = async ($: TestApi, on: On, text: string, extra: Partial<K1Opts> = {}
 
 /** Property: a lazy line under a ticket ends no item, so numbering reaches a child ticket after it. */
 test('a lazy line in the parent, then a blank line: the child ticket at 4 spaces is numbered', async ($, on) => {
-  // The reviewer's L3R2-U2 state (it failed on the code before this fix).
+  // The L3R2-U2 state (it failed on the code before this fix).
   const { files } = await run($, on, '- [ ] #T0001 parent\nwrapped note\n\n    - [ ] child task')
   expect(files[T]).toMatch(/\n {4}- \[ \] #T\w+ child task$/)
 })
@@ -266,7 +266,7 @@ test('control: no lazy line, the child at 4 spaces after a blank line is numbere
 
 /** Property: an unclosed comment in a list item ends with the item, so the tickets after it are numbered. */
 test('an unclosed comment in an item: the next item at column 0 is numbered', async ($, on) => {
-  // The reviewer's L3R2-U1 state.
+  // The L3R2-U1 state.
   const { files } = await run($, on, '- [ ] #T0001 parent\n  <!-- draft note\n- [ ] new ticket')
   expect(files[T]).toMatch(/\n- \[ \] #T\w+ new ticket$/)
   expect(files[T]).toContain('\n  <!-- draft note\n')
@@ -274,13 +274,13 @@ test('an unclosed comment in an item: the next item at column 0 is numbered', as
 
 /** Property: an example in indented code is never numbered, and never takes a real ticket's ID. */
 test('indented code right after a heading: the example line is never numbered', async ($, on) => {
-  // The reviewer's L3R2-198 state.
+  // The L3R2-198 state.
   const { files } = await run($, on, '- [ ] #T0001 a\n## Examples of the format\n    - [ ] example line')
   expect(files[T]).toBe('- [ ] #T0001 a\n## Examples of the format\n    - [ ] example line')
 })
 
 test('an indented-code example under a heading that reuses a real ticket\'s ID never renames the ticket', async ($, on) => {
-  // The reviewer's L3R2-198b state: the old reading wrote `- [ ] Fix the parser`.
+  // The L3R2-198b state: the old reading wrote `- [ ] Fix the parser`.
   const text = '## Format of a ticket\n    - [ ] #T0001 Fix the parser\n\n## Work\n- [ ] #T0001 Fix the parser\n- [ ] #T0002 other'
   const { files } = await run($, on, text)
   expect(files[T]).toBe(text)
@@ -311,7 +311,7 @@ test('the used-up toast names the checkbox line with the ID, not a prose line th
 
 /**
  * Property: a session whose git fails takes the common dir from the git dir's `commondir` file, as git does,
- * so it claims in the folder git sessions claim in, whatever a path segment is called. The reviewer's s6 and s7.
+ * so it claims in the folder git sessions claim in, whatever a path segment is called. The s6 and s7.
  */
 test('git fails in a checkout whose separate git dir is under a folder named worktrees: the claim is in that git dir', async ($, on) => {
   mock.clock(on)

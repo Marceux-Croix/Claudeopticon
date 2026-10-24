@@ -208,9 +208,9 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
             index: ORCH,
             description: orchestratorTitle(orch.title, orchLinks),
             type: 'main conversation',
-            status: orch.isRunning ? 'running' : 'idle',
+            status: 'running',
+            isIdle: false,
             isEnded: false,
-            isIdle: !orch.isRunning,
             startedAt: now,
             toolCalls: orch.toolCalls,
             ...(orch.doing === undefined ? {} : { doing: orch.doing }),
@@ -220,15 +220,27 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
   }
 }
 
+/** How long an agent may sit idle, finished but never stopped, before the board files it with the finished ones. */
+export const IDLE_CLEAR_MS = 10 * 60_000
+
+/** Whether an idle agent has sat idle long enough to be filed with the finished ones. */
+function isIdleCleared(agent: AgentView, now: number): boolean {
+  return agent.isIdle === true && agent.idleSince !== undefined && now - agent.idleSince >= IDLE_CLEAR_MS
+}
+
 /**
- * The agents in three groups: live, idle (finished but never stopped, always shown, since an open
- * task is worth a look), and finished, most recently ended first, so the bottom of the list is the
- * ledger of who ran. `shown` is what the pane lists: the finished ones only with `showFinished`.
+ * The agents in three groups: live, idle (finished but never stopped, shown for IDLE_CLEAR_MS, since
+ * an open task is worth a look), and finished, most recently ended first, so the bottom of the list
+ * is the ledger of who ran. An agent idle past IDLE_CLEAR_MS is filed with the finished ones: Claude
+ * Code keeps it open, but its work is done. `shown` is what the pane lists: the finished ones only
+ * with `showFinished`.
  */
 export function ledger(view: View, showFinished: boolean): { active: AgentView[]; idle: AgentView[]; finished: AgentView[]; shown: AgentView[] } {
   const active = view.agents.filter(agent => !agent.isEnded && !agent.isIdle)
-  const idle = view.agents.filter(agent => !agent.isEnded && agent.isIdle)
-  const finished = view.agents.filter(agent => agent.isEnded).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))
+  const idle = view.agents.filter(agent => !agent.isEnded && agent.isIdle && !isIdleCleared(agent, view.now))
+  const finished = view.agents
+    .filter(agent => agent.isEnded || isIdleCleared(agent, view.now))
+    .sort((a, b) => (b.endedAt ?? b.idleSince ?? 0) - (a.endedAt ?? a.idleSince ?? 0))
 
   return { active, idle, finished, shown: showFinished ? [...active, ...idle, ...finished] : [...active, ...idle] }
 }
@@ -281,6 +293,19 @@ export type TicketColumn = { name: string; items: ItemView[] }
 export type TicketOrder = 'group' | 'recency'
 
 /**
+ * The item's own ID as its text writes it (``), for the card's ID chip; undefined for an item
+ * with no ID of its own. A line that only mentions another ticket's ID has none.
+ */
+export function itemChipId(item: ItemView): string | undefined {
+  const key = storedKey(item.localKey ?? item.key)
+  if (!key.startsWith('#')) {
+    return undefined
+  }
+
+  return new RegExp(`${key}(?![0-9A-Za-z])`, 'i').exec(item.text)?.[0]
+}
+
+/**
  * The value of an item's ticket ID on the number line (`ticketValue`), which grows with each new ID;
  * undefined for an item with no `#T` ID.
  */
@@ -319,6 +344,14 @@ export function ticketColumns(given: readonly ItemView[], current: CategoryBook,
 
   return [column('In progress', 'in_progress'), column('Queued', 'queued'), column('Open', 'pending')]
 }
+
+/** The narrowest a ticket may be drawn side by side with others, in px; narrower, columns stack. */
+export const MIN_TICKET_PX = 300
+/**
+ * The gap between board columns and between tickets stacked in a column, in px. Each gap is a transparent
+ * margin inside the ticket's own image, so the desktop's cell size and its own card spacing do not set it.
+ */
+export const TICKET_GAP_PX = 10
 
 /**
  * How many board columns sit side by side in `width` px: the most, up to `columns`, that each keep

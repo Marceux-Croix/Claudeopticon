@@ -7,8 +7,17 @@
  * `hooks/` (`register.tsx`, `sub/evil.ts`, `../lib/evil.ts`), the names the scan's layer and allowed
  * entries use. Symlinks are not followed: a linked file or folder is named, so the gate fails, rather
  * than read from outside the mod.
+ *
+ * The walk takes its file system calls as a port, so the plugin test harness (which gives a test no
+ * `node:fs`) can run it on a fake disk; `node-sources.ts` binds it to the real one.
  */
-import { lstatSync, readdirSync, readFileSync } from 'node:fs'
+
+/** The file system calls the walk makes: the names in a folder, what one is (a link is not followed), and the text of a file. */
+export type SourcePort = {
+  list: (dir: string) => string[]
+  kind: (path: string) => 'dir' | 'link' | 'file'
+  read: (path: string) => string
+}
 
 /** The source extensions the gates read. */
 const SOURCE = /\.[cm]?[jt]sx?$/
@@ -20,23 +29,23 @@ const SKIPPED = (rel: string, name: string): boolean => (rel === '' && name === 
 const nameOf = (path: string): string => (path.startsWith('hooks/') ? path.slice('hooks/'.length) : `../${path}`)
 
 /** The sources under the mod folder `root` by name (`nameOf`), sorted, and the paths that are links (never read). */
-export function hookSources(root: string): { sources: Record<string, string>; links: string[] } {
+export function hookSourcesFrom(port: SourcePort, root: string): { sources: Record<string, string>; links: string[] } {
   const sources: Record<string, string> = {}
   const links: string[] = []
   const walk = (rel: string) => {
     const dir = rel === '' ? root : `${root}/${rel}`
-    for (const name of readdirSync(dir).sort()) {
+    for (const name of port.list(dir).sort()) {
       const path = rel === '' ? name : `${rel}/${name}`
-      const stat = lstatSync(`${root}/${path}`)
-      if (stat.isDirectory() && SKIPPED(rel, name)) {
+      const kind = port.kind(`${root}/${path}`)
+      if (kind === 'dir' && SKIPPED(rel, name)) {
         continue
       }
-      if (stat.isSymbolicLink()) {
+      if (kind === 'link') {
         links.push(path)
-      } else if (stat.isDirectory()) {
+      } else if (kind === 'dir') {
         walk(path)
       } else if (SOURCE.test(name)) {
-        sources[nameOf(path)] = readFileSync(`${root}/${path}`, 'utf8')
+        sources[nameOf(path)] = port.read(`${root}/${path}`)
       }
     }
   }

@@ -127,7 +127,7 @@ const climb = (from: number, to: number, start: number, perMin: number): Point[]
 
 /**
  * Top-card states for the render check (scripts/render-hero.ts): the README sample; a compaction a
- * minute ago, so the Compacted label sits at the right edge with the end labels; the owner's case of
+ * minute ago, so the Compacted label sits at the right edge with the end labels; the case of
  * the agent and token traces crossing at the right edge; and every trace at zero.
  */
 export function heroStates(): Record<string, View> {

@@ -6,7 +6,7 @@
 //
 //     node scripts/commonmark-html-fixture.cjs <package>/dist/commonmark.js 1 500 > tests/fixtures/commonmark-html-quotes.ts
 //
-// The documents: 2 to 9 lines of the l3-R2 fragments plus HTML blocks of all 7 types and block quotes,
+// The documents: 2 to 9 lines of list-item, checkbox and prose fragments plus HTML blocks of all 7 types and block quotes,
 // each behind one of ten indents, a quarter of them behind `> ` or a checkbox item. A list item inside a
 // block quote counts as no item (the mod's stated design). A document where CommonMark reads a checkbox
 // line as paragraph text is left out: there the mod's deliberate exception applies (an over-indented

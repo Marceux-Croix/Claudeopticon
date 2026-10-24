@@ -5,8 +5,8 @@ const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'C
 
 const fromPs = (script: string) => String.fromCodePoint(...(/\[char\[\]\]\(([\d,]+)\)/.exec(script)![1]!.split(',').map(Number))).replace(/\\/g, '/')
 
-// Engine tests of batch L3 (UCR run 2026-10-17-1, loop 3): the fakes below are this file's own, from the
-// reviewer's probe head (scratchpad l3-r3/probes/head.tsx), with the shared store returned for a second session.
+// Engine cases:the fakes below are this file's own, from the
+// probe head, with the shared store returned for a second session.
 
 /**
  * A fake repo (at `/repo` unless `root` says) with the given files by absolute path; `hasNearest` says
@@ -645,4 +645,35 @@ test('back moves a ticket in progress to queued, then to open', async ($, on) =>
   }
   await ui.press({ key: 'ticket-reopen-TODO.md-#t1' })
   expect(files[path]).toBe('- [ ] #T1 Fix the parser')
+})
+
+/**
+ * Property: when the mod cannot write the queued box for a ticket Claude set from in progress back to
+ * open, the ticket stays open and Claude is told it was not queued, in the tool result.
+ */
+test('a ticket Claude sets from [~] back to [ ] that the mod cannot queue brings a note that it stayed open', async ($, on) => {
+  mock.clock(on)
+  const path = '/repo/.claude_todo/TODO.md'
+  const files: Record<string, string> = { [path]: '- [~] #T1 Fix the parser' }
+  let isFailing = false
+  repoWith(on, files, {
+    hasNearest: true,
+    listed: ['.claude_todo/TODO.md'],
+    fault: () => {
+      if (isFailing) throw new Error('disk full')
+    },
+  })
+  on('tool.call', () => {
+    files[path] = files[path]!.replace('- [~] #T1', '- [ ] #T1')
+    mtimes[path] = (mtimes[path] ?? 0) + 10
+    isFailing = true
+
+    return { result: 'ok' } as never
+  })
+  await open($)
+  const ran = (await $.tool.call({ tool: 'Edit', file_path: path } as never)) as { context?: string[] }
+  expect(files[path]).toBe('- [ ] #T1 Fix the parser')
+  const context = (ran.context ?? []).join('\n')
+  expect(context).toContain('stayed open')
+  expect(context).not.toContain('wrote them as queued')
 })

@@ -35,12 +35,12 @@ test('the next free ticket IDs follow the highest value, old or new, and skip fo
   expect(numberedNote([])).toBeUndefined()
 })
 
-// ---------------------------------------------------------------- (batch J2)
+// ---------------------------------------------------------------- 
 
 /** Property: only `T` and up to SUFFIX_MAX characters counts on the number line, and a pick never repeats an ID. */
 test('a long #T word is a plain word on the number line, and nextTicketIds never repeats', () => {
   expect(SUFFIX_MAX).toBe(6)
-  // The reviewer's P3 state: a date-like tag in a fenced example no longer moves the next IDs.
+  // The P3 state: a date-like tag in a fenced example no longer moves the next IDs.
   expect(nextTicketIds(['t0001', 't20241005'], 1)).toEqual(['T0002'])
   // Behind a valid first case: a long word after a real ID; the probe's pair that gave one ID twice.
   expect(nextTicketIds(['t0005', 'T2024100512'], 1)).toEqual(['T0006'])
@@ -56,7 +56,7 @@ test('a long #T word is a plain word on the number line, and nextTicketIds never
   expect(nextTicketIds([], 1, 77)).toEqual(['T0026'])
 })
 
-// ---------------------------------------------------------------- (batch K1)
+// ---------------------------------------------------------------- 
 
 /**
  * Property: one stray `#T` word, a date tag or a placeholder, never moves the next IDs and never
@@ -64,10 +64,10 @@ test('a long #T word is a plain word on the number line, and nextTicketIds never
  */
 test('a #T word at or past VALUE_END is a plain word, and the line is full only past T1ZZZZ', () => {
   expect(VALUE_END).toBe(parseInt('20000', 36))
-  // The verifier's states: a 6-digit date tag and `Z` beside a real ID.
+  // The states: a 6-digit date tag and `Z` beside a real ID.
   expect(nextTicketIds(['t0001', 't202410'], 1)).toEqual(['T0002'])
   expect(nextTicketIds(['t0001', 'T9ZZZZZ'], 1)).toEqual(['T0002'])
-  // (batch L2) removed `isLineFull`, which no code called: "the line is full" is now said as no next ID.
+  // removed `isLineFull`, which no code called: "the line is full" is now said as no next ID.
   expect(nextTicketIds(['t0001', 'T9ZZZZZ'], 1)).toHaveLength(1)
   // Behind a valid first case: a 5-character tag that starts with 2 or more is plain; the margin (`1....`) counts.
   expect(ticketValue('T20241')).toBeUndefined()
@@ -85,7 +85,7 @@ test('a #T word at or past VALUE_END is a plain word, and the line is full only 
   expect(highestId(['T9ZZZZZ'])).toBeUndefined()
 })
 
-// ---------------------------------------------------------------- (batch G2)
+// ---------------------------------------------------------------- 
 
 test('an ID this session holds that the store gives to another session is lost to it', () => {
   const mine = new Map<string, Reservation>([

@@ -49,7 +49,7 @@ test('a ticket with a subtask after a blank line is never a duplicate', () => {
   expect(removeDuplicateTickets(['- [ ] #T1 Fix X', '- [ ] #T2 Fix X', '', '- [ ] #T3 Other'].join('\n')).removed).toEqual([{ id: 'T2', kept: 'T1' }])
 })
 
-// ---------------------------------------------------------------- , HTML comments (batch G2)
+// ---------------------------------------------------------------- , HTML comments
 
 test('an example in an HTML comment is never the kept copy, and the live ticket is not removed', () => {
   // Valid first case: a commented example above the live ticket (the 5b probe).
@@ -66,14 +66,14 @@ test('an example in an HTML comment is never the kept copy, and the live ticket 
   expect(inside.text).toBe(['- [ ] #T1 Same', '<!-- - [ ] #T5 Same -->', '<!-- see #T2 -->', 'see #T1'].join('\n'))
 })
 
-// ---------------------------------------------------------------- (batch H2)
+// ---------------------------------------------------------------- 
 
 /**
  * Property: a copy that numbering gave its own ID in front of the repeated one is still a duplicate of
  * the line that leads with that ID, so Delete duplicate tickets removes it and points its ID at the kept one.
  */
 test('a numbered copy ( Fix) is a duplicate of Fix', () => {
-  // The verifier's state, behind a valid first pair that folds the old way.
+  // The state, behind a valid first pair that folds the old way.
   const text = ['- [ ] #T1 Other', '- [ ] #T2 Other', '- [ ] #T0005 Fix the parser', '- [ ] #T0007 #T0005 Fix the parser', '- [ ] see #T0007'].join('\n')
   const out = removeDuplicateTickets(text)
   expect(out.removed).toEqual([{ id: 'T2', kept: 'T1' }, { id: 'T0007', kept: 'T0005' }])
@@ -85,4 +85,15 @@ test('a numbered copy ( Fix) is a duplicate of Fix', () => {
   expect(removeDuplicateTickets('- [ ] #T0005 Fix\n- [ ] #T0007 #T0006 Fix').removed).toEqual([])
   expect(removeDuplicateTickets('- [ ] #T0005 Fix\n- [x] #T0007 #T0005 Fix').removed).toEqual([])
   expect(removeDuplicateTickets('- [ ] #T0007 #T0005 Fix\n- [ ] #T0005 Fix').removed).toEqual([])
+})
+
+test('equal ticket text under two `## From` sections is two tickets, never folded', () => {
+  const two = removeDuplicateTickets('## From a\n\n- [ ] #T1 Fix the parser\n\n## From b\n\n- [ ] #T2 Fix the parser\n')
+  expect(two.removed).toEqual([])
+  expect(two.map).toEqual({})
+  // At the limit: the repeat is within one section, after another section's equal ticket.
+  const within = removeDuplicateTickets('## From a\n\n- [ ] #T1 Fix the parser\n\n## From b\n\n- [ ] #T2 Fix the parser\n- [ ] #T3 Fix the parser\n')
+  expect(within.removed).toEqual([{ id: 'T3', kept: 'T2' }])
+  // The excluded population: no sections at all still folds.
+  expect(removeDuplicateTickets('- [ ] #T1 Fix\n- [ ] #T2 Fix\n').removed).toEqual([{ id: 'T2', kept: 'T1' }])
 })

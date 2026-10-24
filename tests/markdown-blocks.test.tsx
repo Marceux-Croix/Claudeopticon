@@ -11,15 +11,15 @@ const itemLines = (lines: readonly string[]): boolean[] => {
   return lines.map((line, at) => !mask[at] && CHECKBOX.test(line))
 }
 
-// ---------------------------------------------------------------- (batch L2)
+// ---------------------------------------------------------------- 
 
 /**
  * Property: indented code starts where CommonMark starts it, after any block that is not a paragraph
  * (a heading, an HTML block, a closed fence, a thematic break) and on the first line, so a checkbox line in it
- * is an example, never a ticket. The reviewer's c198 and p198first states.
+ * is an example, never a ticket. The c198 and p198first states.
  */
 test('indented code right after a heading, an HTML block, a closed fence, or on line 1 is an example', () => {
-  // The reviewer's states: after a heading, after an HTML block, after a closed fence, on line 1.
+  // The states: after a heading, after an HTML block, after a closed fence, on line 1.
   expect(exampleMask(['## Form', '    - [ ] #T0001 example', '', '- [ ] #T0001 Fix the parser'])).toEqual([false, true, false, false])
   expect(exampleMask(['<!-- note -->', '    - [ ] example'])).toEqual([true, true])
   expect(exampleMask(['<!--', 'a', '-->', '    - [ ] example'])).toEqual([true, true, true, true])
@@ -43,11 +43,11 @@ test('indented code right after a heading, an HTML block, a closed fence, or on 
 
 /**
  * Property: a lazy line (a wrapped line at a lower indent under a ticket) goes on the ticket's paragraph and
- * ends no list item, so a child ticket after it and a blank line, 4 spaces in, stays a ticket. The reviewer's
+ * ends no list item, so a child ticket after it and a blank line, 4 spaces in, stays a ticket. The
  * hidden.ts states U2 and U2b, with its control.
  */
 test('a lazy continuation line keeps the item open: a child ticket after a blank line stays a ticket', () => {
-  // The reviewer's control (no lazy line) and U2: both are tickets.
+  // The control (no lazy line) and U2: both are tickets.
   expect(itemLines(['- [ ] #T0001 parent', '  wrapped line', '', '    - [ ] #T0002 child'])).toEqual([true, false, false, true])
   expect(itemLines(['- [ ] #T0001 parent with a long', 'wrapped line', '', '    - [ ] #T0002 child'])).toEqual([true, false, false, true])
   // U2b: a label line under the item, then two children; behind a valid first item.
@@ -65,7 +65,7 @@ test('a lazy continuation line keeps the item open: a child ticket after a blank
 
 /**
  * Property: an HTML comment opened in a list item ends when the item ends (CommonMark), as a fence does, so
- * an unclosed `<!--` in an item never hides the tickets after the item. The reviewer's hidden.ts states U1 and U1b.
+ * an unclosed `<!--` in an item never hides the tickets after the item. The hidden.ts states U1 and U1b.
  */
 test('an unclosed comment in a list item ends with the item; the tickets after it stay tickets', () => {
   // U1, and U1b (tab-indented, a blank line in the comment).
@@ -85,7 +85,7 @@ test('an unclosed comment in a list item ends with the item; the tickets after i
 })
 
 /**
- * Property: the mod's checkbox items are CommonMark's, on the reviewer's random documents
+ * Property: the mod's checkbox items are CommonMark's, on the random documents
  * (fixture: commonmark.py, a port of the spec's reference parser), but for the stated deliberate exception: an
  * over-indented checkbox line right under a paragraph line is an item (CommonMark: paragraph text), and the lines
  * under it read as under an item.
@@ -121,7 +121,7 @@ test('the item lines match CommonMark on 400 random documents, but for the delib
 /**
  * Property: a checkbox line inside an HTML block (any of the 7 CommonMark types) or a block quote (a
  * lazy line under its paragraph included) is an example, never an item, so it never takes a real ticket's ID.
- * The verifier's V203 states, then the three false states.
+ * The V203 states, then the three false states.
  */
 test('V203 an example in an HTML block or a block quote is no item; the real ticket below stays one', () => {
   const real = ['', '## Work', '- [ ] #T0001 Fix the parser', '- [ ] #T0002 other']
@@ -188,4 +188,50 @@ test('a line of NBSP, U+3000 or U+FEFF is content, not a blank line: the HTML bl
   }
   // A control: a line of spaces and tabs is blank and ends the HTML block.
   expect(itemLines(['<div>', ' \t ', '- [ ] #T0005 a real ticket'])).toEqual([false, false, true])
+})
+
+// ---------------------------------------------------------------- nesting cap
+
+/** The least time of `runs` calls of `job`, in ms: a pause that lands on one run does not decide a growth ratio. */
+function leastMs(job: () => void, runs = 5): number {
+  let least = Infinity
+  for (let i = 0; i < runs; i += 1) {
+    const from = performance.now()
+    job()
+    least = Math.min(least, performance.now() - from)
+  }
+
+  return least
+}
+
+/**
+ * Property: the work of exampleMask grows with the text, not with its square, on a line of nested list
+ * markers or quote markers: a 4x longer line costs at most 8x (linear is 4x, quadratic 16x).
+ */
+test('exampleMask costs time linear in the length of one line of nested list markers', () => {
+  const deep = (n: number) => ['- '.repeat(n) + 'x']
+  exampleMask(deep(500))
+  const small = leastMs(() => exampleMask(deep(2500)))
+  const large = leastMs(() => exampleMask(deep(10000)))
+  expect(large / Math.max(small, 0.05)).toBeLessThan(8)
+  const quotes = (n: number) => ['> '.repeat(n) + 'x']
+  const qSmall = leastMs(() => exampleMask(quotes(2500)))
+  const qLarge = leastMs(() => exampleMask(quotes(10000)))
+  expect(qLarge / Math.max(qSmall, 0.05)).toBeLessThan(8)
+})
+
+/** Property: a lazy line costs the same under a deep line as under a shallow one (no walk of every open container per line). */
+test('exampleMask costs the same per lazy line under a 4000-level line as under a 1-level line', () => {
+  const lazy = Array.from({ length: 8000 }, () => 'wrapped')
+  const deep = leastMs(() => exampleMask(['- '.repeat(4000) + 'x', ...lazy]))
+  const shallow = leastMs(() => exampleMask(['- x', ...lazy]))
+  expect(deep / Math.max(shallow, 0.5)).toBeLessThan(8)
+})
+
+test('exampleMask reads nesting up to 10 levels as before, and nothing opens past the nesting cap', () => {
+  const lines = ['- [ ] #T0001 a', `${'  '.repeat(9)}- [ ] #T0002 nested`, `${'> '.repeat(10)}- [ ] #T0003 quoted`, '- [ ] #T0004 b']
+  expect(itemLines(lines)).toEqual([true, true, false, true])
+  // Past the cap the rest of the line is text: no checkbox item opens, and nothing throws.
+  const past = [`${'- '.repeat(200)}[ ] #T0005 too deep`, '- [ ] #T0006 after']
+  expect(itemLines(past)).toEqual([false, true])
 })

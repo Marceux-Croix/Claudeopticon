@@ -3,7 +3,7 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
-// UCR run 2026-10-17-1, loop 2, batch J5: the pane and the counts through the fake engine (findings 154 to 166).
+// the pane and the counts through the fake engine (findings 154 to 166).
 {
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 

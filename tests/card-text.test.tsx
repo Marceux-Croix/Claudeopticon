@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { agentSvg, orchestratorSvg, timelineSvg } from '../hooks/agent-cards'
 import { setWidth } from '../hooks/card-stage'
-import { altText, cleanText, cutText, cutUnits, keyText, wrap } from '../hooks/card-text'
+import { altText, cleanText, cutText, cutUnits, fit, keyText, toastText, wrap } from '../hooks/card-text'
 import { heroSvg } from '../hooks/hero-card'
 import { readTitle } from '../hooks/progress-report'
 import { boardHead, fileCards, ticketSvg } from '../hooks/todo-cards'
@@ -124,7 +124,7 @@ test('a cut never splits a surrogate pair: wrap, fit (through the ticket) and th
 // ---------------------------------------------------------------- (narrowed), 
 
 test('a card alt keeps no control character: C0, DEL and C1 go, a line break parts words', () => {
-  // The verifier's characters and more of C1, each inside a word, at the start (behind nothing) and at the end (the limit).
+  // The characters and more of C1, each inside a word, at the start (behind nothing) and at the end (the limit).
   for (const bad of ['\x01', '\x07', '\x0B', '\x1B', '\x7F', '\x85', '\x9B', '\x9F', '\x80']) {
     for (const text of [`Fix${bad}parser`, `${bad}Fix parser`, `Fix parser${bad}`]) {
       const alt = altText(text)
@@ -156,4 +156,69 @@ test('keyText encodes control characters and lone surrogates, keeps other text, 
   for (const text of ['\u0000', '\u007F', '\u0085', '\r\n', 'x\u0007\u001B[2Jy']) {
     expect(/[\x00-\x1F\x7F-\x9F]/.test(keyText(text))).toBe(false)
   }
+})
+
+/** The least time in ms of `runs` calls of `fn`: one slow call from a busy machine does not count. */
+function leastMs(fn: () => void, runs = 5): number {
+  let best = Number.POSITIVE_INFINITY
+  for (let i = 0; i < runs; i++) {
+    const start = performance.now()
+    fn()
+    best = Math.min(best, performance.now() - start)
+  }
+
+  return best
+}
+
+test('wrap cost grows in step with the length of one long word, with a line limit and without', () => {
+  for (const maxLines of [4, Number.POSITIVE_INFINITY]) {
+    // A 4x longer word costs about 4x when the cost is linear and about 16x when it is quadratic. A timing
+    // reading is noisy, so the ratio is taken up to three times; a quadratic cost fails every time.
+    const ratios: number[] = []
+    for (let attempt = 0; attempt < 3 && !ratios.some(ratio => ratio < 10); attempt++) {
+      const small = leastMs(() => wrap('a'.repeat(200_000), 300, 13, 400, maxLines))
+      const large = leastMs(() => wrap('a'.repeat(800_000), 300, 13, 400, maxLines))
+      ratios.push(large / Math.max(small, 0.05))
+    }
+    expect(Math.min(...ratios)).toBeLessThan(10)
+  }
+})
+
+test('wrap of a long word gives chunks of the line size, and stops at the line limit with an ellipsis', () => {
+  const word = 'x'.repeat(1000)
+  const all = wrap(word, 300, 13, 400, Number.POSITIVE_INFINITY)
+  expect(all.join('')).toBe(word)
+  expect(all.slice(0, -1).every(line => line.length === all[0]?.length)).toBe(true)
+  const cut = wrap(word, 300, 13, 400, 4)
+  expect(cut).toHaveLength(4)
+  expect(cut[3]?.endsWith('…')).toBe(true)
+  expect(cut.slice(0, 3)).toEqual(all.slice(0, 3))
+})
+
+test('wrap and fit size a line by width: wide CJK and emoji take about twice a Latin letter', () => {
+  const room = Math.floor(272 / (13 * 0.52))
+  for (const sample of ['日本語', '😀', 'か']) {
+    const lines = wrap(sample.repeat(80), 272, 13, 400, Number.POSITIVE_INFINITY)
+    expect(lines.length).toBeGreaterThan(1)
+    for (const line of lines) {
+      expect(Array.from(line).length * 2).toBeLessThanOrEqual(room)
+    }
+    expect(lines.join('')).toBe(sample.repeat(80))
+  }
+  const narrow = wrap('a'.repeat(80), 272, 13, 400, Number.POSITIVE_INFINITY)
+  expect(Array.from(narrow[0] ?? '').length).toBe(room)
+  const short = fit('日本語'.repeat(20), 272, 13)
+  expect(short.endsWith('…')).toBe(true)
+  expect(Array.from(short).length * 2).toBeLessThanOrEqual(room)
+})
+
+/** Property: a toast keeps no character that reorders or hides text, and keeps the text around it. */
+test('toastText drops bidi overrides, zero-width and tag characters, and keeps ordinary text and emoji', () => {
+  const tag = String.fromCodePoint(0xe0041, 0xe007f)
+  for (const bad of ['‮', '⁦', '​', '⁠', '﻿', '‏', '؜', tag]) {
+    expect(toastText(`a${bad}b`), `U+${bad.codePointAt(0)!.toString(16)}`).toBe('ab')
+  }
+  expect(toastText('cat‮txt.md\u0007')).toBe('cattxt.md ')
+  expect(toastText('Moved 3 files \u{1F600}')).toBe('Moved 3 files \u{1F600}')
+  expect(toastText('line\nbreak')).toBe('line break')
 })

@@ -3,7 +3,7 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
-// Batch K1 (UCR loop 2 tail, verify-J12): claim folders from the common dir alone in every git layout (136), git
+// Claim folders from the common dir alone in every git layout (136), git
 // output that names another folder (150), a symlink at the global `.claude_todo` itself (148), a case change in the
 // `.claude_todo` segment (151) and in `archive/` (152), the end of the number line (142, 197), indented code (198).
 // The fake is a copy of the J1 disk (a session folder, links, a disk that ignores case), with claim entries made
@@ -247,7 +247,7 @@ const offered = (line: string | undefined): string[] => (line === undefined ? []
 
 const BARE = '/srv/bare.git'
 const BARE_CLAIMS = `${BARE}/claudeopticon/id-claims`
-// (batch L2): a linked worktree's git dir holds `commondir` (`../..`), as `git worktree add` writes it; the walk reads it.
+// a linked worktree's git dir holds `commondir` (`../..`), as `git worktree add` writes it; the walk reads it.
 const bareFiles = (wt: string): Record<string, string> => ({ [`${wt}/.claude_todo/TODO.md`]: '- [ ] #T0001 a', [`${wt}/.git`]: `gitdir: ${BARE}/worktrees/${wt.split('/').pop()}\n`, [`${BARE}/worktrees/${wt.split('/').pop()}/commondir`]: '../..\n' })
 const bareOpts = (wt: string): K1Opts => ({
   cwd: wt,
@@ -259,7 +259,7 @@ const bareOpts = (wt: string): K1Opts => ({
 
 test('a bare repo worktree whose common dir cannot be written names no IDs, never claiming in its own .claude_work', async ($, on) => {
   mock.clock(on)
-  // The verifier's s3 state: the common dir is read-only; the old fallback was this worktree's own `.claude_work`, which no other worktree lists.
+  // The s3 state: the common dir is read-only; the old fallback was this worktree's own `.claude_work`, which no other worktree lists.
   const fake = k1Disk(on, bareFiles('/wt/one'), { ...bareOpts('/wt/one'), mkdirFails: path => path.startsWith(BARE) })
   const prompt = promptOf(on)
   await open($)
@@ -294,7 +294,7 @@ test('git fails in a bare repo worktree: the .git file names the common dir, and
 
 test('git fails with the todo folder 12 folders below the repo root: the claim is still in the git folder', async ($, on) => {
   mock.clock(on)
-  // At the limit of the walk: the verifier's edge case 2. The old walk stopped after 9 folders and claimed in this folder's `.claude_work`.
+  // At the limit of the walk: the edge case 2. The old walk stopped after 9 folders and claimed in this folder's `.claude_work`.
   const deep = `/repo/${Array.from({ length: 12 }, (_, i) => `d${i}`).join('/')}`
   const files: Record<string, string> = { [`${deep}/.claude_todo/TODO.md`]: '- [ ] #T0001 a', '/repo/README.md': 'x' }
   const fake = k1Disk(on, files, { cwd: deep, root: '/repo', gitFails: true, dirs: ['/repo/.git'] })

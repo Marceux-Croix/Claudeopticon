@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-// ---------------------------------------------------------------- batch M (UCR loop 3, final remainders): engine tests
-// Own helpers, copied from the verifier's final-v1 probes (j1Disk of V238, oneFile and storeOn of V181), so this file owns its fakes.
+// ---------------------------------------------------------------- batch M (final remainders): engine tests
+// Own helpers, copied from the final-v1 probes (j1Disk of V238, oneFile and storeOn of V181), so this file owns its fakes.
 {
   type TestApi = Parameters<Parameters<typeof test>[1]>[0]
   type On = Parameters<Parameters<typeof test>[1]>[1]
@@ -174,7 +174,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
   /**
    * Property: an example ticket line in an HTML block (`<div>`, `<details>`) or after a block quote is no item,
-   * so numbering never takes its ID for a duplicate and renames the real ticket below it. The verifier's V203 states.
+   * so numbering never takes its ID for a duplicate and renames the real ticket below it. The V203 states.
    */
   const REAL = '\n\n## Work\n- [ ] #T0001 Fix the parser\n- [ ] #T0002 other'
   for (const [name, head] of [
@@ -201,7 +201,7 @@ import { expect, mock, test } from 'claude-code/testing'
   /**
    * Property: when the central folder's own archive folder is `Archive/` or `ARCHIVE/` (a disk that ignores
    * case), Consolidate writes there as the disk spells it: the archived ticket ends in one place, in the central folder,
-   * with no false symlink toast. The verifier's V238 cases: the `archive/` control, and 3 that failed.
+   * with no false symlink toast. The V238 cases: the `archive/` control, and 3 that failed.
    */
   for (const [srcDir, centralDir] of [['archive', 'archive'], ['archive', 'Archive'], ['Archive', 'Archive'], ['archive', 'ARCHIVE']] as const) {
     test(`V238 Consolidate, source ${srcDir}/, central ${centralDir}/: the archived ticket ends in one place, no symlink toast`, async ($, on) => {
@@ -268,7 +268,7 @@ import { expect, mock, test } from 'claude-code/testing'
    * Property: a block an earlier step left in the archive and in the source (its rollback was refused, its
    * record kept) ends in the archive once, when this session's move rolls back too: the rollback keeps the earlier
    * record for that block, so the next pass only cuts it. Before, the record was cleared and the next pass added the
-   * block again: a duplicate. The verifier's code-reading case, run on the engine.
+   * block again: a duplicate. The code-reading case, run on the engine.
    */
   test('a second rollback keeps the earlier record of a block in both files: it ends in the archive once', { timeoutMs: 60_000 } as never, async ($, on) => {
     const clock = mock.clock(on)
@@ -329,7 +329,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
   /**
    * Property: a NEL (U+0085), VT or FF in a ticket's text never reaches Claude's context raw: the
-   * still-in-progress note quotes the text with each a space. The verifier's V181 engine probe, as a test.
+   * still-in-progress note quotes the text with each a space. The V181 engine probe, as a test.
    */
   for (const [name, code] of [['NEL', 0x85], ['VT', 0x0b], ['FF', 0x0c]] as const) {
     test(`V181 a ${name} in a ticket text reaches the still-in-progress note as a space`, { timeoutMs: 60_000 } as never, async ($, on) => {

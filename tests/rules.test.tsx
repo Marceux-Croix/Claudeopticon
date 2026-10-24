@@ -4,6 +4,12 @@ import { RULES, RULES_BLOCK, withRules } from '../hooks/rules'
 import { nextTicketIds } from '../hooks/ticket-ids'
 import { CHECKBOX, parseTodo } from '../hooks/todo-markdown'
 
+/** The README says the rules are about 5,000 characters (roughly 1,250 tokens): a rules text that grows or shrinks past 10% makes that figure stale. */
+test('the rules are about as long as the README says', () => {
+  expect(RULES.length).toBeGreaterThan(5000 * 0.9)
+  expect(RULES.length).toBeLessThan(5000 * 1.1)
+})
+
 test('the rules tell Claude to report a title when it works on tickets itself', () => {
   expect(RULES).toContain('report_progress` with `title`')
 })

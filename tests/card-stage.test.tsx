@@ -12,12 +12,16 @@ const row = (over: Partial<AgentRow>): AgentRow => ({
   id: 'a1', description: 'x', type: 'Explore', status: 'running', startedAt: 0, toolCalls: 0, brief: '', ...over,
 })
 
-test('the cards take the width they are given, at least 300 px and with no upper cap', async () => {
+test('the cards take the width they are given, from 300 px to the 4096 px the desktop draws', async () => {
   const view = buildView([], [row({})], 1000)
   setWidth(720)
   expect(timelineSvg(view, view.agents).width).toBe(720)
+  setWidth(4000)
+  expect(timelineSvg(view, view.agents).width).toBe(4000)
   setWidth(5000)
-  expect(timelineSvg(view, view.agents).width).toBe(5000)
+  expect(timelineSvg(view, view.agents).width).toBe(4096)
+  setWidth(1e9)
+  expect(timelineSvg(view, view.agents).width).toBe(4096)
   setWidth(10)
   expect(timelineSvg(view, view.agents).width).toBe(300)
   setWidth(384)
@@ -37,5 +41,15 @@ test(' setWidth gives the cards and the board the full pane width', () => {
   expect(PANE).toBe(2000)
   setWidth(200)
   expect(PANE).toBe(300)
+  setWidth(384)
+})
+
+test('setWidth ignores a width that is no finite number and keeps the last valid one', () => {
+  setWidth(500)
+  for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    setWidth(bad)
+    expect(W).toBe(500)
+    expect(PANE).toBe(500)
+  }
   setWidth(384)
 })

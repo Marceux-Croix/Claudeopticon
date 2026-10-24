@@ -4,7 +4,7 @@
 #
 #     uv run --no-project --with commonmark==0.9.1 python -I scripts/commonmark-fixture.py 1 400 > tests/fixtures/commonmark-items.ts
 #
-# The documents are the reviewer's generator (l3-R2, gen.py): 2 to 9 lines of list items, checkbox lines,
+# The documents are random: 2 to 9 lines of list items, checkbox lines,
 # paragraphs, fences, comments and headings, each behind one of ten indents (spaces and tabs).
 import json, random, re, sys
 import commonmark

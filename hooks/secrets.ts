@@ -5,7 +5,8 @@ import { ticketValue } from './ticket-ids'
 /**
  * The rule. A text holds a secret when it has one of these forms:
  * 1. A long option whose name has a secret word: `--password`, `--with-token`, `--api-key`,
- *    `--client-secret`, `--auth`, `--src-creds`, `--account-key`, `--oauth2-bearer`, and the
+ *    `--client-secret`, `--auth`, `--src-creds`, `--account-key`, `--oauth2-bearer`, the word glued on
+ *    or in camelCase (`--dbpassword`, `--accessToken`, `--clientSecret`, `--secretKey`), and the
  *    single-dash `-pass`, `-passwd`, `-passin`, `-storepass` forms. An option about the secret, not the
  *    secret, stays shown: `--auth-type=web`, `--password-stdin`, `--token-file` (OPTION_SETTINGS),
  *    unless a literal is fed to it: `--vault-password-file <(echo pw)`.
@@ -13,7 +14,8 @@ import { ticketValue } from './ticket-ids'
  *    `ConvertTo-SecureString "x"`, `cmdkey /pass:x`.
  * 2. A short option that takes a secret, for the tools in SHORT_OPTIONS only (`mysql -pX`,
  *    `docker login -p`, `az login -p`, `sqlcmd -P`, `ldapsearch -w`, `smbclient -U u%p`, `curl -b a=b`,
- *    `security add-generic-password -w`, `nmcli ... password`, `xfreerdp /p:`, `lftp -u u,p` and more),
+ *    `security add-generic-password -w`, `redis-cli AUTH pw`, `nmcli ... password`, `xfreerdp /p:`,
+ *    `lftp -u u,p` and more),
  *    attached to its value too where the tool's parser takes that (`sqlcmd -PX`, `curl -ubob:pw`,
  *    ), `isql -P` (Sybase), `security unlock-keychain -p`, and the tools that take one as a plain
  *    argument: `sqlplus u/p@db` (and `expdp`, `impdp`, `exp`, `imp`), `wpa_passphrase ssid pw`,
@@ -23,8 +25,8 @@ import { ticketValue } from './ticket-ids'
  *    A short option alone means many things, so it counts only after its own tool, in the same
  *    command. `sudo -S` counts only as an option of sudo itself, before the command it runs.
  * 3. An assignment with a value (`NAME=v`, `NAME: v` or a JSON `"name": "v"`) to a name with a long
- *    secret word in it (password, passphrase, secret, token, api key, access key, private key,
- *    credential, AccountKey), or with a short one as a whole `_` part (`PW=`, `DB_PWD=`, `pass=`,
+ *    secret word in it (password, passphrase, secret, token, api key, access key, private key, the
+ *    two-word ones also with a hyphen or a space between the words, credential, AccountKey), or with a short one as a whole `_` part (`PW=`, `DB_PWD=`, `pass=`,
  *    `auth=`, `GH_PAT=`, `CREDS=`, `SSH_KEY=`). A name alone is no secret: `grep "password:"`, `TOKEN=`
  *    and `grep DB_PASSWORD= .env` (a space after `=` with no quote after it ends the value)
  *    stay shown, and so do a count (`max_tokens`), a flag value that is the whole value
@@ -33,20 +35,22 @@ import { ticketValue } from './ticket-ids'
  *    `PRIMARY_KEY=`). A key in brackets counts: `os.environ["PW"] = x`. So do SQL forms:
  *    `IDENTIFIED BY 'x'`, `PRAGMA key = 'x'`.
  * 4. A credential header with a value (`Authorization: Bearer x`, `Cookie: a=b`, `X-Auth-Token: x`,
- *    `Ocp-Apim-Subscription-Key: x`, `DD-API-KEY: x`), or `curl -u user:` with a name that is not a
- *    number, or `curl -u :token` with no user. The words
+ *    `Ocp-Apim-Subscription-Key: x`, `DD-API-KEY: x`, `x-functions-key: x`), or `curl -u user:` with a
+ *    name that is not a number, or `curl -u :token` with no user, or a password after a name or a file
+ *    (`--proxy-user u:pw`, `--cert c.pem:pw`). The words
  *    "bearer" and "basic" alone (in a commit message) are no secret.
  * 5. A URL that carries one: a token-length user name in an http(s) URL (`https://ghp_x@`), any
- *    `user:pass@` or `:pass@` in a URL, a query or fragment value such as `access_token=` or `key=`,
+ *    `user:pass@` or `:pass@` in a URL, a query or fragment value such as `access_token=`, `key=` or `X-Amz-Signature=`,
  *    or a webhook URL (Slack, Discord, Teams). A short user (`https://bob@host`) is a user, not a token.
  * 6. A known token shape: GitHub, GitLab, OpenAI and Anthropic `sk-`, payment `sk_live_`, Slack, AWS, Google,
  *    npm, Vault, PyPI, DigitalOcean, Shopify, Hugging Face `hf_`, SendGrid `SG.`, age `AGE-SECRET-KEY-1`,
+ *    Docker Hub `dckr_pat_`, Google OAuth `ya29.` and `1//0`, Mailgun `key-` and Twilio `SK` with 32 hex digits,
  *    JWTs, and a private key block: PEM and PGP (`-----BEGIN ... PRIVATE KEY-----`,
  *    `-----BEGIN PGP PRIVATE KEY BLOCK-----`), SSH2 (RFC 4716, `---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----`)
  *    and PuTTY (`PuTTY-User-Key-File-3:` to `Private-MAC:`).
  * 7. A value fed in another way: a secret setting set by name (`aws configure set
- *    aws_secret_access_key v`, `npm set _auth v`, `yarn config set npmAuthToken v`; a value read from a
- *    file, `< key.txt`, stays shown),
+ *    aws_secret_access_key v`, `npm set _auth v`, `yarn config set npmAuthToken v`,
+ *    `redis-cli config set requirepass v`; a value read from a file, `< key.txt`, stays shown),
  *    a here-string into a login or a secret store (`kinit <<< pw`, `op signin <<< pw`,
  *    `ftp <<< "user u pw"`, `wrangler secret put X <<< v`), `echo user:pass | base64`,
  *    a literal echoed into a password reader (`| passwd --stdin`, `| chpasswd`, `| docker login
@@ -109,6 +113,8 @@ const SHORT_OPTIONS: readonly (readonly [tool: string, option: string])[] = [
   ['az(?:\\s{1,5}[a-z-]{1,20}){0,2}\\s{1,5}login', '-p'],
   ['sshpass', '-p'],
   ['redis-cli', '-a'],
+  // `AUTH pw` or `AUTH user pw`, the command typed after the options.
+  ['redis-cli', `(?:AUTH|auth)\\s{1,5}${ARG}`],
   ['zip|unzip', '-P'],
   ['7z\\w{0,2}', '-p\\S'],
   // `-p-` tells unrar there is no password.
@@ -196,7 +202,7 @@ const OPTION_SETTINGS = 'type|method|mode|stdin|file|path|dir|url|uri|length|ttl
 const DATA_KEYS = 'sort|primary|foreign|partition|cache|group|order|range|index|lookup|unique|composite|shard|row|dedup|cluster|routing|idempotency|public|pub|cursor|natural|surrogate|join|map|hash|dict|object|item|config|cfg|label|i18n|translation|message|msg|feature|flag|s3|blob|column|field|sequence|seq'
 
 /** The secret settings a config tool sets by name, the value after a space: `aws configure set aws_secret_access_key v`. */
-const SETTING_NAMES = '(?:aws_)?secret_access_key|aws_session_token|session_token|access_token|refresh_token|auth_?token|client_secret|secret_key|api_?key|private_key|_auth(?:token)?|_password|password|passwd|token|npm_?auth_?(?:token|ident)'
+const SETTING_NAMES = '(?:aws_)?secret_access_key|aws_session_token|session_token|access_token|refresh_token|auth_?token|client_secret|secret_key|api_?key|private_key|_auth(?:token)?|_password|password|passwd|token|npm_?auth_?(?:token|ident)|requirepass|masterauth'
 
 /**
  * The first line of a private key block: PEM (`-----BEGIN OPENSSH PRIVATE KEY-----`, up to three
@@ -220,6 +226,9 @@ const KEY_BLOCKS: readonly { begin: RegExp; end: RegExp }[] = [
 export const SECRET_PATTERNS: readonly RegExp[] = [
   // 1. Long and single-dash options.
   new RegExp(`--(?:[a-z0-9]{1,20}[-_]){0,4}(?:pass(?:w(?:or)?d|phrase)?|pwd|token|secret|api[-_]?key|access[-_]?key|private[-_]?key|account[-_]?key|sse-c-key|(?:encryption|master|signing|shared|storage|subscription|sas)[-_]?key|credentials?|creds?|auth|bearer)(?![a-z])(?![-_](?:${OPTION_SETTINGS})(?![a-z0-9]))`, 'i'),
+  // The secret word glued to a prefix (`--dbpassword`, `--authtoken`) or in camelCase (`--accessToken`, `--clientSecret`).
+  new RegExp(`--[a-z0-9]{1,20}(?:password|passwd|passphrase|pwd|token|secret)(?![a-z])(?![-_](?:${OPTION_SETTINGS})(?![a-z0-9]))`, 'i'),
+  new RegExp(`--(?=[a-z])[a-zA-Z0-9]{0,40}(?:Pass(?:w(?:or)?d|phrase)?|Pwd|Token|Secret|Credentials?|Creds?|Auth|(?:[Aa]pi|[Aa]ccess|[Pp]rivate|[Ss]ecret|[Aa]ccount|[Cc]lient)Key)(?![a-z])(?![-_](?:${OPTION_SETTINGS})(?![a-z0-9]))`),
   /(?:^|\s)-(?:pass(?:in|out|word|phrase|wd)?|(?:store|key|srcstore|deststore)pass)(?=[\s=:]|$)/,
   // PowerShell and nuget options, any case, with a value: `-Password x`, `-NuGetApiKey x`, `-ApiKey x`.
   /(?:^|\s)-(?:password|passphrase|(?:nuget)?apikey|accesstoken|authtoken|clientsecret)(?:\s{1,5}|\s{0,5}[:=]\s{0,5})["']?[^\s"'-]/i,
@@ -241,7 +250,7 @@ export const SECRET_PATTERNS: readonly RegExp[] = [
   // sudo's own options come before the command it runs: `sudo -u root -S cmd`, not `sudo pacman -S git`.
   /(?:^|[^\w.-])sudo(?:\s{1,5}(?:-[A-RT-Za-z]{0,9}[ugpCDrtTUh]\s{1,5}[^\s-]\S{0,100}|-[A-RT-Za-z]{1,10}|--[a-z-]{1,20}(?:=\S{0,100})?)){0,8}\s{1,5}(?:-[A-Za-z]{0,9}S|--stdin)(?![\w-])/,
   // 3. Assignments with a value.
-  new RegExp(`(?:passw(?:or)?d|passphrase|secret|token(?!s|iz)|api_?key|access_?key|private_?key|credentials?|account_?key|sharedaccess(?:key|signature))(?![a-z0-9_]{0,20}_(?:${SETTING_PARTS})(?![a-z0-9]))[a-z0-9_]{0,40}["']?\\]?(?:${EQUALS}|${COLON}${PROSE})${VALUE}`, 'i'),
+  new RegExp(`(?:passw(?:or)?d|passphrase|secret|token(?!s|iz)|api[-_ ]?key|access[-_ ]?key|private[-_ ]?key|credentials?|account_?key|sharedaccess(?:key|signature))(?![a-z0-9_]{0,20}_(?:${SETTING_PARTS})(?![a-z0-9]))[a-z0-9_]{0,40}["']?\\]?(?:${EQUALS}|${COLON}${PROSE})${VALUE}`, 'i'),
   new RegExp(`(?:^|[^a-z0-9_])(?:[a-z0-9]{1,20}_){0,4}(?:pw|pwd|pass|auth|pat|creds?)(?!_(?:${SETTING_PARTS})(?![a-z0-9]))(?:_(?!(?:${SETTING_PARTS})(?![a-z0-9]))[a-z0-9]{1,20}){0,2}(?:${EQUALS}|["']\\]?(?:${EQUALS}|${COLON}))${VALUE}`, 'i'),
   new RegExp(`(?:^|[^a-z0-9_])(?:[a-z0-9]{1,20}_){0,3}(?!(?:${DATA_KEYS})_key)[a-z0-9]{1,20}_key(?:${EQUALS}|["']${COLON})${VALUE}`, 'i'),
   // SQL: `IDENTIFIED BY 'pw'` (MySQL, Oracle), `PRAGMA key = 'pw'` (SQLCipher).
@@ -249,11 +258,13 @@ export const SECRET_PATTERNS: readonly RegExp[] = [
   /pragma\s{1,5}(?:\w{1,30}\.)?(?:re)?(?:hex)?(?:re)?key\s{0,5}[=(]\s{0,5}["']?[^\s"';)]/i,
   // 4. Headers with a value. A scheme word (`Bearer`) needs a value after it.
   /(?:proxy-)?authorization["']?\s{0,5}[:=]\s{0,5}["']?(?:(?:bearer|basic|token|digest|bot|negotiate|ntlm)\s{1,5}["']?[^\s"']|(?!(?:bearer|basic|token|digest|bot|negotiate|ntlm)(?![a-z]))[^\s"'])|(?:set-)?cookie\s{0,5}:\s{0,5}["']?[^\s"']/i,
-  /(?:^|[^a-z0-9-])(?:x-(?:[a-z0-9]{1,20}-){0,4}(?:auth|token|api-?key|secret|session|signature|password|pass|csrf)|private-token|api-key|apikey|access-token|auth-token|(?:ocp-apim-)?subscription-key|dd-(?:api|application)-key)(?:-[a-z0-9]{1,20}){0,3}\s{0,5}:\s{0,5}["']?[^\s"']/i,
+  /(?:^|[^a-z0-9-])(?:x-(?:[a-z0-9]{1,20}-){0,4}(?:auth|token|api-?key|secret|session|signature|password|pass|csrf)|x-functions-key|private-token|api-key|apikey|access-token|auth-token|(?:ocp-apim-)?subscription-key|dd-(?:api|application)-key)(?:-[a-z0-9]{1,20}){0,3}\s{0,5}:\s{0,5}["']?[^\s"']/i,
+  // A password after a user or a certificate file: `--proxy-user u:pw`, `--cert c.pem:pw` (curl). A URL (`https://`) is no password.
+  /--(?:proxy-user|cert)(?:\s{1,5}|=)["']?[^\s:"']{1,200}:[^\s"'/]/,
   // 5. URLs.
   /https?:\/\/[^\s/:@?#]{12,200}@/i,
   /(?:^|[^a-z0-9+.-])[a-z][a-z0-9+.-]{0,30}:\/\/[^\s/:@?#]{0,200}:[^\s/@?#]{1,200}@/i,
-  /[?&;#](?:access_token|refresh_token|id_token|client_secret|private_token|api[_-]?key|apikey|token|key|secret|password|passwd|pwd|sig|signature|auth|code_verifier)=/i,
+  /[?&;#](?:access_token|refresh_token|id_token|client_secret|private_token|api[_-]?key|apikey|token|key|secret|password|passwd|pwd|sig|signature|auth|code_verifier|x-amz-signature|x-amz-security-token|x-goog-signature)=/i,
   /hooks\.slack\.com\/services\/|discord(?:app)?\.com\/api\/webhooks\/|\.webhook\.office\.com\//i,
   // 6. Token shapes, case kept.
   /(?:^|[^A-Za-z0-9])(?:ghp_|gho_|ghs_|ghu_|ghr_|github_pat_|glpat-|sk-|sk_live_|sk_test_|rk_live_|rk_test_|xox[abposr]-|xapp-|hvs\.|dop_v1_|pypi-Ag|shpat_|shpss_|AKIA[0-9A-Z]{8}|ASIA[0-9A-Z]{8}|AIza[0-9A-Za-z_-]{10}|npm_[A-Za-z0-9]{10})[A-Za-z0-9_-]{4}/,
@@ -262,6 +273,8 @@ export const SECRET_PATTERNS: readonly RegExp[] = [
   /(?:^|[^A-Za-z0-9])(?:hf_[A-Za-z0-9]{20}|SG\.[A-Za-z0-9_-]{10,40}\.[A-Za-z0-9_-]{8})/,
   // An age identity: `AGE-SECRET-KEY-1` and its Bech32 body.
   /AGE-SECRET-KEY-1[0-9A-Z]{10}/,
+  // Docker Hub, Google OAuth access and refresh tokens, Mailgun and Twilio API keys.
+  /(?:^|[^A-Za-z0-9])(?:dckr_pat_[A-Za-z0-9_-]{8}|ya29\.[A-Za-z0-9_-]{8}|1\/\/0[A-Za-z0-9_-]{20}|(?:key-|SK)[0-9a-f]{32}(?![0-9A-Za-z]))/,
   PEM_BEGIN,
   PPK_BEGIN,
   // 7. Values fed in other ways.
@@ -304,23 +317,39 @@ export function hideSecrets(text: string): string {
  * own: `#T`, a digit, then digits and capitals (``, ``, the old `#T12`), and only an ID
  * the mod's own parser gives a value (`ticketValue`: at most 6 characters after the `T`, under the
  * end of the number line). Any other `#word` may be the secret (`--password #Hunter2`,
- * `PW=(#hunter2)`), so it goes; so does a `#` glued to the text before it (`-p#Hunter2`). A secret
- * of the mod's ID form is kept: the one residual, as it cannot be told from an ID.
+ * `PW=(#hunter2)`), so it goes; so does a `#` glued to the text before it (`-p#Hunter2`). An ID that
+ * is the line's only secret goes too (`token:`, keptIds). The one residual: a secret of the
+ * mod's ID form on a line that holds another secret is kept, as it cannot be told from a reference
+ * there (`token: PW=x`). Exported for the tests.
  */
-const KEPT_ID = /(?<![^\s(\[,])#[Tt]\d[0-9A-Z]*(?![0-9A-Za-z])/g
+export const KEPT_ID = /(?<![^\s(\[,])#[Tt]\d[0-9A-Z]*(?![0-9A-Za-z])/g
 
 /**
  * KEPT_ID for text normalize changed, where the ID is in lower case: `#t0037`, `#t1`. The same
  * `ticketValue` bound holds on both paths, so `#t0037abc` (7 characters) goes as `abc` does.
  */
-const KEPT_NORMALIZED_ID = /(?<![^\s(\[,])#t\d[0-9a-z]*(?![0-9A-Za-z])/g
+export const KEPT_NORMALIZED_ID = /(?<![^\s(\[,])#t\d[0-9a-z]*(?![0-9A-Za-z])/g
+
+/** The most IDs a hidden line keeps: more than a line names in practice, few enough that their check stays cheap. */
+const KEPT_IDS_MAX = 16
 
 /**
  * The IDs of the mod's form in a hidden line, as `kept` finds them and `ticketValue` takes them. An
  * ID that is the secret's value is not kept: the line holds a secret, and with the ID taken out it holds none.
+ *
+ * At most KEPT_IDS_MAX distinct IDs, the first in the line, each once: every ID checked costs a pass
+ * of the secret check over the whole line, so the cost is held to (KEPT_IDS_MAX + 1) passes, not one
+ * per ID (a line of 12,000 IDs took 48 s). Exported for the tests.
  */
-const keptIds = (line: string, kept: RegExp, isSecret: (line: string) => boolean): string[] =>
-  (line.match(kept) ?? []).filter(id => ticketValue(id.slice(1)) !== undefined && (!isSecret(line) || isSecret(line.replace(id, ''))))
+export const keptIds = (line: string, kept: RegExp, isSecret: (line: string) => boolean): string[] => {
+  const ids = [...new Set(line.match(kept) ?? [])].filter(id => ticketValue(id.slice(1)) !== undefined).slice(0, KEPT_IDS_MAX)
+  if (ids.length === 0) {
+    return ids
+  }
+  const isLineSecret = isSecret(line)
+
+  return ids.filter(id => !isLineSecret || isSecret(line.replace(id, '')))
+}
 
 /**
  * `text` with each line that looks like it holds a secret replaced by "(hidden)", followed by the

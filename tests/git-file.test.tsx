@@ -6,7 +6,7 @@ import type { GitFs } from '../hooks/git-file'
 
 /**
  * Property: a session whose git call fails reads the same common dir from the `.git` entry that
- * `git rev-parse` gives a git session, so both list the same claim folders. (batch K1) dropped the root
+ * `git rev-parse` gives a git session, so both list the same claim folders. dropped the root
  * from these answers: the claim folders come from the common dir alone, so the expectations name it only.
  */
 /**
@@ -38,7 +38,7 @@ test('a .git entry read with no git gives the common dir git names, in each layo
 /**
  * Property: a session whose git fails takes the common dir from the `commondir` file of the git dir its
  * `.git` file names, as git does, so it names the claim folders a git session names, whatever the path segments
- * are called. The reviewer's s6 (a separate git dir under `.../worktrees/proj.git`) and s7 (a submodule named
+ * are called. The s6 (a separate git dir under `.../worktrees/proj.git`) and s7 (a submodule named
  * `worktrees`, with a nested submodule `inner`) layouts, as `git` makes them (`S/lay`).
  */
 test('the common dir comes from the commondir file, never from a path segment named worktrees', async () => {
@@ -81,7 +81,7 @@ function walkFs(entries: Record<string, string>, failing: string[] = []): GitFs 
  * walks up with no folder limit, so it claims where the git sessions do; a `.git` it cannot tell names no folder.
  */
 test('gitWhereUp walks up with no folder limit, and a .git it cannot read is unknown', async () => {
-  // The verifier's edge case 2: a primary todo folder 12 folders below the repo root; the old walk stopped at 9.
+  // The edge case 2: a primary todo folder 12 folders below the repo root; the old walk stopped at 9.
   const deep = `/repo/${Array.from({ length: 12 }, (_, i) => `d${i}`).join('/')}`
   expect(await gitWhereUp(walkFs({ '/repo/.git': 'dir' }), deep)).toEqual({ common: '/repo/.git' })
   // Behind a valid first case: a bare repo's worktree `.git` file names the common dir every worktree names.

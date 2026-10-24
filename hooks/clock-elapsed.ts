@@ -10,3 +10,12 @@
 export function elapsedSince(from: number, now: number): { ms: number; from: number } {
   return now < from ? { ms: 0, from: now } : { ms: now - from, from }
 }
+
+/**
+ * Whether a deadline set at most `span` ms ahead has passed at `now`. A deadline further ahead than
+ * `span` can only come from a clock set back since it was set, so it has passed: the thing it timed
+ * ends at once and not after the length of the set-back.
+ */
+export function isDeadlinePast(until: number, now: number, span: number): boolean {
+  return now >= until || until > now + span
+}

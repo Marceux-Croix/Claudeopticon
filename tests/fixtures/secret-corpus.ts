@@ -1,6 +1,6 @@
 /**
  * The secret corpus: commands that hold a secret, and ordinary commands that hold none.
- * The verifier of batch G5 wrote SECRET, PLAIN and NEUTRAL; batch H5 added MORE_SECRET and
+ * The first part holds SECRET, PLAIN and NEUTRAL; added MORE_SECRET and
  * MORE_PLAIN, written against the rule in hooks/secrets.ts to find its edges.
  */
 
@@ -555,7 +555,7 @@ export const MORE_PLAIN: readonly string[] = [
 ]
 
 /**
- * Loop 2: the secret forms reviewer R6 found missed, then the commands of verifier HI
+ *: the secret forms found missed, then the commands of the second pass
  * (secret and ordinary, none in the lists above), each with a literal value.
  */
 export const L2_SECRET: readonly string[] = [
@@ -630,7 +630,7 @@ export const L2_SECRET: readonly string[] = [
   "op signin --raw <<< Hunter2xyz",
 ]
 
-/** Loop 2: verifier HI's ordinary commands, then the plain neighbors of each new form above (a file, a variable, a prompt). */
+/** The second pass's ordinary commands, then the plain neighbors of each new form above (a file, a variable, a prompt). */
 export const L2_PLAIN: readonly string[] = [
   "git log --author=bob --grep=password",
   "npm run test:auth",
@@ -715,7 +715,7 @@ export const L2_PLAIN: readonly string[] = [
 ]
 
 /**
- * Loop 3: verifier J6's corpus, which loop 2 left with 27 of 40 missed,
+ *: the corpus that the second pass left with 27 of 40 missed,
  * each with a literal value.
  */
 export const J6_SECRET: readonly string[] = [
@@ -809,7 +809,7 @@ export const J6_PLAIN: readonly string[] = [
 const PW = 'Zebra9Quill'
 
 /**
- * Loop 3: reviewer R6's 40 secret commands, none in any list above: commands continued with a
+ * 40 secret commands, none in any list above: commands continued with a
  * backslash, attached short options, positional and stdin forms, and
  * forms the rule already names.
  */
@@ -861,7 +861,7 @@ export const L3_SECRET: readonly string[] = [
   `curl https://api.example \\\n  -H "Authorization: Bearer ${PW}"`,
 ]
 
-/** Reviewer R6's ordinary commands of loop 3: a MAC-like IPv6 address and a bare name after `=` among them. */
+/** Ordinary commands: a MAC-like IPv6 address and a bare name after `=` among them. */
 export const L3_PLAIN: readonly string[] = [
   'git log --author=bob --since=2.weeks --oneline',
   'grep -rn "password" src/ --include=*.ts',
@@ -908,7 +908,7 @@ export const L3_PLAIN: readonly string[] = [
 /** A key body line, which has no mark of its own: a hidden block must not show it. */
 export const KEY_BODY = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7'
 
-/** Loop 3: private key blocks other than PEM, and an age identity, each with a body line. */
+/**: private key blocks other than PEM, and an age identity, each with a body line. */
 export const KEY_SECRET: readonly string[] = [
   ['gpg --import <<EOF', '-----BEGIN PGP PRIVATE KEY BLOCK-----', '', KEY_BODY, '=Xy12', '-----END PGP PRIVATE KEY BLOCK-----', 'EOF'].join('\n'),
   ['cat > k.ppk <<EOF', 'PuTTY-User-Key-File-3: ssh-ed25519', 'Encryption: none', 'Public-Lines: 1', 'AAAAC3NzaC1lZDI1NTE5', 'Private-Lines: 1', KEY_BODY, 'Private-MAC: 6f1c2a', 'EOF'].join('\n'),
@@ -920,7 +920,7 @@ export const KEY_SECRET: readonly string[] = [
 const MW = 'Kestrel42Moth'
 
 /**
- * Batch M: the verifier's final-v1 corpus of 40 secret commands, none in a list above (its misses were
+ * Batch M: the final-v1 corpus of 40 secret commands, none in a list above (its misses were
  * expdp, yarn npmAuthToken and security unlock-keychain), Sybase isql, and the variants of each new form.
  */
 export const M_SECRET: readonly string[] = [
@@ -981,7 +981,7 @@ export const M_SECRET: readonly string[] = [
   "restic -r /srv/r init <<< Hunter2xyz",
 ]
 
-/** Batch M: the verifier's 38 ordinary commands that were shown (its two old false positives are left out), and each new form's neighbors. */
+/** Batch M: the 38 ordinary commands that were shown (its two old false positives are left out), and each new form's neighbors. */
 export const M_PLAIN: readonly string[] = [
   'openssl rand -hex 16',
   "zip -r out.zip dir -x '*.pyc'",
@@ -1045,4 +1045,70 @@ export const M_PLAIN: readonly string[] = [
   "echo \"token: see vault\"",
   "echo 'password: in the keychain'",
   "# api_key: stored in 1Password",
+]
+
+/** The value of every N_SECRET entry that takes one. */
+const NW = 'Plover77Finch'
+
+/**
+ * Secret names with a hyphen or a space between their words, long options with the secret word glued
+ * on or in camelCase, and the credential forms of curl, Redis, AWS presigned URLs, Azure Functions and
+ * the token shapes of Docker Hub, Google OAuth, Mailgun and Twilio.
+ */
+export const N_SECRET: readonly string[] = [
+  `api-key = "${NW}"`,
+  `{"api-key": "${NW}"}`,
+  `access-key=${NW}`,
+  `private-key=${NW}`,
+  `api key: ${NW}`,
+  `API-KEY=${NW}`,
+  `app --accessToken ${NW}`,
+  `app --authToken ${NW}`,
+  `app --authtoken ${NW}`,
+  `app --clientSecret ${NW}`,
+  `app --secretKey ${NW}`,
+  `app --bearerToken ${NW}`,
+  `app --adminPassword ${NW}`,
+  `app --dbpassword ${NW}`,
+  `curl --proxy-user bob:${NW} https://x.example`,
+  `curl --proxy-user=bob:${NW} https://x.example`,
+  `redis-cli -h db AUTH ${NW}`,
+  `redis-cli -h db auth bob ${NW}`,
+  `redis-cli config set requirepass ${NW}`,
+  `redis-cli CONFIG SET masterauth ${NW}`,
+  `curl --cert c.pem:${NW} https://x.example`,
+  `curl "https://b.s3.amazonaws.com/k?X-Amz-Algorithm=AWS4&X-Amz-Signature=0123abcdef"`,
+  `curl "https://b.s3.amazonaws.com/k?X-Amz-Security-Token=FwoGZXIvYXdz"`,
+  'echo dckr_pat_abcdefghijklmnopqrst',
+  'echo ya29.a0AfH6SMBabcdefghij',
+  'echo 1//0gabcdefghijklmnopqrstuvwxyz',
+  // Built at run time: a literal 32-hex key reads as a real Mailgun or Twilio key to a host's secret scanning.
+  `echo key-${'0123456789abcdef'.repeat(2)}`,
+  `echo SK${'0123456789abcdef'.repeat(2)}`,
+  `curl -H "x-functions-key: ${NW}" https://f.example/api/x`,
+]
+
+/** The neighbors of N_SECRET that hold no secret: a setting about a key, prose, a word that only holds a secret word, and an option with no value. */
+export const N_PLAIN: readonly string[] = [
+  'api-key-file=k.txt',
+  'the api key: see vault',
+  'train --tokenizer bpe',
+  'run --bypass',
+  'draw --compass',
+  'proxy --passthrough',
+  'llm --max-tokens 5',
+  'count --tokens 3',
+  'sort --sortKey name',
+  'ssh-add --publicKey k.pub',
+  'keytool --keyPassword-file f',
+  'curl --proxy-user',
+  'curl --proxy-user bob https://x.example',
+  'redis-cli -h db PING',
+  'redis-cli config get requirepass',
+  'curl --cert client.pem --key client.key https://x.example',
+  'curl --cert https://x.example/c.pem',
+  'curl "https://b.s3.amazonaws.com/k?X-Amz-Algorithm=AWS4&X-Amz-Expires=60"',
+  'echo key-short',
+  'echo 1//2 of the work',
+  'curl -H "x-functions-name: list" https://f.example/api/x',
 ]

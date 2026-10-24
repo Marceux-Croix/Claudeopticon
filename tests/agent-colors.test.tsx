@@ -35,3 +35,15 @@ test('a new agent never changes the color of an agent already drawn', () => {
   const before = colorSlots([live(1), ended(2, 3), live(4)], 6)
   expect(colorSlots([live(1), ended(2, 3), live(4), live(5)], 6).slice(0, 3)).toEqual(before)
 })
+
+test('an agent with a pinned slot keeps it after the idle agent that freed it wakes', () => {
+  const idle = { startedAt: 1, idleSince: 3, isEnded: false }
+  const first = colorSlots([idle, live(4)], 6)
+  expect(first).toEqual([0, 0])
+  // A woken: no idle time on its row, so the replay alone would move B to slot 1.
+  expect(colorSlots([live(1), live(4)], 6)).toEqual([0, 1])
+  expect(colorSlots([{ ...live(1), pinned: first[0]! }, { ...live(4), pinned: first[1]! }], 6)).toEqual([0, 0])
+  // A pin outside the slots is ignored; a later agent still counts the pinned holders.
+  expect(colorSlots([{ ...live(1), pinned: 99 }], 6)).toEqual([0])
+  expect(colorSlots([{ ...live(1), pinned: 2 }, live(2)], 6)).toEqual([2, 0])
+})

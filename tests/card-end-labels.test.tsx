@@ -5,7 +5,7 @@ import type { Box, Trace } from '../hooks/card-end-labels'
 import { setWidth } from '../hooks/card-stage'
 import { heroSvg } from '../hooks/hero-card'
 import { fuzzStates } from '../scripts/hero-fuzz'
-import { r5Check, r5States, R5_WIDTHS } from '../scripts/hero-fuzz-r5'
+import { seededCheck, seededStates, SEEDED_WIDTHS } from '../scripts/hero-fuzz-seeded'
 import { clearPlaceExists, overlaps } from '../scripts/hero-geometry'
 import { heroStates } from '../scripts/sample'
 
@@ -58,7 +58,7 @@ test('traceSpan gives the y range of a trace over an x range, a step line too', 
   expect(traceSpan([[0, 50], [10, 50]], 30, 60)).toBeUndefined()
 })
 
-test('the owner case: an agent label under its dot is not put on the token line that crosses there', () => {
+test('the crossing case: an agent label under its dot is not put on the token line that crosses there', () => {
   // The token line climbs to the right edge and crosses the agent level just left of it (as in the screenshot).
   const tokenLine: Trace = [[64, 240], [480, 150]]
   const agentLine: Trace = [[64, 200], [400, 200], [400, 164], [480, 164]]
@@ -95,10 +95,10 @@ test('an end label is never put on the Compacted label', () => {
   expect(two.some((y, i) => meets(labelBox(y, [38, 44][i]!, AREA.right), compacted))).toBe(false)
 })
 
-// ---------------------------------------------------------------- the verifier's fuzz, kept as a test
+// ---------------------------------------------------------------- the fuzz, kept as a test
 
 const FUZZ_WIDTHS = [300, 384, 520, 720, 960, 1920]
-/** The sample states and the verifier's 340 fuzz states (fixed seed): 344 states, drawn once per width below. */
+/** The sample states and the 340 fuzz states (fixed seed): 344 states, drawn once per width below. */
 const FUZZ = [...Object.entries(heroStates()), ...fuzzStates()]
 
 // One test per width. Each takes 0.4 to 1 s alone but 5.8 to 6.9 s at a load average of 61, so each has its own limit, not the 5 s default.
@@ -130,7 +130,7 @@ for (const width of FUZZ_WIDTHS) {
   })
 }
 
-test('the verifier r24 state: "7 live" never sits on "Compacted", at any width', () => {
+test('the r24 state: "7 live" never sits on "Compacted", at any width', () => {
   const r24 = fuzzStates(25, 0)[24]![1]
   for (const width of FUZZ_WIDTHS) {
     setWidth(width)
@@ -182,17 +182,17 @@ test('endLabelWidth holds the glyphs of every end label character at 12 px', () 
   expect(endLabelWidth('12', ' live')).toBeGreaterThanOrEqual(12 * (0.556 * 2) + 12 * (0.278 + 0.222 + 0.222 + 0.5 + 0.556))
 })
 
-// ---------------------------------------------------------------- loop 3, batch L5: and (never on a trace)
+// ---------------------------------------------------------------- and (never on a trace)
 
-/** The loop-3 reviewer's 420 states (scripts/hero-fuzz-r5.ts), drawn once per width. */
-const R5 = r5States(420)
+/** The 420 states (scripts/hero-fuzz-seeded.ts), drawn once per width. */
+const R5 = seededStates(420)
 
 /** The widths where the card is too narrow for a clear place in every state (the rate axis takes a second label column). */
 const CROWDED_WIDTHS = [300, 384]
 
-for (const width of R5_WIDTHS) {
+for (const width of SEEDED_WIDTHS) {
   const crowded = CROWDED_WIDTHS.includes(width)
-  test(`the loop-3 reviewer's fuzz at ${width} px: no end label on a trace, dot, label or Compacted label, in all 420 states${crowded ? ' where a clear place exists (else the halo)' : ''}`, { timeoutMs: 300_000 }, () => {
+  test(`the fuzz at ${width} px: no end label on a trace, dot, label or Compacted label, in all 420 states${crowded ? ' where a clear place exists (else the halo)' : ''}`, { timeoutMs: 300_000 }, () => {
     setWidth(width)
     const failures: string[] = []
     // States with a hit and no clear place: the owner rule allows them (the halo is the label's only help).
@@ -201,8 +201,8 @@ for (const width of R5_WIDTHS) {
     const clearHit: string[] = []
     for (const [name, view] of R5) {
       const svg = heroSvg(view).source
-      // The reviewer's check (its own ink widths, sampled segments) and this suite's (hero-geometry): both must be empty.
-      const found = r5Check(svg, width).map(one => `${name}: ${one}`)
+      // The check (its own ink widths, sampled segments) and this suite's (hero-geometry): both must be empty.
+      const found = seededCheck(svg, width).map(one => `${name}: ${one}`)
       const { soft, hard, geometry } = overlaps(svg)
       found.push(...[...soft, ...hard].map(one => `${name} (geometry): ${one}`))
       failures.push(...found)
@@ -225,13 +225,13 @@ for (const width of R5_WIDTHS) {
   })
 }
 
-test('the states the reviewer flagged at 300 px (s30-equal, s90-huge, s178-seeded) put the /min label off every trace', () => {
+test('the states flagged at 300 px (s30-equal, s90-huge, s178-seeded) put the /min label off every trace', () => {
   setWidth(300)
   const flagged = R5.filter(([name]) => ['s30-equal', 's90-huge', 's178-seeded'].includes(name))
   expect(flagged.length).toBe(3)
   for (const [, view] of flagged) {
     const svg = heroSvg(view).source
-    expect(r5Check(svg, 300)).toEqual([])
+    expect(seededCheck(svg, 300)).toEqual([])
     expect(overlaps(svg).soft).toEqual([])
   }
   setWidth(384)

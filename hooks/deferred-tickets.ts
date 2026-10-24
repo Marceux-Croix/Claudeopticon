@@ -5,8 +5,8 @@ import { ID_SRC } from './todo-markdown'
 /** The words that put work off: the ticket is next, or waits for an event. */
 const DEFER = /\b(?:after|afterwards?|next|once|later|queue|queued|follow[- ]?up|until|when\s+\S+\s+(?:lands|is\s+done|finishes))\b/i
 
-/** One sentence: up to a full stop, question or exclamation mark followed by a space, or a line break. */
-const SENTENCES = /[^.!?\n]+(?:[.!?](?=\s|$))?/g
+/** One sentence: up to a full stop, question or exclamation mark followed by white space or the end, or a line break. A dot inside a word (`parser.ts`) does not end it. */
+const SENTENCES = /(?:[^.!?\n]|[.!?](?!\s|$))+(?:[.!?](?=\s|$))?/g
 
 /**
  * The IDs (`T0042`, uppercase, no `#`) named in a sentence of `text` that also holds a word that puts

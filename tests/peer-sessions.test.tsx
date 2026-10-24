@@ -27,6 +27,20 @@ test('sanitizeSessionName cuts a trailing ref, control characters and markup, an
   expect(sanitizeSessionName(42)).toBeUndefined()
 })
 
+/** Property: a stored session name holds no format character (bidi override, zero-width, tag), which would reorder or hide the name where it is drawn or quoted. */
+test('sanitizeSessionName drops format characters: behind a valid first part, at the ends of the name, and keeps an emoji', () => {
+  const CF = /\p{Cf}/u
+  // State 1: behind a valid first part, a bidi override and a zero-width space.
+  const name = sanitizeSessionName('a‮b​c')
+  expect(name !== undefined && CF.test(name)).toBe(false)
+  expect(name).toBe('a b c')
+  // State 2: at the ends of the name, and a name of format characters only.
+  expect(sanitizeSessionName('‮Fix the board\u{E0041}')).toBe('Fix the board')
+  expect(sanitizeSessionName('​‮')).toBeUndefined()
+  // State 3: an emoji and accented text, which are no format characters, are kept.
+  expect(sanitizeSessionName('Ship \u{1F680} é')).toBe('Ship \u{1F680} é')
+})
+
 test('readPresence accepts a well formed record and drops anything malformed', () => {
   expect(readPresence(record())).toEqual(record())
   expect(readPresence(record({ name: undefined }))).toEqual({ v: 1, sessionId: 'a', root: ROOT, tickets: record().tickets, agentTickets: [], planned: [], seenAt: NOW })

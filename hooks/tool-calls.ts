@@ -23,7 +23,7 @@ export function describeCall(tool: string, input: Record<string, unknown>): stri
 export function callSummary(tool: string, input: Record<string, unknown>): string {
   const description = input.description
 
-  return typeof description === 'string' && description.trim() !== '' ? (hasSecret(description) ? `${tool}: (hidden)` : description.trim().split('\n')[0]!) : describeCall(tool, input)
+  return typeof description === 'string' && description.trim() !== '' ? (hasSecret(description) ? `${tool}: (hidden)` : cutUnits(description.trim().split('\n')[0]!, DETAIL_MAX)) : describeCall(tool, input)
 }
 /** The longest detail kept per history entry; the card cuts it again to fit its line. */
 export const DETAIL_MAX = 300

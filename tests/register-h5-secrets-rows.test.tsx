@@ -3,7 +3,7 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
-// Batch H5 (UCR loop 1 tail): secrets in agent descriptions and titles, rows stored by an
+// secrets in agent descriptions and titles, rows stored by an
 // older version, the still-in-progress line with the rules off (V3), an ended agent brought
 // back (N62), and the trust guards behind writes. g1Repo is copied from the H3 block.
 {
@@ -102,7 +102,7 @@ function g1Repo(on: On, files: Record<string, string>, opts: G1Opts) {
 
     return key === undefined ? path : `${links[key]}${path.slice(key.length)}`
   }
-  // (batch K1): the session folder exists, so the real path of `.` (the engine's own folder, read back as `cwd`) resolves.
+  // the session folder exists, so the real path of `.` (the engine's own folder, read back as `cwd`) resolves.
   const exists = (path: string) => !isHidden(path) && (path in files || Object.keys(files).some(key => key.startsWith(`${path}/`)) || gitDirs.has(path) || (opts.present ?? []).includes(path) || path === opts.cwd)
   const named = (dir: string) => {
     const names = new Set<string>()

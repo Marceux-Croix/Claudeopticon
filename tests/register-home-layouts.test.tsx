@@ -79,7 +79,7 @@ function repoWith(on: On, files: Record<string, string>, opts: { listed: string[
   // The engine hands the session folder's own `.claude_todo` over made absolute, outside the fake repo: it is the repo root one. A home folder's is not there.
   const isRel = (path: string) => !inside(path) && path.endsWith('.claude_todo') && !path.endsWith('/.claude/.claude_todo')
   on('fs.exists', (_$, e) => ({ value: e.path.endsWith('.git') || (isRel(e.path) && e.path.endsWith('.claude_todo')) || (e.path === '/usr/bin/trash' && opts.trashFile === true) || (inside(e.path) && (e.path in files || Object.keys(files).some(path => path.startsWith(`${e.path}/`)))) }))
-  // (batch K1): the engine hands `.` over as its own folder, outside the fake repo; that session folder is the repo root.
+  // the engine hands `.` over as its own folder, outside the fake repo; that session folder is the repo root.
   const isSession = (path: string) => !inside(path) && !path.includes('.claude_todo') && !path.includes('.git') && !path.startsWith('/home/a') && !path.startsWith('/usr/')
   on('fs.stat', (_$, e) => {
     if (isSession(e.path) && opts.links?.[e.path] === undefined) {
@@ -172,7 +172,7 @@ const BOOK_STATES: [string, { links?: Record<string, string>; dangling?: string[
   ['the book is a symlink to another file', { links: { [BOOK]: '/home/a/.zshrc' } }],
   ['the book is a symlink to a file inside the repo', { links: { [BOOK]: '/repo/other.json' } }],
   ['the book is a dangling symlink', { dangling: [BOOK] }],
-  // The case of a symlinked book folder is in batch G1's block: this fake read no items through it, so it passed with no check.
+  // The case of a symlinked book folder is in this block: this fake read no items through it, so it passed with no check.
 ]
 for (const [name, state] of BOOK_STATES) {
   test(`${name}: the sorter calls no model and writes nothing`, async ($, on) => {

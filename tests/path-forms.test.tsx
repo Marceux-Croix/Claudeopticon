@@ -64,7 +64,7 @@ test('listedName: the one listed entry that matches without case, else the name'
   expect(listedName([], 'TODO.md')).toBe('TODO.md')
 })
 
-// ---------------------------------------------------------------- (batch K1)
+// ---------------------------------------------------------------- 
 
 /** Property: git's output counts only when the session folder it names is the session's own folder, the real path of `.`. */
 test('isSameFolder: git names the session folder, else the output names another folder', () => {
@@ -72,7 +72,7 @@ test('isSameFolder: git names the session folder, else the output names another 
   expect(isSameFolder('/w/proj', '/w/proj')).toBe(true)
   expect(isSameFolder('/w/caf\u00e9', '/w/cafe\u0301/')).toBe(true)
   expect(isSameFolder('C:/Work/Proj', 'c:\\work\\proj')).toBe(true)
-  // The verifier's shapes: GIT_DIR and GIT_WORK_TREE (vcsh) name /w/plain, core.worktree names /w/other; the session is in /w/proj.
+  // The shapes: GIT_DIR and GIT_WORK_TREE (vcsh) name /w/plain, core.worktree names /w/other; the session is in /w/proj.
   expect(isSameFolder('/w/plain', '/w/proj')).toBe(false)
   expect(isSameFolder('/w/other', '/w/proj')).toBe(false)
   // At the limit: a parent or a child of the session folder is another folder; a POSIX path in another case is another folder.

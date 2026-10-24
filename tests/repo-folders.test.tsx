@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { diskSpelling, findTodoDirWith, gitCommonDir, globalDirs, isGlobalTodo, isMisspelledTodo, isSameTodo, isTodoOf, MAX_FOLDERS, MAX_UP_NO_REAL, pickFolders, repoRoots, revParseLines, sessionFolder, todoFoldersIn } from '../hooks/repo-folders'
+import { diskSpelling, findTodoDirWith, gitCommonDir, globalDirs, globalParents, isGlobalTodo, isInsideRoots, isMisspelledTodo, isSameTodo, isTodoOf, MAX_FOLDERS, MAX_UP_NO_REAL, pickFolders, repoRoots, replaceGlobals, revParseLines, sessionFolder, todoFoldersIn } from '../hooks/repo-folders'
 
 test('the todo folder is the repo root one, the main checkout one from a worktree, and never the global one', async () => {
   const fake = (layout: Record<string, 'dir' | 'file'>, real: Record<string, string> = {}) => ({
@@ -216,7 +216,7 @@ test('a main checkout named with a trailing space is found from the worktree lis
   expect(repoRoots('/wt\n/m /.git/worktrees/wt\n/m /.git\n\n', 'worktree /m \nHEAD a\n\nworktree /wt\nHEAD b\n')).toEqual({ root: '/wt', main: '/m ' })
 })
 
-// ---------------------------------------------------------------- batch I2: remainder
+// ---------------------------------------------------------------- remainder
 
 /**
  * Property: the claim folder's base is the git common dir as an absolute path in every git layout, the
@@ -226,7 +226,7 @@ test('gitCommonDir: the common dir, absolute, for a .git folder, a .git file and
   // A plain repo, from the top and from a subfolder (git prints the dir against the folder it runs in).
   expect(gitCommonDir('/repo\n.git\n.git\n\n')).toBe('/repo/.git')
   expect(gitCommonDir('/repo\n/repo/.git\n../../.git\nmods/y/\n')).toBe('/repo/.git')
-  // The verifier's state: `.git` is a file (`--separate-git-dir`); sessions at the root and in `mods/y` name one dir.
+  // The state: `.git` is a file (`--separate-git-dir`); sessions at the root and in `mods/y` name one dir.
   expect(gitCommonDir('/repo\n/store/repo.git\n/store/repo.git\n\n')).toBe('/store/repo.git')
   expect(gitCommonDir('/repo\n/store/repo.git\n/store/repo.git\nmods/y/\n')).toBe('/store/repo.git')
   // A submodule, and a linked worktree (the main checkout's common dir).
@@ -299,11 +299,11 @@ test('diskSpelling: a listed folder whose real path differs only by case takes t
   expect(diskSpelling(one, '/repo/Docs/.claude_todo', ['/repo'])).toBe(one)
 })
 
-// ---------------------------------------------------------------- batch K1
+// ---------------------------------------------------------------- more cases
 
 /** Property: a project folder that the global `.claude_todo` resolves to at write time is the global folder. */
 test('isSameTodo: the real path of a global .claude_todo, read at write time, names the folder global', () => {
-  // The verifier's V148 state: `~/.claude/.claude_todo` made a symlink to `/repo/.claude_todo` after the load.
+  // The V148 state: `~/.claude/.claude_todo` made a symlink to `/repo/.claude_todo` after the load.
   expect(isSameTodo('/repo/.claude_todo', '/repo/.claude_todo')).toBe(true)
   // Behind a valid first case and at the limit of the compare: a trailing slash, NFD, and a Windows path in any case.
   expect(isSameTodo('/repo/.claude_todo', '/repo/.claude_todo/')).toBe(true)
@@ -317,7 +317,7 @@ test('isSameTodo: the real path of a global .claude_todo, read at write time, na
 
 /** Property: a `.claude_todo` folder git lists in another letter case is found, and one the disk spells so is named, never skipped silently. */
 test('todoFoldersIn matches the .claude_todo segment in any case, and isMisspelledTodo names a folder not spelled .claude_todo', () => {
-  // The verifier's V151 state: the index keeps `.Claude_todo` after a case-only rename of the folder itself.
+  // The V151 state: the index keeps `.Claude_todo` after a case-only rename of the folder itself.
   expect(todoFoldersIn('.claude_todo/TODO.md\0docs/.Claude_todo/TODO.md', '/repo').map(one => one.rel)).toEqual(['.claude_todo', 'docs/.Claude_todo'])
   expect(diskSpelling({ path: '/repo/docs/.Claude_todo', rel: 'docs/.Claude_todo' }, '/repo/docs/.claude_todo', ['/repo'])).toEqual({ path: '/repo/docs/.claude_todo', rel: 'docs/.claude_todo' })
   // At the limit: every letter in another case, and a collapsed ignored entry.
@@ -331,7 +331,7 @@ test('todoFoldersIn matches the .claude_todo segment in any case, and isMisspell
   expect(todoFoldersIn('a/.claude_todo_old/x.md\0b/claude_todo/x.md', '/repo')).toEqual([])
 })
 
-// ---------------------------------------------------------------- L1 (loop 3)
+// ---------------------------------------------------------------- L1
 
 /** A fake disk for the nearest-folder walk: `layout` by relative path, file texts by path, and the real path of `.`. */
 function walkFs(layout: Record<string, 'dir' | 'file'>, texts: Record<string, string>, realDot: string | undefined) {
@@ -396,4 +396,42 @@ test('the main checkout of a .git file is read from commondir, never from a /wor
   // A commondir with an absolute path, and a separate common dir that names its main checkout by core.worktree.
   expect(await findTodoDirWith(walkFs({ '.git': 'file', '/m/.claude_todo': 'dir' }, { '.git': 'gitdir: /x/wt\n', '/x/wt/commondir': '/m/.git\n' }, '/wt'))).toBe('/m/.claude_todo')
   expect(await findTodoDirWith(walkFs({ '.git': 'file', '/main/.claude_todo': 'dir' }, { '.git': 'gitdir: /worktrees/r.git/worktrees/wt\r\n', '/worktrees/r.git/worktrees/wt/commondir': '../..\r\n', '/worktrees/r.git/config': '[core]\n\tworktree = /main\n' }, '/wt'))).toBe('/main/.claude_todo')
+})
+
+/** Property: a todo folder that resolves outside the checkouts the mod reads is refused, whatever else stands beside it. */
+test('isInsideRoots accepts a folder inside a checkout and refuses the one that resolves outside', () => {
+  const roots = ['/repo', '/main']
+  // The folders in the checkouts, a linked worktree's main checkout included.
+  expect(isInsideRoots('/repo/.claude_todo', roots)).toBe(true)
+  expect(isInsideRoots('/main/mods/x/.claude_todo', roots)).toBe(true)
+  // Behind a valid first case: a link out of the repo.
+  expect(isInsideRoots('/outside/notes/.claude_todo', roots)).toBe(false)
+  // At the limit: a sibling that shares the root's text as a prefix, and the root itself.
+  expect(isInsideRoots('/repo2/.claude_todo', roots)).toBe(false)
+  expect(isInsideRoots('/repo', roots)).toBe(false)
+  // The excluded population: a path in another letter case on a POSIX disk is another folder; a Windows path compares without case.
+  expect(isInsideRoots('/REPO/.claude_todo', roots)).toBe(false)
+  expect(isInsideRoots('C:/Proj/.claude_todo', ['c:/proj'])).toBe(true)
+  expect(isInsideRoots('C:/Other/.claude_todo', ['c:/proj'])).toBe(false)
+})
+
+/** Property: the global folders are replaced in one step, so a check between two loads never sees an empty set. */
+test('replaceGlobals swaps the global folders and parents in one step and keeps nothing of the last load', () => {
+  replaceGlobals(['/cfg/.claude_todo'], ['/cfg'])
+  expect(isGlobalTodo('/cfg/.claude_todo')).toBe(true)
+  expect([...globalParents]).toEqual(['/cfg'])
+  const next = ['/other/.claude_todo']
+  replaceGlobals(next, ['/other'])
+  expect(isGlobalTodo('/cfg/.claude_todo')).toBe(false)
+  expect(isGlobalTodo('/other/.claude_todo')).toBe(true)
+  expect([...globalParents]).toEqual(['/other'])
+  // A set built from the live one is read before it is cleared.
+  replaceGlobals(globalDirs, globalParents)
+  expect(isGlobalTodo('/other/.claude_todo')).toBe(true)
+  replaceGlobals([], [])
+})
+
+test('todoFoldersIn finds a folder that is itself ignored, and none under an ignored directory (git lists that directory as one entry)', () => {
+  expect(todoFoldersIn('x/.claude_todo/\0', '/repo')).toEqual([{ path: '/repo/x/.claude_todo', rel: 'x/.claude_todo' }])
+  expect(todoFoldersIn('ign/\0', '/repo')).toEqual([])
 })

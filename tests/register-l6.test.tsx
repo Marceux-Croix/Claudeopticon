@@ -1,4 +1,4 @@
-// Engine tests of UCR batch L6 (loop 3): names and text in the notes and answers to Claude are
+// Engine tests names and text in the notes and answers to Claude are
 // data (181), and a prompt dropped beneath the mod keeps its notes (245). The fakes are reviewer
 // R6's (inj181.test.tsx), copied into a scope of their own; nothing is shared with another file.
 import { expect, mock, test } from 'claude-code/testing'

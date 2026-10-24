@@ -3,8 +3,8 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
-// ---------------------------------------------------------------- batch J6 (loop 2): move_ticket keys, notes to Claude, hidden descriptions
-// Ports of reviewer R6's engine probes (R6-1nl, R6-1tab, R6-2, R6-4, R6-6) and of the mutants M07 and
+// ---------------------------------------------------------------- move_ticket keys, notes to Claude, hidden descriptions
+// Ports of engine probes (R6-1nl, R6-1tab, R6-2, R6-4, R6-6) and of the mutants M07 and
 // M22 into tests that assert the property. A block of its own, with its own fakes.
 {
 type J6Engine = Parameters<Parameters<typeof test>[1]>[0]
@@ -40,7 +40,7 @@ function j6Repo(on: J6On, files: Record<string, string>): void {
     return out(argv.includes('--directory') ? '' : Object.keys(files).map(path => path.slice('/repo/'.length)).join('\0'))
   })
   on('fs.exists', (_$, e) => ({ value: e.path.endsWith('.git') || (inside(e.path) && (e.path in files || Object.keys(files).some(path => path.startsWith(`${e.path}/`)))) }))
-  // The engine hands the session folder (`.`) over as its own absolute folder: it is the repo (batch K1).
+  // The engine hands the session folder (`.`) over as its own absolute folder: it is the repo.
   const isSession = (path: string) => !inside(path) && !path.includes('.claude_todo') && !path.includes('.git') && !path.startsWith('/home/a') && !path.startsWith('/usr/')
   on('fs.stat', (_$, e) => {
     if (isSession(e.path)) {

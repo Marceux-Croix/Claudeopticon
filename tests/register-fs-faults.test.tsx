@@ -101,12 +101,18 @@ for (const [label, failing, rounds] of [['first file', 'A.md', 1], ['last file',
     await clock.advance(4_000)
     // The claims are stored when the pane draws.
     await ui.drawn()
+    // The ticket of the file that will fail: its words are on the drawn board while the read works, and while it fails.
+    const ticket = failing === 'A.md' ? 'Ship the parser' : 'Ship the docs'
+    const shown = async () => JSON.stringify(await ui.findAll({ type: 'Svg' }))
+    expect(await shown()).toContain(ticket)
     const before = JSON.stringify([['#t1', true], ['#t2', true]])
     expect(JSON.stringify(store.get('orchestrator:sess-1'))).toBe(before)
     for (let i = 0; i < rounds; i += 1) {
       fail = true
       await clock.advance(61_000)
       await ui.drawn()
+      // A failed read keeps the last good parse: the file's ticket stays on the board, not dropped as if the file were gone.
+      expect(await shown()).toContain(ticket)
     }
     expect(JSON.stringify(store.get('orchestrator:sess-1'))).toBe(before)
     fail = false

@@ -1,12 +1,12 @@
 import { expect, test } from 'claude-code/testing'
 
 import { agentSvg } from '../hooks/agent-cards'
-import { endLabelWidth, labelBox, segmentMeets } from '../hooks/card-end-labels'
+import { endLabelWidth, LEADER_PX, labelBox, leaderLine, segmentMeets } from '../hooks/card-end-labels'
 import { tokens } from '../hooks/card-format'
 import { setWidth } from '../hooks/card-stage'
 import type { View } from '../hooks/card-types'
-import { clipLabelBox, clipMark, finishedCount, HERO_H, heroSvg, heroText, labelPx, LEADER_PX, leaderLine, totalsLine } from '../hooks/hero-card'
-import { r5States } from '../scripts/hero-fuzz-r5'
+import { clipLabelBox, clipMark, finishedCount, HERO_H, heroCard, heroSvg, heroText, labelPx, totalsLine } from '../hooks/hero-card'
+import { seededStates } from '../scripts/hero-fuzz-seeded'
 import { heroView as sampleHero } from '../scripts/sample'
 import { addCompact, addPoint, emptySeries, QUANT_MS, stepAxes, WINDOW_MS } from '../hooks/series'
 import type { Axes, Point, Series } from '../hooks/series'
@@ -198,7 +198,7 @@ test('with no data the card draws the empty axes and says no activity yet', asyn
   // the rate axis has its own scale, at its smallest step with no data, as the token axis.
   expect(svg).not.toContain('>15k<')
   expect(axisLabels(svg).fr.at(-1)!.text).toBe('150k')
-  // zero reads a plain 0, as in the approved sample (it read 0k).
+  // zero reads a plain 0, as in the sample (it read 0k).
   expect(svg).toContain('>0<')
   expect(svg).not.toContain('>0k<')
   expect(svg).not.toContain('<polyline')
@@ -351,8 +351,8 @@ test('at narrow widths text is dropped or shortened instead of overlapping', () 
 
 // ---------------------------------------------------------------- 
 
-test('the top card counts the agents that ended; an idle agent is neither live nor finished', () => {
-  const idle = row({ id: 'i', status: 'running', idleSince: 5 })
+test('the top card counts the agents that ended; an agent idle less than IDLE_CLEAR_MS is neither live nor finished', () => {
+  const idle = row({ id: 'i', status: 'running', idleSince: NOW - 5 })
   const done = row({ id: 'd', status: 'completed', endedAt: 5 })
   const failed = row({ id: 'f', status: 'failed', endedAt: 5 })
   const live = row({ id: 'l' })
@@ -451,7 +451,7 @@ test('the end labels have a halo in the stage color, and sit off the traces in t
 })
 
 test('with a compaction in the last minute no end label sits on the Compacted label', () => {
-  // The verifier's state: a compaction about a minute ago, the agent label at the top right.
+  // The state: a compaction about a minute ago, the agent label at the top right.
   const series: Series = { agents: [[NOW - 20 * MIN, 4]], tokens: [[NOW - 20 * MIN, 20_000_000], [NOW - 70_000, 0], [NOW - 40_000, 400_000]], compacts: [NOW - 70_000] }
   for (const width of [300, 384, 520, 720, 960]) {
     setWidth(width)
@@ -483,15 +483,15 @@ test('the totals line says total session tokens, and drops words to fit at narro
     expect(24 + text.length * 6.5 * (size / 13)).toBeLessThanOrEqual(width - 24 - 16)
   }
   setWidth(300)
-  // The agent count goes first, so the owner's phrase stays (it read '659.63M tokens  ·  47/50 done').
+  // The agent count goes first, so the title phrase stays (it read '659.63M tokens  ·  47/50 done').
   expect(words(heroSvg(heroView(opts)).source)).toBe('659.63M total session tokens')
   setWidth(384)
   expect(heroText(heroView(opts))).toContain('659.63M total session tokens.')
 })
 
-// ---------------------------------------------------------------- and, loop-1 tail (H1)
+// ---------------------------------------------------------------- and
 
-test(' the zero axis label reads 0 on every token axis and on the rate axis, as in the approved sample', () => {
+test(' the zero axis label reads 0 on every token axis and on the rate axis, as in the sample', () => {
   for (const top of [150_000, 4_500_000, 60_000_000, 9_000_000_000]) {
     const svg = heroSvg({ ...graphView({ agents: [[NOW - 5 * MIN, 1]], tokens: [[NOW - 5 * MIN, top / 2]], compacts: [] }, { tokens: top / 2 }, NOW), axes: { agents: { max: 4 }, tokens: { max: top }, rate: { max: top } } }).source
     const axis = axisLabels(svg)
@@ -551,7 +551,7 @@ test('at 300 px the sample reads "623.59M total session tokens": the agent count
   expect(totalsLine('623.59M', 33, 35, 12, 170).parts.map(part => part.text).join('')).toBe('623.59M total session tokens')
 })
 
-// ---------------------------------------------------------------- loop 2, batch J5
+// ---------------------------------------------------------------- more cases
 
 test('M4 a compaction 10 s ago keeps its marker: the plot snaps now down, and the marker stays up to one step past it', () => {
   // now is 25 s into a QUANT_MS step, so the snapped now is 25 s behind it and the compaction (at now - 10 s) is 15 s past the snapped now.
@@ -566,7 +566,7 @@ test('M4 a compaction 10 s ago keeps its marker: the plot snaps now down, and th
   expect(edge(NOW + QUANT_MS + 1)).not.toContain('>Compacted<')
 })
 
-// ---------------------------------------------------------------- loop 3, batch L5
+// ---------------------------------------------------------------- more cases
 
 /** The visible Compacted labels of a drawn top card, as boxes (58 px wide, as compactedBox places them). */
 function compactedBoxes(svg: string): { x0: number; x1: number }[] {
@@ -647,7 +647,7 @@ test('a stored series of 2000 points draws one point per 30 s step, so the end l
   // 29 minutes of 30 s steps, the point before the window and the hold to now: at most 63; the old code drew about 1930.
   expect(tokenLine.length).toBeLessThanOrEqual(63)
   expect(agentSteps).toBeLessThanOrEqual(63)
-  console.log(`heroSvg of a 2000-point series at 960 px: ${ms.toFixed(1)} ms (358 ms before the fix, reviewer probe S7)`)
+  console.log(`heroSvg of a 2000-point series at 960 px: ${ms.toFixed(1)} ms (358 ms before the fix, probe S7)`)
 })
 
 test('two compactions at one time draw one dashed line and one label, and addCompact never adds a time twice', () => {
@@ -669,7 +669,7 @@ test('"since compact" is never negative, even for a count at compact above the t
 })
 
 test('a label far from its dot gets a leader line; one near it does not, in three constructed states', () => {
-  // State 1, the defect behind a valid first case: a label 110 px left of its dot (as "0/min" in the reviewer's s9) gets a leader.
+  // State 1, the defect behind a valid first case: a label 110 px left of its dot (as "0/min" in the s9) gets a leader.
   const far = leaderLine({ x0: 150, x1: 190, y0: 100, y1: 112 }, 300, 106)
   expect(far).toBeDefined()
   expect(far!.map(n => Math.round(n * 10) / 10)).toEqual([192, 106, 295, 106])
@@ -678,20 +678,20 @@ test('a label far from its dot gets a leader line; one near it does not, in thre
   expect(leaderLine({ x0: 235, x1: 275, y0: 100, y1: 112 }, 276 + LEADER_PX, 106)).toBeDefined()
   // State 3, the excluded population: the home place, 10 px left of and just above the dot, draws none.
   expect(leaderLine({ x0: 250, x1: 290, y0: 94, y1: 106 }, 300, 109)).toBeUndefined()
-  // In a drawn card: the reviewer's s30-equal state at 300 px moves its /min label far left, with a leader in its color.
+  // In a drawn card: the s30-equal state at 300 px moves its /min label far left, with a leader in its color.
   setWidth(300)
-  const s30 = r5States(31)[30]!
+  const s30 = seededStates(31)[30]!
   expect(s30[0]).toBe('s30-equal')
   expect(heroSvg(s30[1]).source).toMatch(/<line [^>]*stroke="#60A5FA" class="sr" stroke-width="0.75"/)
   setWidth(384)
 })
 
 // The sweep draws the top card 140 times, 8.6 s in a full run: past the runner's 5 s default.
-test('over the reviewer\'s 140 states at 300 px, no leader line crosses another end label', { timeoutMs: 120_000 }, () => {
+test('over 140 fuzz states at 300 px, no leader line crosses another end label', { timeoutMs: 120_000 }, () => {
   setWidth(300)
   // s90-huge had one through "807.23M".
   const crossed: string[] = []
-  for (const [name, view] of r5States(140)) {
+  for (const [name, view] of seededStates(140)) {
     const svg = heroSvg(view).source
     const boxes = [...svg.matchAll(/<text x="([\d.]+)" y="([\d.]+)" text-anchor="end" font-size="12" stroke=[^>]*><tspan [^>]*>([^<]*)<\/tspan>(?:<tspan [^>]*>([^<]*)<\/tspan>)?/g)].map(m => labelBox(Number(m[2]), endLabelWidth(m[3]!, m[4] ?? ''), Number(m[1])))
     for (const m of svg.matchAll(/<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)" [^>]*stroke-width="0.75"/g)) {
@@ -717,4 +717,24 @@ test('the version is drawn small in the lower right corner, and not at all when 
   const source = heroSvg({ ...base, version: '0.9.12' }).source
   expect(source).toMatch(new RegExp(`<text x="\\d+" y="${HERO_H - 9}" text-anchor="end" fill="[^"]+" font-size="9.5">v0\\.9\\.12</text>`))
   expect(heroSvg(base).source).not.toContain('font-size="9.5"')
+})
+
+/** Property: a draw with the same inputs gives the same card without drawing again; a draw with any input changed draws anew. */
+test('heroCard draws once for equal inputs and anew when the time, the width, the usage or the series change', () => {
+  setWidth(384)
+  const base = sampleHero
+  const first = heroCard(base)
+  expect(heroCard({ ...base })).toBe(first)
+  expect(first.source).toBe(heroSvg(base).source)
+  expect(heroCard({ ...base, now: base.now + 1000 })).not.toBe(first)
+  const again = heroCard(base)
+  expect(again).not.toBe(first)
+  expect(heroCard({ ...base, usage: { tokens: (base.usage?.tokens ?? 0) + 1000, since: base.usage?.since ?? 0 } })).not.toBe(again)
+  const third = heroCard(base)
+  expect(heroCard({ ...base, series: { ...base.series!, tokens: [...base.series!.tokens, [base.now, 1e9]] } })).not.toBe(third)
+  const fourth = heroCard(base)
+  setWidth(640)
+  expect(heroCard(base)).not.toBe(fourth)
+  expect(heroCard(base).width).toBe(640)
+  setWidth(384)
 })

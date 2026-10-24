@@ -5,7 +5,7 @@ import { AGENT_COLORS } from '../hooks/agent-identity'
 import { ACCENT, setWidth } from '../hooks/card-stage'
 import type { FileView, ItemView } from '../hooks/card-types'
 import { heroSvg } from '../hooks/hero-card'
-import { boardHead, fileCards, listRowPx, padCard, spaceSvg, ticketSvg } from '../hooks/todo-cards'
+import { boardHead, fileCards, listRowHeights, listRowPx, padCard, ticketSvg } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
 import { buildView, todoLedger } from '../hooks/view-model'
 import type { AgentRow, TodoFile } from '../types'
@@ -112,15 +112,6 @@ test('an orchestrator ticket tag is O in its own color and blinks only while the
   }
 })
 
-test('a space is a transparent card of its height with no text and no buttons', async () => {
-  const space = spaceSvg(300, 142)
-  expect([space.width, space.height]).toEqual([300, 142])
-  expect(space.source).toContain('height="142"')
-  expect(space.source).not.toContain('<text')
-  expect(space.source).not.toContain('<rect')
-  expect(space.source).not.toContain('fill=')
-})
-
 test('padCard adds a transparent margin on the left and above, and keeps the card inside whole', async () => {
   const card = { source: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100" viewBox="0 0 300 100"><rect/></svg>', width: 300, height: 100, alt: 'a' }
   const padded = padCard(card, 15, 15)
@@ -142,7 +133,7 @@ test('the list view keeps the place of a row that left', async () => {
   expect(held.height).toBe(whole.height)
 })
 
-// ---------------------------------------------------------------- loop 2, batch J5
+// ---------------------------------------------------------------- more cases
 
 
 /** The rightmost and leftmost x any shape of an SVG reaches, from its rects, circles and the anchors of its text. */
@@ -261,4 +252,25 @@ test('a silent peer tag is dimmed to half opacity and its tip carries the inacti
   expect(dim.source).toContain('<g opacity=".5"><title>Fix plans to work this (inactive since 07:05)</title>')
   expect(dim.source).toContain('>Peer owned</text>')
   expect(dim.isInteractive).toBe(true)
+})
+
+/** Property: when a row leaves the list view, the space it keeps is as high as the rows and the group heading it took with it, so the rows below do not move. */
+test('a list row that was alone in its group keeps its heading height in its space, and one in a larger group does not', () => {
+  const items = [0, 1, 2, 3].map(i => ({ text: `Row ${i}`, status: 'pending' as const, owners: [], key: `r${i}` }))
+  const file = (list: typeof items, groups: { name: string; from: number; count: number }[]): FileView => ({ name: 'A.md', id: 'A.md', done: 0, active: 0, total: list.length, owners: [], items: list, mtimeMs: 1, groups })
+  const view = buildView([], [], 0)
+  const whole = file(items, [{ name: 'One', from: 0, count: 1 }, { name: 'Two', from: 1, count: 2 }, { name: 'Three', from: 3, count: 1 }])
+  const heights = listRowHeights(whole, 12)
+  const tall = fileCards(whole, view, 12)[0]!.height
+  // Each row leaves in turn; the list is redrawn with groups as they are then, and the space of the row that left.
+  const leaves: [number, { name: string; from: number; count: number }[]][] = [
+    [0, [{ name: 'Two', from: 0, count: 2 }, { name: 'Three', from: 2, count: 1 }]],
+    [3, [{ name: 'One', from: 0, count: 1 }, { name: 'Two', from: 1, count: 2 }]],
+    [1, [{ name: 'One', from: 0, count: 1 }, { name: 'Two', from: 1, count: 1 }, { name: 'Three', from: 2, count: 1 }]],
+  ]
+  for (const [gone, groups] of leaves) {
+    const left = file(items.filter((_, i) => i !== gone), groups)
+    const held = fileCards(left, view, 12, false, new Map([[gone, heights[gone]!]]))[0]!.height
+    expect(held, `row ${gone} left`).toBe(tall)
+  }
 })

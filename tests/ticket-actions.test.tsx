@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DONE_ACTION, QUEUE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, TICKET_GLYPHS, UNSTART_ACTION } from '../hooks/ticket-actions'
+import { DONE_ACTION, QUEUE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, UNSTART_ACTION } from '../hooks/ticket-actions'
 
 test('send and status actions build a prompt that names the path and the item text', async () => {
   const send = SEND_ACTION.prompt('/repo/.claude_todo/A.md', '- [ ] #T0001 Fix x')
@@ -21,17 +21,14 @@ test('the manual moves write a box and ask Claude nothing', async () => {
   }
 })
 
-test('every action has a distinct name, the two back buttons share one glyph, and TICKET_GLYPHS holds exactly the six glyphs', async () => {
+test('every action has a distinct name, the two back buttons share one glyph, and each has a tip and a toast', async () => {
   const all = [SEND_ACTION, STATUS_ACTION, QUEUE_ACTION, START_ACTION, DONE_ACTION, REOPEN_ACTION, UNSTART_ACTION]
   expect(new Set(all.map(a => a.name)).size).toBe(7)
   expect(REOPEN_ACTION.glyph).toBe(UNSTART_ACTION.glyph)
   // the back buttons are the one arrow, a hook to the right.
   expect(REOPEN_ACTION.glyph).toBe('\u21AA')
-  expect(TICKET_GLYPHS.size).toBe(6)
   for (const a of all) {
-    expect(TICKET_GLYPHS.has(a.glyph)).toBe(true)
     expect(a.tip).not.toBe('')
     expect(a.toast).not.toBe('')
   }
-  expect(TICKET_GLYPHS.has('x')).toBe(false)
 })

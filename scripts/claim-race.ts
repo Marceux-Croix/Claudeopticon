@@ -9,7 +9,8 @@
  * `.claude_work` fallback, each makes its share of `rounds` claims with `claimAcross` (the engine's own steps), all
  * starting at one moment and each starting its scan at the lowest block neither folder holds, so they fight for the
  * same blocks. `--old` runs the steps before (each process looks at its own folder only), to show that the
- * check finds the defect.
+ * check finds the defect. `--crash` makes one worker exit 1, to show that a failed worker fails the run (exit 1) and
+ * that the temp folder is still removed.
  *
  * `--layouts`: real git repos of every layout whose claim folders differ (a `.git` folder with a linked worktree,
  * a bare repo with two worktrees, a separate git dir with a linked worktree), and two whose path holds a folder
@@ -125,7 +126,7 @@ function lowestFree(dirs: (string | undefined)[]): number {
 
 // ---------------------------------------------------------------- two folders
 
-async function worker(dir: string, other: string, out: string, go: string, claims: number, me: string, isOld: boolean): Promise<void> {
+async function worker(dir: string, other: string, out: string, go: string, claims: number, me: string, isOld: boolean, isCrash: boolean): Promise<void> {
   while (!existsSync(go)) {
     await new Promise(done => setTimeout(done, 1))
   }
@@ -138,6 +139,10 @@ async function worker(dir: string, other: string, out: string, go: string, claim
       appendFileSync(out, `${me} ${got.block} ${got.path}\n`)
       kept += 1
     }
+  }
+  // `--crash`, the self-test of the exit check: a worker that fails after its claims.
+  if (isCrash) {
+    process.exit(1)
   }
 }
 
@@ -165,15 +170,34 @@ async function race(argvs: string[][], go: string): Promise<void> {
   const runs = argvs.map(argv => {
     const child = spawn(process.execPath, ['--import', loader, here, ...argv], { stdio: 'inherit' })
 
-    return new Promise<void>(done => child.on('exit', () => done()))
+    // A worker that dies or exits non-zero fails the run: its claims would otherwise go unchecked.
+    return new Promise<void>((done, fail) => child.on('exit', (code, signal) => (code === 0 ? done() : fail(new Error(`worker ${argv.join(' ')} ended with ${signal ?? `code ${code}`}`)))))
   })
+  // Settled at once, so a worker that fails early is never an unhandled rejection.
+  const settled = Promise.allSettled(runs)
   await new Promise(done => setTimeout(done, 2000))
   writeFileSync(go, '')
-  await Promise.all(runs)
+  // All workers end before a failure is raised, so none writes into the temp root while it is removed.
+  const failed = (await settled).find((one): one is PromiseRejectedResult => one.status === 'rejected')
+  if (failed !== undefined) {
+    throw failed.reason
+  }
 }
 
-async function driver(rounds: number, isOld: boolean): Promise<void> {
+async function driver(rounds: number, isOld: boolean, isCrash: boolean): Promise<void> {
   const root = mkdtempSync(`${tmpdir()}/claim-race-`)
+  // The temp root goes even when a worker fails or a step throws.
+  let isBad = true
+  try {
+    isBad = await driveRace(root, rounds, isOld, isCrash)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+  process.exit(isBad ? 1 : 0)
+}
+
+/** Runs the two-folder race under `root` and says whether it found a defect. */
+async function driveRace(root: string, rounds: number, isOld: boolean, isCrash: boolean): Promise<boolean> {
   const git = `${root}/git/id-claims`
   const work = `${root}/work/id-claims`
   mkdirSync(git, { recursive: true })
@@ -186,7 +210,7 @@ async function driver(rounds: number, isOld: boolean): Promise<void> {
     Array.from({ length: WORKERS }, (_, i) => {
       const [dir, other] = i % 2 === 0 ? [git, work] : [work, git]
 
-      return ['worker', dir!, other!, out, go, String(per), `p${i}`, isOld ? 'old' : 'new']
+      return ['worker', dir!, other!, out, go, String(per), `p${i}`, isOld ? 'old' : 'new', ...(isCrash && i === 0 ? ['crash'] : [])]
     }),
     go,
   )
@@ -196,9 +220,8 @@ async function driver(rounds: number, isOld: boolean): Promise<void> {
   for (const [block, holders] of twice.slice(0, 5)) {
     console.log(`  block ${block}: ${holders.join(', ')}`)
   }
-  rmSync(root, { recursive: true, force: true })
   // no claim in a folder (git or fallback) or by a worker is a race that checked nothing: a failure.
-  process.exit(twice.length > 0 || gone.length > 0 || idle.length > 0 || inGit === 0 || inGit === won.length ? 1 : 0)
+  return twice.length > 0 || gone.length > 0 || idle.length > 0 || inGit === 0 || inGit === won.length
 }
 
 // ---------------------------------------------------------------- real git layouts
@@ -358,6 +381,18 @@ function makeLayouts(root: string): { name: string; roles: Role[] }[] {
 async function layoutDriver(rounds: number, isNoFallback: boolean): Promise<void> {
   // Sessions start from the path as given (on macOS a symlink, /var to /private/var), as a shell's folder can be; git and the walk print real paths.
   const root = mkdtempSync(`${tmpdir()}/claim-race-layouts-`)
+  let isBad = true
+  // The temp root goes even when a worker fails or a step throws.
+  try {
+    isBad = await layoutRace(root, rounds, isNoFallback)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+  process.exit(isBad ? 1 : 0)
+}
+
+/** Runs the layout races under `root` and says whether any found a defect. */
+async function layoutRace(root: string, rounds: number, isNoFallback: boolean): Promise<boolean> {
   const shown = realpathSync(root)
   let isBad = false
   for (const layout of makeLayouts(root)) {
@@ -373,7 +408,8 @@ async function layoutDriver(rounds: number, isNoFallback: boolean): Promise<void
       layout.roles.map((role, i) => ['layout-worker', JSON.stringify(role), out, go, String(per), `p${i}`, ...(isNoFallback ? ['no-fallback'] : [])]),
       go,
     )
-    const named = readFileSync(`${out}.roles`, 'utf8').split('\n').filter(line => line !== '')
+    // A role that never wrote its line leaves no file: no views, a failure below.
+    const named = (existsSync(`${out}.roles`) ? readFileSync(`${out}.roles`, 'utf8') : '').split('\n').filter(line => line !== '')
     const views = new Set(named.map(line => line.slice(line.lastIndexOf(' {') + 1)))
     const { won, blocks, twice, gone, idle } = tally(out, layout.roles.length)
     const byDir = new Map<string, number>()
@@ -393,20 +429,20 @@ async function layoutDriver(rounds: number, isNoFallback: boolean): Promise<void
     // a layout or a role that kept no claim checked nothing: a failure, never a pass.
     isBad ||= twice.length > 0 || gone.length > 0 || views.size !== 1 || idle.length > 0 || won.length === 0 || isOneFolderOnly
   }
-  rmSync(root, { recursive: true, force: true })
-  process.exit(isBad ? 1 : 0)
+
+  return isBad
 }
 
 const args = process.argv.slice(2)
 const rounds = Number(args.find(one => /^\d+$/.test(one)) ?? 1000)
 if (args[0] === 'worker') {
-  const [, dir, other, out, go, claims, me, mode] = args
-  await worker(dir!, other!, out!, go!, Number(claims), me!, mode === 'old')
+  const [, dir, other, out, go, claims, me, mode, crash] = args
+  await worker(dir!, other!, out!, go!, Number(claims), me!, mode === 'old', crash === 'crash')
 } else if (args[0] === 'layout-worker') {
   const [, role, out, go, claims, me, mode] = args
   await layoutWorker(JSON.parse(role!) as Role, out!, go!, Number(claims), me!, mode === 'no-fallback')
 } else if (args.includes('--layouts')) {
   await layoutDriver(rounds, args.includes('--no-fallback'))
 } else {
-  await driver(rounds, args.includes('--old'))
+  await driver(rounds, args.includes('--old'), args.includes('--crash'))
 }

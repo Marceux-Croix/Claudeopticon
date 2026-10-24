@@ -7,6 +7,7 @@
 import type { AgentRow, TodoFile } from '../types'
 import { cutText } from './card-text'
 import { isEnded } from './agent-ends'
+import { elapsedSince } from './clock-elapsed'
 import { fileId, itemKey, keptKey, storedKey } from './item-keys'
 import { linkAgents } from './links'
 
@@ -56,7 +57,8 @@ export function ticketId(file: { folder: string; name: string }, item: { text: s
 }
 
 /**
- * A session name made safe to store and draw: control characters and markup characters removed,
+ * A session name made safe to store and draw: control characters and format characters (bidi
+ * overrides, zero-width and tag characters) a space, markup characters removed,
  * a trailing " [ref]" (ListAgents writes the name with its ref) cut, at most MAX_NAME characters.
  * Undefined when nothing is left.
  */
@@ -65,7 +67,7 @@ export function sanitizeSessionName(input: unknown): string | undefined {
     return undefined
   }
   const text = input
-    .replace(/[\x00-\x1F\x7F-\x9F]/g, ' ')
+    .replace(/[\x00-\x1F\x7F-\x9F]|\p{Cf}/gu, ' ')
     .replace(/\s*\[[^\]]*\]\s*$/, '')
     .replace(/[<>&`]/g, '')
     .replace(/\s+/g, ' ')
@@ -224,6 +226,8 @@ export function peerHolds(records: readonly { id: string; value: unknown }[], me
   const live = records
     .map(one => ({ id: one.id, presence: readPresence(one.value) }))
     .filter((one): one is { id: string; presence: Presence } => one.presence !== undefined && one.id !== me && one.presence.sessionId === one.id && one.presence.root === root && Math.abs(now - one.presence.seenAt) < PEER_IGNORE_MS)
+    // A time in the future counts as now, for the dim and the sort too (a peer's clock may run ahead).
+    .map(one => ({ id: one.id, presence: { ...one.presence, seenAt: Math.min(one.presence.seenAt, now) } }))
     .sort((a, b) => b.presence.seenAt - a.presence.seenAt)
   const held = new Map<string, PeerClaim>()
   // Held first, from every peer, then planned: a ticket one peer works on is held, though another plans it.
@@ -251,4 +255,18 @@ export function peerTip(peer: { name?: string; isPlanned?: true; silentSince?: n
   const base = `${holderName(peer.name)} ${peer.isPlanned === true ? 'plans to work this' : 'owns this'}`
 
   return peer.silentSince === undefined ? base : `${base} (inactive since ${clockText(peer.silentSince)})`
+}
+
+/**
+ * Whether a wait of `every` ms from `from` is over at `now`, and the reference to keep. Nothing done
+ * yet (`from` undefined) is over. A clock set back resets the reference to `now` (elapsedSince), so the
+ * wait starts over from there: a reference kept as it was would hold the wait for the length of the set-back.
+ */
+export function waitOver(from: number | undefined, now: number, every: number): { isOver: boolean; from: number | undefined } {
+  if (from === undefined) {
+    return { isOver: true, from }
+  }
+  const elapsed = elapsedSince(from, now)
+
+  return { isOver: elapsed.ms >= every, from: elapsed.from }
 }

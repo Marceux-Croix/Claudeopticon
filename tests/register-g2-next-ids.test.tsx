@@ -6,7 +6,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import { readKeptReserved } from '../hooks/kept-records'
 import { parseTodo } from '../hooks/todo-markdown'
 
-// Batch G2 (UCR loop 1): the next free IDs from the disk, shared reservations, numbering of duplicate
+// the next free IDs from the disk, shared reservations, numbering of duplicate
 // leading IDs, and the Consolidate retry record. The fakes are copied from the block above.
 {
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }

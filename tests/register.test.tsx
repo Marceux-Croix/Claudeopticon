@@ -5,7 +5,7 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
-import { ROOM_SLOTS } from '../hooks/agent-room'
+import { blankCard, ROOM_SLOTS } from '../hooks/agent-room'
 import { appendSections } from '../hooks/consolidate-text'
 import { blockIds, CLAIM_MS } from '../hooks/id-blocks'
 import { itemKey } from '../hooks/item-keys'
@@ -14,10 +14,12 @@ import { psPath } from '../hooks/path-forms'
 import { PROGRESS_NOTE } from '../hooks/register'
 import { RULES } from '../hooks/rules'
 import type { Series } from '../hooks/series'
+import { stage } from '../hooks/card-stage'
 import { setBox } from '../hooks/ticket-boxes'
 import { nextTicketIds, ticketValue } from '../hooks/ticket-ids'
 import { statusPrompt, ticketPrompt } from '../hooks/ticket-prompts'
 import { SPACE_MS } from '../hooks/ticket-spaces'
+import { padCard } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
 import type { AgentRow } from '../types'
 
@@ -686,13 +688,15 @@ test('Stop on a live agent card stops the agent at once through TaskStop, and an
   await $.agent.spawn({ prompt: 'Fix the parser', description: 'Parser', subagentType: 'engineer' } as never)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   const labels = async () => (await ui.findAll({ type: 'Button' })).map(button => (button as { props?: { label?: string } }).props?.label)
-  expect(await labels()).toContain('\u2296')
+  expect(await labels()).toContain('\u00a0\u00a0')
   expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('Running')
+  expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('#DC2626')
   await ui.press({ key: 'agent-stop-a1' })
   expect(stops).toEqual(['a1'])
   await ui.press({ key: 'agents-toggle' })
   expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).toContain('>Stopped<')
-  expect(await labels()).not.toContain('\u2296')
+  expect(await labels()).not.toContain('\u00a0\u00a0')
+  expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).not.toContain('#DC2626')
 })
 
 test('an agent missing from the engine list ends after a grace period, and its notification gives how', async ($, on) => {
@@ -822,7 +826,7 @@ test('an agent whose turn ended with nothing after it is idle: not live, still s
   expect(svgs).toContain('Agents: 0 live, 0 of 1 finished.')
   expect(await ui.find({ type: 'Text', text: /0 live, 1 idle, 0 finished/ })).toBeDefined()
   const labels = (await ui.findAll({ type: 'Button' })).map(button => (button as { props?: { label?: string } }).props?.label)
-  expect(labels).toContain('\u2296')
+  expect(labels).toContain('\u00a0\u00a0')
 })
 
 /** The empty `archive/TODO.md` the mod makes for the Show completed link: a test of other files leaves it out. */
@@ -1788,7 +1792,7 @@ test('the text view lists the orchestrator before the agents', async ($, on) => 
 
 // ---------------------------------------------------------------- archiving closed tickets
 
-const PLAN_TEXT = ['# Plan', '', '## Core', '- [x] #T1 Done parser', '  note under it', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', '- [x] #T5 Done docs', 'prose stays'].join('\n')
+const PLAN_TEXT = ['# Plan', '', '## Core', '- [x] #T1 Done parser', '  note under it', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', '- [x] #T5 Done docs', '', 'prose stays'].join('\n')
 
 test('a closed ticket moves to archive/<same file> after 5 seconds, under its heading, and the live file keeps the rest', async ($, on) => {
   const clock = mock.clock(on)
@@ -1803,7 +1807,7 @@ test('a closed ticket moves to archive/<same file> after 5 seconds, under its he
   expect(writes).toEqual([])
   await clock.advance(3000)
   expect(files['/repo/.claude_todo/archive/TODO.md']).toBe('## Core\n\n- [x] #T1 Done parser\n  note under it\n\n## Docs\n\n- [x] #T5 Done docs\n')
-  expect(files['/repo/.claude_todo/TODO.md']).toBe(['# Plan', '', '## Core', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', 'prose stays'].join('\n'))
+  expect(files['/repo/.claude_todo/TODO.md']).toBe(['# Plan', '', '## Core', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', '', 'prose stays'].join('\n'))
   // the board has no Done column, so the moved tickets leave the board; the counts still hold them.
   const drawn = JSON.stringify(await ui.findAll({ type: 'Svg' }))
   expect(drawn).not.toContain('Done parser')
@@ -2617,11 +2621,12 @@ test('side-by-side columns are 10 px apart: a 10 px margin inside each ticket af
   await edit('- [~] #T1 First thing\n- [>] #T2 Second thing\n- [ ] #T3 Third thing')
   await wide.press({ key: 'todo-tickets' })
   await wide.press({ key: 'todo-tickets' })
-  // 240 cells of 8.5 px: three columns that fill the pane less two 10 px gaps; the second and third carry the gap as a left margin.
-  const ticketW = Math.floor((240 * 8.5 - 2 * 10) / 3)
+  // 240 cells of 10 px: three columns that fill the pane less two 10 px gaps; the second and third carry the gap as a left margin.
+  const ticketW = Math.floor((240 * 10 - 2 * 10) / 3)
   const sideBySide = JSON.stringify(await wide.findAll({ type: 'Svg' }))
-  expect(sideBySide.split(`"width":${ticketW},`).length - 1).toBe(1)
-  expect(sideBySide.split(`"width":${ticketW + 10},`).length - 1).toBe(2)
+  const widthCount = (px: number) => sideBySide.match(new RegExp(`"width":${px}[,}]`, 'g'))?.length ?? 0
+  expect(widthCount(ticketW)).toBe(1)
+  expect(widthCount(ticketW + 10)).toBe(2)
   expect(sideBySide).toContain('<svg x=\\"10\\" y=\\"0\\"')
 })
 
@@ -2632,8 +2637,8 @@ test('an empty column side by side keeps its share of the width', async ($, on) 
   await edit('- [>] #T2 Second thing\n- [ ] #T3 Third thing')
   await wide.press({ key: 'todo-tickets' })
   await wide.press({ key: 'todo-tickets' })
-  // 240 cells of 8.5 px: In progress is empty, and keeps the width of a first-column ticket.
-  const paneW = 240 * 8.5
+  // 240 cells of 10 px: In progress is empty, and keeps the width of a first-column ticket.
+  const paneW = 240 * 10
   const share = Math.floor((Math.floor((paneW - 2 * 10) / 3) / paneW) * 100)
   expect(JSON.stringify(await wide.findAll({ type: 'Box' }))).toContain(`"width":"${share}%"`)
 })
@@ -2647,34 +2652,120 @@ test('stacked tickets take the full width, with a 10 px margin above each after 
   await narrow.press({ key: 'todo-tickets' })
   // 60 cells: the columns stack, each ticket is the full width, and the second In progress ticket carries the gap above it.
   const stacked = JSON.stringify(await narrow.findAll({ type: 'Svg' }))
-  expect(stacked.split(`"width":${60 * 8.5}`).length - 1).toBeGreaterThanOrEqual(3)
+  expect(stacked.split(`"width":${60 * 10}`).length - 1).toBeGreaterThanOrEqual(3)
   expect(stacked).toContain('<svg x=\\"0\\" y=\\"10\\"')
   expect(stacked).not.toContain('<svg x=\\"10\\"')
 })
 
-test('a ticket leaving In progress keeps its space until the next press, and a space expires after 60 seconds', async ($, on) => {
+// A ticket image set lower than the one gap above it: room held for a ticket that left.
+const heldSpaces = (svgs: unknown) => [...JSON.stringify(svgs).matchAll(/<svg x=\\"\d+\\" y=\\"(\d+)\\"/g)].filter(one => Number(one[1]) > 10).length
+
+test('a ticket leaving a board column leaves no space: the tickets below close up at once', async ($, on) => {
+  const three = (second: string) => `- [~] #T1 First thing\n- [${second}] #T2 Second thing\n- [~] #T3 Third thing`
+  const { edit } = orchSetup($, on)
+  await begin($)
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
+  await edit(three('~'))
+  await ui.press({ key: 'todo-tickets' })
+  await ui.press({ key: 'todo-tickets' })
+  expect(heldSpaces(await ui.findAll({ type: 'Svg' }))).toBe(0)
+  await edit(three('x'))
+  const drawn = await ui.findAll({ type: 'Svg' })
+  expect(heldSpaces(drawn)).toBe(0)
+  expect(JSON.stringify(drawn)).not.toContain('Second thing')
+  expect(JSON.stringify(drawn)).toContain('Third thing')
+})
+
+/** The height of the list view's card for a todo file, found by its alt text (it starts with the file name). */
+/** The drawn height of a file's list card, read from its image: cards are sent with no height prop. */
+const listCardHeight = async (ui: { findAll: (q: { type: string }) => Promise<unknown[]> }, file: string) => {
+  const cards = (await ui.findAll({ type: 'Svg' })) as { props?: { alt?: string; source?: string }; alt?: string; source?: string }[]
+  const card = cards.map(one => one.props ?? one).find(one => (one.alt ?? '').startsWith(`${file}:`))
+  const height = /^<svg[^>]*\sheight="([\d.]+)"/.exec(card?.source ?? '')?.[1]
+
+  return height === undefined ? undefined : Number(height)
+}
+
+test('a row leaving the list view keeps its space until a press that changes the view or 60 seconds pass', async ($, on) => {
   const three = (second: string) => `- [~] #T1 First thing\n- [${second}] #T2 Second thing\n- [~] #T3 Third thing`
   const { edit, clock } = orchSetup($, on)
   await begin($)
   const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
-  const spaces = async () => JSON.stringify(await ui.findAll({ type: 'Svg' })).split('role=\\"presentation\\"').length - 1
   await edit(three('~'))
   await ui.press({ key: 'todo-tickets' })
-  await ui.press({ key: 'todo-tickets' })
-  expect(await spaces()).toBe(0)
+  const full = await listCardHeight(ui, 'OPEN.md')
+  expect(full).toBeGreaterThan(0)
+  // The middle row leaves: its words go, the card keeps its height, so the rows below stay where they were.
   await edit(three('x'))
-  expect(await spaces()).toBe(1)
-  // The space is not a ticket: no text, no buttons of its own. the done ticket has no Done column either.
   expect(JSON.stringify(await ui.findAll({ type: 'Svg' }))).not.toContain('Second thing')
+  expect(await listCardHeight(ui, 'OPEN.md')).toBe(full)
+  // A press that changes the view closes the space up: the card is shorter than the one that held it.
   await ui.press({ key: 'todo-tickets' })
   await ui.press({ key: 'todo-tickets' })
-  expect(await spaces()).toBe(0)
-  // Another ticket leaves; 60 s without a press clears it.
-  await edit(three('~'))
-  await edit(three('x'))
-  await edit(`- [~] #T1 First thing\n- [x] #T2 Second thing\n- [x] #T3 Third thing`)
-  expect(await spaces()).toBeGreaterThan(0)
+  const closed = await listCardHeight(ui, 'OPEN.md')
+  expect(closed).toBeLessThan(full!)
+  // A second row leaves with no press after it: its space ends by itself after SPACE_MS.
+  await edit(`${three('x')}\n- [~] #T4 Fourth thing`)
+  await ui.press({ key: 'todo-tickets' })
+  await ui.press({ key: 'todo-tickets' })
+  const withFourth = await listCardHeight(ui, 'OPEN.md')
+  await edit(`${three('x')}\n- [x] #T4 Fourth thing`)
+  expect(await listCardHeight(ui, 'OPEN.md')).toBe(withFourth)
   await clock.advance(SPACE_MS + 2000)
-  expect(await spaces()).toBe(0)
+  expect(await listCardHeight(ui, 'OPEN.md')).toBeLessThan(withFourth!)
+})
+
+// ---------------------------------------------------------------- every card the pane draws has a size
+// The desktop draws an image with nothing in it, or with no alt text, at no size (2026-10-24): a spacer or a space made
+// of one moved the tickets below it. So every Svg the pane gets must draw an element and carry alt text, in every view.
+const DRAWN = /<(rect|text|path|circle|ellipse|line|polyline|polygon|image|use)\b/
+
+// The background every stage() card starts with: it is drawn on a card with nothing else in it, so it does not count.
+const STAGE_BACKGROUND = /<rect width="[\d.]+" height="[\d.]+" rx="12" fill="[^"]*"\/>/g
+
+/** True when the card draws something besides its background. */
+const isCardDrawn = (source: string): boolean => DRAWN.test(source.replace(STAGE_BACKGROUND, ''))
+
+test('the guard rejects a card that draws only its background: bare, inside a margin, and with a blank body', () => {
+  const alt = 'a card'
+  expect(isCardDrawn(stage(80, '', alt).source)).toBe(false)
+  expect(isCardDrawn(padCard(stage(80, '', alt), 10, 10).source)).toBe(false)
+  expect(isCardDrawn(stage(80, '\n  \n', alt).source)).toBe(false)
+  // And it accepts a card with one drawn element, bare or inside a margin.
+  expect(isCardDrawn(stage(80, '<text x="1" y="9">hi</text>', alt).source)).toBe(true)
+  expect(isCardDrawn(padCard(stage(80, '<rect width="4" height="4"/>', alt), 10, 10).source)).toBe(true)
+})
+
+function expectEveryCardDrawn(svgs: readonly unknown[], where: string): void {
+  expect(svgs.length).toBeGreaterThan(0)
+  for (const one of svgs) {
+    const props = ((one as { props?: Record<string, unknown> }).props ?? one) as { source?: string; alt?: string }
+    // The held agent room's empty slot is the cards' gray box by design (blankCard): its background fill is what it draws. Every other card must draw more.
+    const isBlankSlot = props.alt === blankCard(1).alt
+    expect({ where, alt: props.alt, isDrawn: isBlankSlot || isCardDrawn(props.source ?? '') }).toEqual({ where, alt: props.alt, isDrawn: true })
+    expect({ where, hasAlt: (props.alt ?? '').trim().length > 0 }).toEqual({ where, hasAlt: true })
+  }
+}
+
+test('no view draws a card with nothing in it or with no alt text', async ($, on) => {
+  const five = (first: string, second: string) => `- [${first}] #T1 First thing\n- [${second}] #T2 Second thing\n- [~] #T3 Third thing\n- [>] #T4 Fourth thing\n- [ ] #T5 Fifth thing`
+  const { edit } = orchSetup($, on)
+  await begin($)
+  for (const [name, mount] of [['stacked', PANE], ['side by side', { ...PANE, props: { ...PANE.props, bodyColumns: 240 } }]] as const) {
+    const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...mount } as never)
+    await edit(five('~', '~'))
+    for (const view of ['first view', 'second view']) {
+      await ui.press({ key: 'todo-tickets' })
+      expectEveryCardDrawn(await ui.findAll({ type: 'Svg' }), `${name}, ${view}`)
+    }
+    // Tickets leave the top and the middle of a column: no card stands in for them.
+    await edit(five('x', 'x'))
+    expectEveryCardDrawn(await ui.findAll({ type: 'Svg' }), `${name}, after tickets left`)
+    // Limit UI shift holds the agents' room with blank slots.
+    await ui.press({ key: 'room-toggle' })
+    expectEveryCardDrawn(await ui.findAll({ type: 'Svg' }), `${name}, room held`)
+    await ui.press({ key: 'room-toggle' })
+    await ui.unmount()
+  }
 })
 }

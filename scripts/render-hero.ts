@@ -1,6 +1,6 @@
 /**
  * Renders the top card in each sample state, and in fuzz states (scripts/hero-fuzz: r24 and tight7,
- * the verifier's cases, and 20 more: r0 to r10 and tight0 to tight9 but tight7), at the widths the pane allows, dark and light, as SVG
+ * the cases, and 20 more: r0 to r10 and tight0 to tight9 but tight7), at the widths the pane allows, dark and light, as SVG
  * files in the folder given (default .claude_work/hero), each in a square frame, for a check by eye: convert them with
  * `qlmanage -t -s 1440 -o <dir> <dir>/*.svg` on macOS and look at the PNGs.
  */

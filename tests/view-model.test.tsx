@@ -6,7 +6,7 @@ import type { View } from '../hooks/card-types'
 import { readTitle } from '../hooks/progress-report'
 import { fileCards } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
-import { buildView, columnPx, columnsThatFit, ledger, orchestratorTitle, rowsOf, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
+import { buildView, columnPx, columnsThatFit, IDLE_CLEAR_MS, itemChipId, ledger, orchestratorTitle, rowsOf, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
 import { readBook } from '../hooks/categories'
 import { PEER_DIM_MS } from '../hooks/peer-sessions'
 import type { PeerClaim } from '../hooks/peer-sessions'
@@ -266,7 +266,7 @@ test('the ledger lists every active agent, then the finished ones, most recently
   expect(all.shown.map(agent => agent.index)).toEqual([1, 3, 2, 0])
   const finishedCard = agentSvg(all.finished[0] ?? all.shown[0]!, view).source
   expect(finishedCard).toContain('opacity=".55"')
-  expect(finishedCard).toContain('ended 0s ago')
+  expect(finishedCard).toMatch(/ended \d\d:\d\d:\d\d\s/)
   expect(agentSvg(all.active[0]!, view).source).not.toContain('opacity=".55"')
   const timeline = timelineSvg(view, all.shown).source
   expect(timeline.split('<g opacity=".55">').length - 1).toBe(2)
@@ -364,4 +364,39 @@ test('columnPx: the columns of a row and their gaps fill the pane', () => {
   expect(columnPx(1000, 2, 10)).toBe(495)
   expect(columnPx(1000, 1, 10)).toBe(1000)
   expect(columnPx(1000, 0, 10)).toBe(1000)
+})
+
+test('the ID chip is the line own ID as written; a line that only mentions another ticket has none', () => {
+  const list: TodoFile[] = [
+    {
+      name: 'T.md',
+      folder: '.claude_todo',
+      mtimeMs: 1,
+      items: parseTodo(['- [ ] #T0001 The ticket', '- [ ] Follow up on #T0001 later', '- [ ] #t0002 lower case', '- [ ] Do the thing #T0003'].join('\n')),
+    },
+  ]
+  const items = buildView(list, [], 1000).files[0]?.items ?? []
+  const byText = (text: string) => items.find(item => item.text.includes(text))
+  expect(itemChipId(byText('The ticket')!)).toBe('#T0001')
+  expect(itemChipId(byText('Follow up')!)).toBeUndefined()
+  expect(itemChipId(byText('lower case')!)).toBe('#t0002')
+  expect(itemChipId(byText('Do the thing')!)).toBe('#T0003')
+})
+
+/**
+ * Property: an idle agent (finished, never stopped) stays with the idle ones for IDLE_CLEAR_MS, then is filed with the
+ * finished ones, so the board clears it while Claude Code keeps it open. A live agent is never filed.
+ */
+test('an agent idle for IDLE_CLEAR_MS is filed with the finished ones; one idle less long stays idle', () => {
+  const at = 10_000_000
+  const agent = (id: string, extra: Record<string, unknown>) => ({ index: 1, id, description: id, type: 'engineer', status: 'running', startedAt: 0, toolCalls: 0, links: [], isEnded: false, ...extra }) as never
+  const view = {
+    now: at,
+    agents: [agent('fresh', { isIdle: true, idleSince: at - IDLE_CLEAR_MS + 1 }), agent('edge', { isIdle: true, idleSince: at - IDLE_CLEAR_MS }), agent('live', { isIdle: false }), agent('done', { isEnded: true, status: 'completed', endedAt: at - 5 })],
+  } as never
+  const groups = ledger(view, false)
+  expect(groups.idle.map(a => a.id)).toEqual(['fresh'])
+  expect(groups.active.map(a => a.id)).toEqual(['live'])
+  expect(groups.finished.map(a => a.id)).toEqual(['done', 'edge'])
+  expect(groups.shown.map(a => a.id)).toEqual(['live', 'fresh'])
 })

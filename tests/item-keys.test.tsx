@@ -32,7 +32,7 @@ test('an item key without an ID never ends in half an emoji', () => {
   expect(itemKey({ text: `${'k'.repeat(198)}${'\u{1F600}'} more` })).toBe(`${'k'.repeat(198)}${'\u{1F600}'}`)
 })
 
-// ---------------------------------------------------------------- batch I2: remainder
+// ---------------------------------------------------------------- remainder
 
 /**
  * Property: a stored key never holds a place number, so identical lines share one stored key (that of
@@ -41,7 +41,7 @@ test('an item key without an ID never ends in half an emoji', () => {
  */
 test('stored keys are first-place keys: identical lines share one, and it does not move when a line above goes', () => {
   const keys = (text: string) => parseTodo(text).map(item => keptKey({ folder: '/r/.claude_todo' }, item))
-  // The verifier's state: three identical lines, then the first removed.
+  // The state: three identical lines, then the first removed.
   expect(keys('- [ ] Fix it\n- [~] Fix it\n- [ ] Fix it')).toEqual(['fix it', 'fix it', 'fix it'])
   expect(keys('- [~] Fix it\n- [ ] Fix it')).toEqual(['fix it', 'fix it'])
   // At the limit: an ID key with a place, in another folder.

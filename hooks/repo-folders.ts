@@ -45,6 +45,24 @@ export const globalDirs = new Set<string>()
  */
 export const globalParents = new Set<string>()
 
+/**
+ * Replaces the known global folders and their parents in one synchronous step. A load builds the new
+ * sets while it awaits the environment and the disk, then swaps them in here: a write check that runs
+ * in between still sees the folders the last load found, never an empty set.
+ */
+export function replaceGlobals(dirs: Iterable<string>, parents: Iterable<string>): void {
+  const nextDirs = [...dirs]
+  const nextParents = [...parents]
+  globalDirs.clear()
+  globalParents.clear()
+  for (const dir of nextDirs) {
+    globalDirs.add(dir)
+  }
+  for (const parent of nextParents) {
+    globalParents.add(parent)
+  }
+}
+
 /** One spelling of a folder for the global compare: slashes folded, no trailing slash, NFC, and a Windows path in any letter case. */
 function globalKey(path: string): string {
   const flat = normPath(path)
@@ -109,9 +127,6 @@ async function mainOf(fs: TodoFs, gitdir: string | undefined, base: string): Pro
   if (common.endsWith('/.git')) {
     // A main checkout at the file system root gives '', which the caller joins as `/.claude_todo`.
     return common.slice(0, -'/.git'.length)
-  }
-  if (common === '.git') {
-    return '.'
   }
   const set = /^\s*worktree\s*=\s*(.+)$/m.exec(await fs.read(`${common}/config`).catch(() => ''))?.[1]?.trim()
 
@@ -181,6 +196,9 @@ export const MAX_FOLDERS = 20
  * The `.claude_todo/` folders in the output of `git ls-files -z`: every entry with a `.claude_todo`
  * segment is cut to the folder path ending there. An ignored folder lists as a collapsed directory
  * entry (`x/.claude_todo/`), which cuts the same way. Duplicates drop; the order is by path.
+ * A folder under an ignored directory is not found: git lists the ignored directory as one entry
+ * (`ign/`), with no `.claude_todo` segment, and the mod does not walk an ignored tree (a `node_modules`
+ * can hold millions of files). A `.claude_todo` that is itself ignored is found.
  *
  * The segment matches in any letter case: after a case-only rename of the folder itself on a
  * disk that ignores case, git keeps the index spelling (`.Claude_todo`) while the disk has
@@ -367,6 +385,17 @@ export function pickFolders(found: readonly { path: string; rel: string; real?: 
   const rest = kept.filter(one => one.path !== primary).sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0))
 
   return [...first.map(one => ({ ...one, isOther: false })), ...rest.map(one => ({ ...one, isOther: true }))].slice(0, limit)
+}
+
+/**
+ * True when `real`, the real path of a folder, lies inside one of `roots`, the real paths of the checkouts
+ * the mod reads (the repo root, and the main checkout of a linked worktree). A listed folder that resolves
+ * elsewhere is a symlink out of the repo (a tracked `.claude_todo -> /other`): its files are not the repo's.
+ */
+export function isInsideRoots(real: string, roots: readonly string[]): boolean {
+  const own = globalKey(real)
+
+  return roots.some(root => own.startsWith(`${globalKey(root).replace(/\/+$/, '')}/`))
 }
 
 /** Where a folder sits in its checkout, for the heading in the central file: its path without `.claude_todo`. */

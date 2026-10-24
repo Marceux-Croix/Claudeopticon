@@ -256,7 +256,7 @@ test('the token points keep the minute before the window, so tokens per minute a
   expect(addPoint(atNow, now + QUANT_MS, 8)).toEqual([[now - 30 * MIN, 3], [now, 9], [now + QUANT_MS, 8]])
 })
 
-// ---------------------------------------------------------------- loop 2, batch J5
+// ---------------------------------------------------------------- more cases
 
 test('niceMax gives the base step for a peak that is not a finite number, never the last of 200', () => {
   for (const peak of [NaN, Infinity, -Infinity]) {
@@ -421,12 +421,12 @@ test('a clock that once read far ahead does not freeze the trace: the tail is re
   expect(addPoint([[T + 3_600_000, 1]], T, 2)).toEqual([[T, 1], [T, 2]])
 })
 
-// ---------------------------------------------------------------- loop 3, batch L5
+// ---------------------------------------------------------------- more cases
 
 const T5 = 1_792_000_000_000
 
 test('one forward clock blip keeps the history: a trim never goes past the last point plus one QUANT_MS', () => {
-  // State 1, the reviewer's probe (blip.ts): 40 requests 30 s apart, one clock read 1 h ahead, then the next real request.
+  // State 1, the probe (blip.ts): 40 requests 30 s apart, one clock read 1 h ahead, then the next real request.
   let pts: Point[] = []
   let v = 0
   for (let i = 0; i < 40; i += 1) {
@@ -466,7 +466,7 @@ test('one forward clock blip keeps the history: a trim never goes past the last 
 
 test('retimeSeries re-times the compactions and seeds with the token points, so a seed stays no usage and a mark follows its fall', () => {
   const M = MIN
-  // State 1, the reviewer's probe S1: a seeded series, then a request from a clock set back 45 s (more than one step).
+  // State 1, the probe S1: a seeded series, then a request from a clock set back 45 s (more than one step).
   let s: Series = { agents: [], tokens: [[T5 - 10 * M, 100], [T5 - 5 * M, 200]], compacts: [] }
   s = seedSeries(s, { tokens: 900_200, atCompact: 0, since: 0 }, T5)
   s = addTokens(s, T5 - 45_000, 900_700, 500)

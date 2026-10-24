@@ -161,7 +161,7 @@ const BOTH = ['.claude_todo/TODO.md', 'mods/x/.claude_todo/TODO.md']
  */
 // Each state: the file edited the first time its stat runs after the target holds the copy.
 const STATES_167: [string, Record<string, string>, string[], string][] = [
-    // The reviewer's R3-B state, behind a valid first case (the target write landed).
+    // The R3-B state, behind a valid first case (the target write landed).
     ['source', { [CENTRAL]: '- [ ] #T1 Fix', [SOURCE]: '- [ ] #T2 Docs' }, BOTH, SOURCE],
     // At the limit: the last source of the press, an archive file of the source folder.
     ['archive', { [CENTRAL]: '- [ ] #T1 Fix', [SOURCE]: '- [ ] #T2 Docs', '/repo/mods/x/.claude_todo/archive/OLD.md': '- [x] #T9 Old' }, [...BOTH, 'mods/x/.claude_todo/archive/OLD.md'], '/repo/mods/x/.claude_todo/archive/OLD.md'],
@@ -193,7 +193,7 @@ for (const [name, start, listed, edited] of STATES_167) {
  * marks is never written over: the destination keeps the edit, the sources stay, and the marks go.
  */
 const STATES_168: [string, Record<string, string>, string[], string, string][] = [
-    // The reviewer's R3-A state: Claude closes #T1 in the target during the store write.
+    // The R3-A state: Claude closes #T1 in the target during the store write.
     ['target', { [CENTRAL]: '- [ ] #T1 Fix', [SOURCE]: '- [ ] #T2 Docs' }, BOTH, CENTRAL, '- [x] #T1 Fix'],
     // At the limit: the last destination, the central archive file a source archive goes to.
     ['archive', { [CENTRAL]: '- [ ] #T1 Fix', '/repo/.claude_todo/archive/OLD.md': '- [x] #T0 Old', '/repo/mods/x/.claude_todo/archive/OLD.md': '- [x] #T9 Done in x' }, ['.claude_todo/TODO.md', '.claude_todo/archive/OLD.md', 'mods/x/.claude_todo/archive/OLD.md', 'mods/x/.claude_todo/TODO.md'], '/repo/.claude_todo/archive/OLD.md', '- [x] #T0 Old\n- [x] #T7 Pasted'],
@@ -239,7 +239,7 @@ for (const [name, start, listed, dest, edit] of STATES_168) {
  */
 const ARCHIVE = '/repo/.claude_todo/archive/TODO.md'
 const STATES_169: [string, string | undefined, string][] = [
-    // The reviewer's R3-C state: a line pasted into the archive during the store write.
+    // The R3-C state: a line pasted into the archive during the store write.
     ['pasted', '- [x] #T0 Old\n', '- [x] #T0 Old\n- [x] #T7 Pasted by the user\n'],
     // At the limit: the archive file is missing, and the user creates it during the store write.
     ['created', undefined, '- [x] #T7 Made by the user\n'],
@@ -280,7 +280,7 @@ for (const [name, archive, edit] of STATES_169) {
  * not copied, and every source copied is an item of the result before any source is emptied.
  */
 for (const [kind, tail] of [['fence', '\n```sh\nnpm test'], ['comment', '\n<!-- notes for later']] as const) {
-  // The reviewer's R3-J state: the target ends open; behind a valid first line.
+  // The R3-J state: the target ends open; behind a valid first line.
   test(`Consolidate refuses a target that ends inside an open ${kind}`, async ($, on) => {
     mock.clock(on)
     const target: Record<string, string> = { [CENTRAL]: `- [ ] #T1 Fix${tail}`, [SOURCE]: '- [ ] #T2 Docs' }
@@ -292,7 +292,7 @@ for (const [kind, tail] of [['fence', '\n```sh\nnpm test'], ['comment', '\n<!-- 
     expect([kind, target[SOURCE]]).toEqual([kind, '- [ ] #T2 Docs'])
     expect([kind, toasts.join('\n').includes('unclosed code block or HTML block')]).toEqual([kind, true])
   })
-  // The reviewer's R3-K state, at the limit: the first source ends open and would swallow the last one.
+  // The R3-K state, at the limit: the first source ends open and would swallow the last one.
   test(`Consolidate does not copy a source that ends inside an open ${kind}`, async ($, on) => {
     mock.clock(on)
     const sources: Record<string, string> = { [CENTRAL]: '- [ ] #T1 Fix', '/repo/mods/a/.claude_todo/TODO.md': `- [ ] #T2 Docs${tail}`, '/repo/mods/b/.claude_todo/TODO.md': '- [ ] #T3 Ship' }
@@ -319,7 +319,7 @@ test('Consolidate writes a target whose fence and comment are closed', async ($,
  * Property: the archive step never appends to an archive file that ends inside an unclosed
  * code block or HTML comment: the ticket stays in the live file, and the user is told once.
  */
-// The reviewer's R3-M states (fence and comment), and at the limit an open comment on the last line with no line end.
+// The R3-M states (fence and comment), and at the limit an open comment on the last line with no line end.
 for (const tail of ['\n```sh\nnpm test\n', '\n<!-- notes for later\n', '\n<!--']) {
   test(`the archive step waits on an archive that ends inside an open fence or comment (${JSON.stringify(tail)})`, async ($, on) => {
     const clock = mock.clock(on)
@@ -367,7 +367,7 @@ test('the archive step leaves a done line inside an HTML comment where it is', a
 test('Delete duplicate tickets tells Claude of a written target when an archive file fails', async ($, on) => {
   mock.clock(on)
   const files: Record<string, string> = { [CENTRAL]: '- [ ] #T1 Fix the parser\n- [ ] #T2 Fix the parser\n- [ ] see #T2', '/repo/.claude_todo/archive/A.md': '- [x] #T8 done, after #T2' }
-  // The reviewer's R3-E state, at the limit of the archive loop: the last archive file fails its read once the press runs.
+  // The R3-E state, at the limit of the archive loop: the last archive file fails its read once the press runs.
   let archiveReads = 0
   Object.defineProperty(files, '/repo/.claude_todo/archive/OLD.md', {
     enumerable: true,
@@ -406,7 +406,7 @@ test('Delete duplicate tickets tells Claude of a written target when an archive 
 test('the Consolidate button stays while a source archive file is left, and the next press finishes', async ($, on) => {
   mock.clock(on)
   const files: Record<string, string> = { [CENTRAL]: '- [ ] #T1 Fix', [SOURCE]: '- [ ] #T1 Docs\n- [ ] #T2 Ship, after #T1', '/repo/mods/x/.claude_todo/archive/OLD.md': '- [x] #T9 Done in x' }
-  // The reviewer's R3-H k=38 state: the emptying write of the source archive fails once.
+  // The R3-H k=38 state: the emptying write of the source archive fails once.
   repoWith(on, files, { hasNearest: true, failOnce: ['/repo/mods/x/.claude_todo/archive/OLD.md'], listed: [...BOTH, 'mods/x/.claude_todo/archive/OLD.md'] })
   const toasts = toastsOf(on)
   const ui = await open($)
@@ -522,7 +522,7 @@ test('a stale press on identical lines in two sections writes nothing', async ($
   repoWith(on, files, { hasNearest: true, listed: ['.claude_todo/TODO.md'] })
   const toasts = toastsOf(on)
   const ui = await open($)
-  // The verifier's HI-025 state: the top line goes behind the board's back; the board still shows the Frontend line second.
+  // The HI-025 state: the top line goes behind the board's back; the board still shows the Frontend line second.
   files[CENTRAL] = before.split('\n').slice(1).join('\n')
   await ui.press({ key: 'ticket-start-TODO.md-write tests%092' })
   expect(files[CENTRAL]).toBe(before.split('\n').slice(1).join('\n'))

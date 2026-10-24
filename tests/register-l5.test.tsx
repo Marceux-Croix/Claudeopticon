@@ -1,4 +1,4 @@
-// Engine tests of UCR loop 3, batch L5: the categories book read with own keys,
+// Engine cases: the categories book read with own keys,
 // the search Input value, turn.step counted on every way out and the Stop toast
 //. Every engine call is faked here; the rig is a trimmed copy of the repoWith rig of
 // tests/register.test.tsx.

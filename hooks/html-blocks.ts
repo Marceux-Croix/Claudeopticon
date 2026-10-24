@@ -50,8 +50,8 @@ export function htmlStart(rest: string, isOnParagraph: boolean): HtmlEnd | undef
   return kind === undefined || (isOnParagraph && !kind.interrupts) ? undefined : kind.end
 }
 
-/** True when the line ends an open HTML block with end condition `end`: a matching line, or a blank one. */
 /** Whether a line is blank in CommonMark terms: only spaces and tabs (trim() also strips NBSP, U+3000 and U+FEFF, which are content). */
 export const isBlankLine = (line: string): boolean => /^[ \t\r]*$/.test(line)
 
+/** True when the line ends an open HTML block with end condition `end`: a matching line, or a blank one. */
 export const htmlEnds = (line: string, end: HtmlEnd): boolean => (end === 'blank' ? isBlankLine(line) : end.test(line))

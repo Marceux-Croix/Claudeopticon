@@ -1,7 +1,7 @@
 /**
  * The hooks module that hooks.json loads. It registers the hooks and the tools, and it holds each
  * function that calls the engine through `$`, with the session state that those functions write.
- * It is one responsibility, the engine-bound layer, at about 3,500 lines. `claude plugin validate`
+ * It is one responsibility, the engine-bound layer. `claude plugin validate`
  * follows `$` only into functions in this file, never across an import, and it reads a hook filter
  * only from a constant in this file. An imported `let` cannot get a new value, so the state that
  * these functions assign stays here too. The pure logic is in the modules that this file imports.
@@ -9,36 +9,37 @@
 
 import type { EngineInterface, Register, Timer } from 'claude-code'
 import type { AgentRow, AgentRowStatus, TodoFile, TodoItem } from '../types'
-import { agentSvg, orchestratorSvg, stopInsetPx, timelineSvg } from './agent-cards'
+import { agentSvg, orchestratorSvg, timelineSvg } from './agent-cards'
 import { isEnded, notifiedEnd, unlistedEnds } from './agent-ends'
 import { respawnedRow } from './agent-respawn'
-import { agentColor, agentLabel, ORCH, setLabelBase } from './agent-identity'
+import { colorSlots } from './agent-colors'
+import { agentColor, AGENT_COLORS, agentLabel, ORCH, setColorSlots, setLabelBase } from './agent-identity'
 import { MATCH_ITEMS, matchPrompt, readMatchReply } from './agent-match'
-import { addToArchive, ARCHIVE_AFTER_MS, archiveName, blocksLeft, blocksStandAsItems, closedBlocks, hasBlock, recordAfterRollback, removeBlocks } from './archive-blocks'
+import { addToArchive, ARCHIVE_AFTER_MS, archiveName, blockFinder, blocksLeft, blocksStandAsItems, closedBlocks, recordAfterRollback, removeBlocks } from './archive-blocks'
 import type { ClosedBlock } from './archive-blocks'
 import { addFailure, isRetryDue } from './backoff'
 import type { Failing } from './backoff'
 import { clock, elapsed, tokens } from './card-format'
 import { ACCENT, DANGER, GREEN, setWidth } from './card-stage'
-import { altText, controlFree, cutUnits, keyText } from './card-text'
+import { altText, controlFree, cutUnits, keyText, toastText } from './card-text'
 import type { AgentView, FileView, ItemStatus, ItemView, Usage, View } from './card-types'
 import { applySortReply, bookBackups, bookKeptBy, categoryGroups, categoryOf, emptyBook, filterNames, groupOf, isSubstantialChange, mergeRecategorized, pruneBookItems, readBook, SORT_BATCH, SORT_BATCHES, SORT_EVERY_MS, SORT_MODEL, SORT_TRIES, sortPrompt, usedCategories, withoutHidden } from './categories'
 import type { CategoryBook } from './categories'
 import { keepsMissing, MISSING_CLAIM_MS } from './claim-keeping'
-import { elapsedSince } from './clock-elapsed'
+import { elapsedSince, isDeadlinePast } from './clock-elapsed'
 import type { ClaimFolder } from './claim-keeping'
 import { bestMatches } from './claim-score'
 import type { PendingNotes } from './claude-notes'
 import { claimNotes, DATA_MARK, SESSION_NAME_NOTE, deferredNote, endedNote, hasLabel, labelNote, moveLine, movesNote, NEXT_IDS_SHOWN, nextIdsLine, noteName, NUDGE_REPEAT_MS, NUDGE_TICKETS, numberedLine, numberedNote, peerClaimedLine, plannedLine, quoteName, quoteTicket, removedNote, renameNote, stillOpenNote, stoppedNote, withoutTold } from './claude-notes'
 import { mergeMarks, readKeptMarks, retryStep } from './consolidate-marks'
 import type { CopyMark } from './consolidate-marks'
-import { appendSections, copyLines, destOf, eolOf, isUnsafeHeadingName, itemLines, keepsEveryItem, renameLines, renumberLines, sectionCount, sectionText } from './consolidate-text'
+import { appendSections, copyLines, destOf, eolOf, isUnsafeHeadingName, itemLines, keepsEveryItem, pressToast, renameLines, renumberLines, sectionCount, sectionText } from './consolidate-text'
 import { removeDuplicateTickets, renameRefs } from './duplicate-tickets'
 import { endsInExample } from './example-end'
-import { finishedCount, heroSvg, heroText } from './hero-card'
+import { heroCard, heroText } from './hero-card'
 import { fileId, filePath, itemKey, keptKey, storedKey } from './item-keys'
 import { pruneTo } from './key-prune'
-import { cutReturnSlots, forgottenCut, isOldSessionList, KEPT_AGENTS, KEPT_CUT, liveSessionIds, MAX_BASE, nextDropping, nextSessions, readDropping, readKeptAgents, readKeptBase, readKeptBlocks, readKeptCut, readKeptReserved, readKeptTickets, readKeptWrote, SESSION_PREFIXES, SESSION_RETRY_MS, SESSION_TOUCH_MS, STORED_BRIEF, storedBrief } from './kept-records'
+import { cutReturnSlots, forgottenCut, isOldSessionList, KEPT_AGENTS, KEPT_CUT, KEPT_DROPPING, liveSessionIds, MAX_BASE, nextDropping, nextSessions, readDropping, readKeptAgents, readKeptBase, readKeptBlocks, readKeptCut, readKeptReserved, readKeptTickets, readKeptWrote, SESSION_PREFIXES, SESSION_RETRY_MS, SESSION_TOUCH_MS, STORED_BRIEF, storedBrief } from './kept-records'
 import { linkOne } from './links'
 import { normalize } from './normalize'
 import { blockIds, blockOf, CLAIM_PRUNE_MS, CLAIM_SCAN, claimDirs, claimFrom, firstBlock, needsBlock, prunableClaims } from './id-blocks'
@@ -53,10 +54,10 @@ import type { OrchestratorEntry } from './orchestrator-history'
 import { envDirs, isAbsPath, isSameFolder, isWinPath, listedName, normPath, psPath, relIn, resolveAgainst, samePath } from './path-forms'
 import { MAC_SIGNS, openCommand, platformFrom, trashReason } from './platform-commands'
 import { CLAIM_CHECK_MS, progressReply, readClaims, readProgress, readTitle } from './progress-report'
-import { DIR, diskSpelling, findTodoDirWith, folderPlace, gitCommonDir, globalDirs, globalParents, isGlobalTodo, isMisspelledTodo, isSameTodo, isTodoOf, MAX_FOLDERS, pickFolders, placeOf, REV_PARSE, repoRoots, sessionFolder, todoFoldersIn } from './repo-folders'
+import { DIR, diskSpelling, findTodoDirWith, folderPlace, gitCommonDir, globalParents, isGlobalTodo, isInsideRoots, isMisspelledTodo, isSameTodo, isTodoOf, MAX_FOLDERS, pickFolders, placeOf, replaceGlobals, REV_PARSE, repoRoots, sessionFolder, todoFoldersIn } from './repo-folders'
 import type { TodoFolder } from './repo-folders'
 import { sameRows } from './row-equality'
-import { buildPresence, holdings, newlyQueued, peerHolds, peerIds, peerTip, PEER_DIM_MS, PEER_IGNORE_MS, PEERS_EVERY_MS, plannedKey, PRESENCE_EVERY_MS, presenceKey, prunePlanned, readPlanned, readPresence, samePresence, sanitizeSessionName, ticketId } from './peer-sessions'
+import { buildPresence, holdings, newlyQueued, peerHolds, peerIds, peerTip, PEER_DIM_MS, PEER_IGNORE_MS, PEERS_EVERY_MS, plannedKey, PRESENCE_EVERY_MS, presenceKey, prunePlanned, readPlanned, readPresence, samePresence, sanitizeSessionName, ticketId, waitOver } from './peer-sessions'
 import type { PeerClaim, Presence } from './peer-sessions'
 import { withRules } from './rules'
 import { HIDDEN, hideSecretLines, hideSecrets, hideTitle } from './secrets'
@@ -65,7 +66,7 @@ import { addAloneTry, isItemsFailure, nextBatchSize, nextSortBatch, nextThrows, 
 import type { BatchThrows } from './sort-queue'
 import type { Axes, Series } from './series'
 import { bar, clip, textChildren } from './terminal-text'
-import { DONE_ACTION, QUEUE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, TICKET_GLYPHS, UNSTART_ACTION } from './ticket-actions'
+import { DONE_ACTION, QUEUE_ACTION, REOPEN_ACTION, SEND_ACTION, START_ACTION, STATUS_ACTION, UNSTART_ACTION } from './ticket-actions'
 import type { TicketAction } from './ticket-actions'
 import { drawnPlaces, isDrawnLine, setBox, statusNamed, STATUS_WORDS } from './ticket-boxes'
 import type { DrawnPlace } from './ticket-boxes'
@@ -73,18 +74,19 @@ import { heldBy, highestId, lostIds, RESERVE_MS, ticketValue } from './ticket-id
 import type { Reservation } from './ticket-ids'
 import { findTickets, narrowTickets } from './ticket-lookup'
 import { moveQuestion, peerSendPrompt, sendScope, ticketSummary } from './ticket-prompts'
-import { clearSpaces, columnSlots, expireSpaces, newLayout, pressKeepsSpaces } from './ticket-spaces'
-import { boardHead, boardWidth, cardWidth, fileCards, listRowPx, padCard, longItems, spaceSvg, ticketSvg } from './todo-cards'
-import { bare, CHECKBOX, exampleMask, ID_SRC, ITEM_ID, leadingId, lineOwnIds, parseTodo, plainText } from './todo-markdown'
+import { beginRender, clearSpaces, columnSlots, expireSpaces, newLayout, pressKeepsSpaces } from './ticket-spaces'
+import { boardHead, boardWidth, cardWidth, fileCards, isTicketLong, listRowHeights, padCard, longItems, ticketSvg } from './todo-cards'
+import { bare, CHECKBOX, exampleMask, ITEM_ID, leadingId, lineOwnIds, parseTodo, plainText } from './todo-markdown'
 import { readReason, reasonOf, TodoReadError } from './todo-read'
 import type { TodoRead } from './todo-read'
-import { readKeptUsage, stepUsage, turnTokens } from './token-usage'
+import { isTurnKept, readKeptUsage, stepUsage, turnKey as turnKeyOf, turnTokens } from './token-usage'
 import type { StepUsage } from './token-usage'
 import { isSkipped, nextStreak } from './unread-files'
 import type { UnreadStreak } from './unread-files'
 import { foldersWithUnread } from './unread-folders'
+import { mergeToldLines, readToldLists } from './told-notes'
 import { callDetail, callSummary, describeCall } from './tool-calls'
-import { boardTargets, buildView, columnPx, columnsThatFit, ledger, rowsOf, searchTodo, ticketColumns, todoLedger } from './view-model'
+import { boardTargets, buildView, columnPx, columnsThatFit, itemChipId, ledger, MIN_TICKET_PX, rowsOf, searchTodo, TICKET_GAP_PX, ticketColumns, todoLedger } from './view-model'
 import type { OrchestratorState, TicketOrder } from './view-model'
 import { failAfter, inTime, NoAnswer, RUN_LIMIT_MS, STORE_LIMIT_MS, TIMED_OUT } from './time-limit'
 import { tryWriteLock, withWriteLock } from './write-lock'
@@ -95,8 +97,6 @@ import type { AgentRoom } from './agent-room'
 import { manifestVersion } from './plugin-version'
 
 const PANE = 'claudeopticon'
-/** The tallest an Svg may be drawn, in px: the engine refuses the whole pane past it, so a taller card (a timeline of 200 agents) takes its own height. */
-const MAX_SVG_PX = 4096
 const TITLE = 'Claudeopticon'
 /** The hover group of the room switch and its tip. */
 const ROOM_SCOPE = 'claudeopticon-room'
@@ -112,21 +112,22 @@ const ITEMS_SHOWN = 12
 /** The corner button's offsets from the card's lower right corner, in cells: about even in px. */
 const ACTION_RIGHT = 2
 const ACTION_BOTTOM = 1
-/** Rows from a live agent card's top edge to its Stop button, on the title row left of the badge. */
+/** Rows from a live agent card's top edge to its Stop button, on the title row at the card's right edge. */
 const STOP_TOP = 1
-/** The Stop button's label: a circle with a bar, the stop sign. */
-const STOP_GLYPH = '\u2296'
+/** The Stop button's label: blank, since the card draws the red key it lies over; two no-break spaces and the button's padding are about the key's width. */
+const STOP_HIT = '\u00a0'.repeat(2)
+/** Cells the blank Stop button's right edge sits left of the drawn key's: the button's own padding, measured on the desktop (2026-10-24). */
+const STOP_PAD_CELLS = 1
 /** The cells one corner button and its gap take, to set the tip left of them all. */
 const ACTION_CELLS = 5
-/** The narrowest a ticket may be drawn side by side with others, in px; narrower, columns stack. */
-const MIN_TICKET_PX = 300
-/** CSS pixels per pane cell on the desktop: a slight overestimate, since a card wider than the pane scales down to fit. */
-const CELL_PX = 8.5
 /**
- * The gap between board columns and between tickets stacked in a column, in px. Each gap is a transparent
- * margin inside the ticket's own image, so the desktop's cell size and its own card spacing do not set it.
+ * CSS pixels per pane cell on the desktop: an estimate, not a measure (the pane reports cells, not pixels). It must be an
+ * overestimate. A card drawn wider than the pane scales down to the pane's exact width, and the buttons placed over a card
+ * in cells (Stop, tips) then land on the scaled card at any real cell width, since both use this value. An underestimate
+ * draws every card short of the pane, out of line with the buttons outside the cards, and a Stop button over the badge
+ * (, 8.5 fell short after a desktop update, 2026-10-24).
  */
-const TICKET_GAP_PX = 10
+const CELL_PX = 10
 
 /** The tool names stay in this file: the validator reads the tool filter of a hook only from a constant here. */
 const PROGRESS_TOOL = 'mcp__claudeopticon__report_progress'
@@ -193,7 +194,7 @@ let isRoomHeld = false
 let pluginVersion: string | undefined
 /** The mod's version from its own plugin.json; undefined when the manifest cannot be read. */
 async function readPluginVersion($: EngineInterface): Promise<string | undefined> {
-  const text: unknown = await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`).catch(() => undefined)
+  const text: unknown = await fsBounded($, () => $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`)).catch(() => undefined)
 
   return typeof text === 'string' ? manifestVersion(text) : undefined
 }
@@ -452,6 +453,9 @@ let lastTouch: number | undefined
 /** When the last note failed, clock ms; undefined while no note failed. It is tried again SESSION_RETRY_MS later. */
 let touchFailedAt: number | undefined
 let isTouching = false
+/** The notes that failed in a row, and whether the toast that says so is shown (it clears with the next note that is stored). */
+let touchFailures = 0
+let isTouchToastShown = false
 
 /**
  * Notes this session in the store's list of the last KEPT_SESSIONS sessions, with the time, and
@@ -471,8 +475,20 @@ async function pruneSessions($: EngineInterface): Promise<void> {
     await noteSession($, time)
     lastTouch = time
     touchFailedAt = undefined
+    touchFailures = 0
+    isTouchToastShown = false
   } catch (error) {
     touchFailedAt = time
+    touchFailures += 1
+    // Like a failing save (saveKey): one toast after SAVE_FAILS_TOAST failures in a row. Until a note is stored, other sessions may clear this session's keys.
+    if (touchFailures >= SAVE_FAILS_TOAST && !isTouchToastShown) {
+      isTouchToastShown = true
+      try {
+        showToast($, `Claudeopticon cannot note this session in the store: ${touchFailures} notes in a row failed. Another session may clear what this session saved.`)
+      } catch {
+        // A toast that fails must not hide the failed note.
+      }
+    }
     throw error
   }
 }
@@ -486,6 +502,24 @@ async function noteSession($: EngineInterface, time: number): Promise<void> {
   }
   wallMs = Math.max(wallMs, time)
   const { list, dropped, untimed, isListed } = nextSessions(got.value, seenGot.ok ? seenGot.value : undefined, me, time)
+  // A session the list forgets is queued in `sessions-dropping` first: once the list no longer names it, no later note finds it dropped, so its keys would never be cleared. A queue that is not read or not stored throws before the list is written, and the next note starts from the same list.
+  const droppedTimed = dropped.filter(one => !untimed.includes(one))
+  if (droppedTimed.length > 0) {
+    const queued = await tryGet($, 'sessions-dropping')
+    if (!queued.ok) {
+      throw new Error('session list read failed')
+    }
+    const held = readDropping(queued.value)
+    const queue = new Map(held)
+    for (const id of droppedTimed) {
+      if (!queue.has(id)) {
+        queue.set(id, time)
+      }
+    }
+    if (queue.size !== held.size) {
+      await storeSet($, 'sessions-dropping', [...queue].slice(-KEPT_DROPPING))
+    }
+  }
   await storeSet($, 'sessions-recent', list)
   if (isOldSessionList(got.value)) {
     // The list is in the new form now; the old times key is not read again.
@@ -501,7 +535,7 @@ async function noteSession($: EngineInterface, time: number): Promise<void> {
   // the list made then still shows it not live. One read cannot tell a dead session from a live one
   // whose note this write just overwrote (it read the list before that note and wrote after it); the
   // live one notes itself again within SESSION_TOUCH_MS, so the second step sees it.
-  const timed = dropped.filter(one => !untimed.includes(one))
+  const timed = droppedTimed
   const pendingGot = await tryGet($, 'sessions-dropping')
   const pendingBefore = pendingGot.ok ? readDropping(pendingGot.value) : new Map<string, number>()
   const fresh = untimed.length === 0 && timed.length === 0 && pendingBefore.size === 0 ? undefined : await tryGet($, 'sessions-recent')
@@ -611,7 +645,7 @@ function mergeGroup(group: StoreGroup, values: readonly unknown[]): void {
     }
   } else if (group === 'tickets') {
     for (const [kept, seen] of readKeptTickets(values[0])) {
-      // A key stored with a place number (batch H2) is read as its first-place key: never a place.
+      // A key stored with a place number is read as its first-place key: never a place.
       const key = storedKey(kept)
       if (!orchTickets.has(key)) {
         orchTickets.set(key, seen)
@@ -772,8 +806,8 @@ function saveAgents($: EngineInterface): void {
  */
 export async function findTodoDir($: EngineInterface): Promise<string | undefined> {
   return findTodoDirWith({
-    exists: path => $.fs.exists(path),
-    kind: path => $.fs.stat(path).then(stat => stat.kind).catch(() => undefined),
+    exists: path => fsBounded($, () => $.fs.exists(path)),
+    kind: path => fsBounded($, () => $.fs.stat(path)).then(stat => stat.kind).catch(() => undefined),
     realPath: path => realOf($, path),
     read: path => $.fs.read(path).then(text => (typeof text === 'string' ? text : '')).catch(() => ''),
   })
@@ -813,8 +847,9 @@ async function envPath($: EngineInterface, name: 'HOME' | 'USERPROFILE' | 'CLAUD
  * home, when HOME is not set) and CLAUDE_CONFIG_DIR. Without a readable home the mod fails closed.
  */
 async function loadGlobals($: EngineInterface): Promise<void> {
-  globalDirs.clear()
-  globalParents.clear()
+  // Built aside, swapped in with no await between (`replaceGlobals`): a write check during the load sees the folders of the last load, never none.
+  const dirs = new Set<string>()
+  const parentSet = new Set<string>()
   let homes = await envPath($, 'HOME')
   if (homes.length === 0) {
     homes = (await envPath($, 'USERPROFILE')).filter(isWinPath)
@@ -823,20 +858,21 @@ async function loadGlobals($: EngineInterface): Promise<void> {
   const home = homes[0]
   const parents = [...homes.map(one => `${one.replace(/\/$/, '')}/.claude`), ...configs.map(one => one.replace(/\/$/, ''))]
   for (const parent of parents) {
-    globalParents.add(parent)
+    parentSet.add(parent)
     const dir = `${parent}/${DIR}`
-    globalDirs.add(dir)
+    dirs.add(dir)
     const real = await realOf($, dir)
     if (real !== undefined) {
-      globalDirs.add(real.replace(/\/+$/, ''))
+      dirs.add(real.replace(/\/+$/, ''))
     }
     // The parent exists at load even when `.claude_todo` does not yet: a symlinked `~/.claude`,
     // HOME or CLAUDE_CONFIG_DIR (stow, chezmoi) gives the real path a folder made later will have.
     const realParent = await realOf($, parent)
     if (realParent !== undefined) {
-      globalDirs.add(`${realParent.replace(/[\\/]+$/, '')}/${DIR}`)
+      dirs.add(`${realParent.replace(/[\\/]+$/, '')}/${DIR}`)
     }
   }
+  replaceGlobals(dirs, parentSet)
   globalsKnown = home !== undefined
 }
 
@@ -895,13 +931,82 @@ function noteListFailed($: EngineInterface, error: FolderListError, isKept: bool
 }
 
 /**
+ * One fs read under the time limit of an outside call (RUN_LIMIT_MS, at most; calls started in one bucket share a timer). The engine's fs gives no time limit of its
+ * own, and the files may sit on a network mount or a stuck volume; a read that never answers would hold the
+ * scan, and with it every later scan, for the whole session. An unanswered read rejects with NoAnswer, so it is
+ * a failed read: never a missing file, an empty file or an empty folder. Use it only where a rejection already
+ * means "could not be read". The call itself is not stopped; its late result is dropped. Writes are not bounded:
+ * a write that gave no answer may still land, and a retry would not know.
+ */
+function fsBounded<T>($: EngineInterface, call: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const bucket = fsBucketFor($)
+    const giveUp = () => reject(new NoAnswer(`no answer within ${RUN_LIMIT_MS / 1000} s`))
+    bucket.add(giveUp)
+    Promise.resolve()
+      .then(call)
+      .then(
+        value => {
+          bucket.delete(giveUp)
+          resolve(value)
+        },
+        (error: unknown) => {
+          bucket.delete(giveUp)
+          reject(error)
+        },
+      )
+  })
+}
+
+/** How long one bucket of fs calls takes new calls: a call waits between RUN_LIMIT_MS minus this and RUN_LIMIT_MS. */
+const FS_BUCKET_MS = 5000
+/** The calls started since the open bucket began: one timer gives them all up, so a scan of many files holds two timers, not one per call. */
+let fsBucket: Set<() => void> | undefined
+
+/** The bucket that a new fs call joins; the first call after the last bucket closed opens the next, with its two timers. */
+function fsBucketFor($: EngineInterface): Set<() => void> {
+  if (fsBucket !== undefined) {
+    return fsBucket
+  }
+  const bucket = new Set<() => void>()
+  fsBucket = bucket
+  // A timer the engine refuses leaves the calls of this bucket unbounded, as for a store call; they still settle by their own answer.
+  const arm = (ms: number, fire: () => void) => {
+    try {
+      const timer: unknown = $.clock.after(ms, fire)
+      if (typeof (timer as { then?: unknown } | null)?.then === 'function') {
+        void (timer as Promise<unknown>).then(undefined, () => undefined)
+      }
+    } catch {
+      // Nothing to do: the bucket stays open and its calls are not timed.
+    }
+  }
+  arm(FS_BUCKET_MS, () => {
+    if (fsBucket === bucket) {
+      fsBucket = undefined
+    }
+  })
+  arm(RUN_LIMIT_MS, () => {
+    for (const giveUp of [...bucket]) {
+      giveUp()
+    }
+    bucket.clear()
+    if (fsBucket === bucket) {
+      fsBucket = undefined
+    }
+  })
+
+  return bucket
+}
+
+/**
  * The real path of a folder in the one spelling the mod uses (`normPath`), or undefined when it cannot
  * be resolved. The engine's realpath gives backslashes on Windows: kept raw, the session
  * folder became `C:\proj`, its todo `C:\proj/.claude_todo`, which the trust check refuses, and the
  * claim folder was cut at a `/` it does not have. A POSIX path is returned as it is.
  */
 function realOf($: EngineInterface, path: string): Promise<string | undefined> {
-  return $.fs.stat(path, { resolve: true }).then(stat => (typeof stat.realPath === 'string' ? normPath(stat.realPath) : stat.realPath)).catch(() => undefined)
+  return fsBounded($, () => $.fs.stat(path, { resolve: true })).then(stat => (typeof stat.realPath === 'string' ? normPath(stat.realPath) : stat.realPath)).catch(() => undefined)
 }
 
 /** The todo folders found but cut from the pane by MAX_FOLDERS; their ticket IDs still count. */
@@ -1000,6 +1105,28 @@ function noteNoHome($: EngineInterface, where: string | undefined): void {
   }
 }
 
+/** The folders already named in an "outside the repo" toast: one toast each, per load of the module. */
+const outsideToasted = new Set<string>()
+
+/** Says once per folder that a listed todo folder resolves outside the repo, so the mod does not read it. */
+function noteOutsideRepo($: EngineInterface, path: string, real: string): void {
+  if (!outsideToasted.has(path)) {
+    outsideToasted.add(path)
+    showToast($, `Claudeopticon skips ${path}: it is a link to ${real}, outside the repo, so its files are not read.`)
+  }
+}
+
+/** True once a failed read of the repo layout was told; a layout that reads clears it, so the next failure is told again. */
+let layoutFailToasted = false
+
+/** Tells once that the repo layout could not be read, and what the board does instead: it shows the nearest todo folder only. */
+function noteLayoutFailed($: EngineInterface, reason: string): void {
+  if (!layoutFailToasted) {
+    layoutFailToasted = true
+    showToast($, `Claudeopticon could not read the repo layout (${reason}). The board shows the nearest todo folder only until you press Consolidate todos or reload the mod.`)
+  }
+}
+
 /** The folders already named in a "spelled in another letter case" toast: one toast each, per load of the module. */
 const misspelledToasted = new Set<string>()
 
@@ -1029,6 +1156,10 @@ async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Pro
     sessionDir = await realOf($, '.')
     looseRoot = sessionDir
     gitCommon = undefined
+    // A search that finds no repo this time leaves no root of an earlier one trusted (a rediscover after a failed rev-parse).
+    repoRoot = undefined
+    centralRoot = undefined
+    centralBlocked = false
     noteNoHome($, sessionDir)
     if (nearest === undefined) {
       return []
@@ -1043,6 +1174,12 @@ async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Pro
       noteTimedOut($, REV_PARSE)
     }
     const top = ran === TIMED_OUT || ran === undefined ? { exitCode: 1, stdout: '', stderr: '' } : ran
+    // Exit 128 is git's answer outside a repo: normal. Any other failure to ask is told; a time-out already was.
+    if (ran === undefined) {
+      noteLayoutFailed($, 'git did not start')
+    } else if (ran !== TIMED_OUT && top.exitCode !== 0 && top.exitCode !== 128) {
+      noteLayoutFailed($, `git rev-parse exited ${top.exitCode}`)
+    }
     let roots = top.exitCode === 0 ? repoRoots(top.stdout) : undefined
     if (roots !== undefined && (roots.isLinked === true || roots.main !== undefined)) {
       // The main checkout is the first entry of the worktree list, whatever the shape of the git dir; the common dir is the fallback only when the list fails.
@@ -1064,6 +1201,7 @@ async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Pro
       return await alone()
     }
     repoRoot = roots.root
+    layoutFailToasted = false
     // The two worktree rules, both decided here. 1: a linked worktree whose main checkout git
     // names writes the main checkout's todo only; its own `.claude_todo/` is read but never written, as
     // it is outside `centralRoot`. 2: a worktree whose main checkout git cannot name (a separate git dir,
@@ -1096,11 +1234,19 @@ async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Pro
     const found: { path: string; rel: string; real?: string }[] = []
     const globals = new Set<string>()
     let primary: string | undefined
+    // The real paths of the checkouts git listed in: a folder that resolves outside them is a tracked symlink out of the repo.
+    const realRoots = await Promise.all((roots.main === undefined ? [roots.root] : [roots.root, roots.main]).map(root => realOf($, root)))
+    // Judged only when every root resolved: a root that did not leaves no basis to call a folder outside.
+    const knownRoots = realRoots.every(one => one !== undefined) ? (realRoots as string[]) : []
     for (const listedOne of listed) {
-      if (!(await $.fs.exists(listedOne.path).catch(() => false))) {
+      if (!(await fsBounded($, () => $.fs.exists(listedOne.path)).catch(() => false))) {
         continue
       }
       const real = await realOf($, listedOne.path)
+      if (real !== undefined && knownRoots.length > 0 && !isGlobalTodo(real) && !isInsideRoots(real, knownRoots)) {
+        noteOutsideRepo($, listedOne.path, real)
+        continue
+      }
       // Git's index spelling after a case-only rename (`Docs/` for `docs/`) is read in the disk's spelling, so the trust check, which compares by exact case, passes it.
       const one = diskSpelling(listedOne, real, roots.main === undefined ? [roots.root] : [roots.root, roots.main])
       // A folder spelled `.Claude_todo` on the disk is no todo folder: left out, and named once.
@@ -1136,7 +1282,10 @@ async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Pro
     }
 
     return all.slice(0, MAX_FOLDERS)
-  } catch {
+  } catch (error) {
+    // Not a repo is a normal answer (exit 128 above); a throw is a failure to read the layout, told once.
+    noteLayoutFailed($, error instanceof Error ? error.message : String(error))
+
     return alone()
   }
 }
@@ -1193,10 +1342,44 @@ let pendingRenames: string[] = []
 let pendingNumbered: string[] = []
 /** The duplicate tickets removed that Claude has not been told of yet. */
 let pendingRemoved: string[] = []
+/** The most new IDs Consolidate asks `freeIds` for at once: one pick scans CLAIM_SCAN blocks of BLOCK_SIZE IDs, so a count past that always fails. */
+const PICK_CHUNK = 256
+
+const toldKey = (me: string): string => `told-notes:${me}`
+/** True once the stored waiting lines of this session were read into memory (once per load). */
+let toldLoaded = false
+
+/**
+ * Brings the waiting renumbering, numbering and removal notes that an earlier load of this session
+ * stored into memory, before the next prompt or tool result tells them: a reload between the change
+ * and the prompt must not lose "#T7 is now". A store that does not read is tried again next time.
+ */
+async function loadToldNotes($: EngineInterface): Promise<void> {
+  if (toldLoaded) {
+    return
+  }
+  const got = await tryGet($, toldKey(await sessionOf($)))
+  if (!got.ok) {
+    return
+  }
+  toldLoaded = true
+  const stored = readToldLists(got.value)
+  pendingRenames = mergeToldLines(pendingRenames, stored.renames)
+  pendingNumbered = mergeToldLines(pendingNumbered, stored.numbered)
+  pendingRemoved = mergeToldLines(pendingRemoved, stored.removed)
+}
+
+/** Stores the waiting lines (what loadToldNotes reads); a store that fails leaves the memory as the only copy. */
+async function saveToldNotes($: EngineInterface): Promise<void> {
+  await storeSet($, toldKey(await sessionOf($)), { renames: pendingRenames, numbered: pendingNumbered, removed: pendingRemoved }).catch(() => undefined)
+}
+
 /** The empty `.md` files of the known folders, found by the last scan: the Delete empty todos button's work. */
 let emptyFiles: { folder: string; path: string; name: string; rel?: string }[] = []
 /** True when the central target file holds two or more identical tickets: the Delete duplicate tickets button's work. */
 let hasDupTickets = false
+/** The reference renames (old lowercase ID to the kept one) that Delete duplicate tickets could not write into some central archive file: the next press tries them again. */
+let refsToFix: Record<string, string> = {}
 
 /** The central folder: `<root of the main checkout>/.claude_todo`. */
 function centralFolder(): string | undefined {
@@ -1224,7 +1407,7 @@ function canDeleteEmpty(): boolean {
 
 /** True when the Delete duplicate tickets button shows: the same gate, and identical tickets in the target file. */
 function canDeleteDupTickets(): boolean {
-  return !centralBlocked && centralRoot !== undefined && hasDupTickets
+  return !centralBlocked && centralRoot !== undefined && (hasDupTickets || Object.keys(refsToFix).length > 0)
 }
 
 /**
@@ -1259,6 +1442,8 @@ async function loadMarks($: EngineInterface, central: string): Promise<void> {
 
 /** Stores the marks; a store that cannot be written does not stop the press (the memory holds them, as before). */
 async function saveMarks($: EngineInterface, central: string): Promise<void> {
+  // Read again first: a mark another session stored since this session's last read stays in the written map.
+  await loadMarks($, central)
   const isSaved = await Promise.resolve()
     .then(() => storeSet($, marksKey(central), Object.fromEntries(copiedNotEmptied)))
     .then(() => true, () => false)
@@ -1294,10 +1479,10 @@ async function mdFiles($: EngineInterface, folder: string, isStrict = false): Pr
   const archive = await archiveDirOf($, folder)
   for (const [dir, prefix] of [[folder, ''], [archive, `${archive.slice(folder.length + 1)}/`]] as const) {
     // Strict, a folder that will not answer or list is an error, not an empty or absent folder.
-    if (!(isStrict ? await $.fs.exists(dir) : await $.fs.exists(dir).catch(() => false))) {
+    if (!(isStrict ? await fsBounded($, () => $.fs.exists(dir)) : await fsBounded($, () => $.fs.exists(dir)).catch(() => false))) {
       continue
     }
-    for (const entry of isStrict ? await $.fs.list(dir) : await $.fs.list(dir).catch(() => [])) {
+    for (const entry of isStrict ? await fsBounded($, () => $.fs.list(dir)) : await fsBounded($, () => $.fs.list(dir)).catch(() => [])) {
       if (entry.kind === 'file' && entry.name.endsWith('.md')) {
         names.push(`${prefix}${entry.name}`)
       }
@@ -1315,9 +1500,9 @@ async function mdFiles($: EngineInterface, folder: string, isStrict = false): Pr
 async function readTodo($: EngineInterface, path: string): Promise<TodoRead> {
   let text: unknown
   try {
-    text = await $.fs.read(path)
+    text = await fsBounded($, () => $.fs.read(path))
   } catch (error) {
-    const isThere = await $.fs.exists(path).then(is => is, () => true)
+    const isThere = await fsBounded($, () => $.fs.exists(path)).then(is => is, () => true)
 
     return isThere ? { kind: 'failed', reason: reasonOf(error), error } : { kind: 'missing', error }
   }
@@ -1381,14 +1566,14 @@ type WriteOutcome = { kind: 'written' } | { kind: 'changed' } | { kind: 'unread'
  * symlink), and its folder, when there, must be its own real path. Never through a symlink.
  */
 async function placeProblem($: EngineInterface, path: string): Promise<string | undefined> {
-  if (await $.fs.exists(path)) {
+  if (await fsBounded($, () => $.fs.exists(path))) {
     return plainFileProblem($, path)
   }
   if (await hasEntry($, path)) {
     return 'something that is no file stands at its name (a dangling symlink?)'
   }
   const dir = path.slice(0, path.lastIndexOf('/'))
-  if ((await $.fs.exists(dir)) && !samePath((await realOf($, dir)) ?? '', dir)) {
+  if ((await fsBounded($, () => $.fs.exists(dir))) && !samePath((await realOf($, dir)) ?? '', dir)) {
     return 'its folder is a symlink or could not be read'
   }
 
@@ -1432,7 +1617,7 @@ async function writeIfUnchanged($: EngineInterface, path: string, expected: stri
     await $.fs.write(path, next)
   } catch (error) {
     // Only a file that is not there may need its folder made; a check that fails counts as there.
-    if (!isCreate || (await $.fs.exists(path).catch(() => true))) {
+    if (!isCreate || (await fsBounded($, () => $.fs.exists(path)).catch(() => true))) {
       throw error
     }
     const made = await runInTime($, ['mkdir', '-p', path.slice(0, path.lastIndexOf('/'))])
@@ -1487,7 +1672,7 @@ async function chooseTarget($: EngineInterface, central: string, topNames: reado
  *: a stat that did not answer is not called a symlink.
  */
 async function plainFileProblem($: EngineInterface, path: string): Promise<string | undefined> {
-  const stat = await $.fs.stat(path).catch(() => undefined)
+  const stat = await fsBounded($, () => $.fs.stat(path)).catch(() => undefined)
   if (stat === undefined) {
     return 'it could not be checked (the stat failed)'
   }
@@ -1510,10 +1695,10 @@ async function isPlainFile($: EngineInterface, path: string): Promise<boolean> {
 /** True when anything stands at the path's name in its folder, a dangling symlink included; a folder that will not list counts as yes. */
 async function hasEntry($: EngineInterface, path: string): Promise<boolean> {
   const dir = path.slice(0, path.lastIndexOf('/'))
-  if (!(await $.fs.exists(dir).catch(() => true))) {
+  if (!(await fsBounded($, () => $.fs.exists(dir)).catch(() => true))) {
     return false
   }
-  const entries = await $.fs.list(dir).catch(() => undefined)
+  const entries = await fsBounded($, () => $.fs.list(dir)).catch(() => undefined)
 
   return entries === undefined || entries.some(entry => entry.name === path.slice(dir.length + 1))
 }
@@ -1636,7 +1821,7 @@ async function consolidateLocked($: EngineInterface): Promise<void> {
       }
       const path = `${central}/${name}`
       // An existing central file that cannot be read aborts the press: it is never written over.
-      const text = (await $.fs.exists(path)) ? await readStrict($, path) : ''
+      const text = (await fsBounded($, () => $.fs.exists(path))) ? await readStrict($, path) : ''
       texts.set(name, text)
 
       return text
@@ -1695,6 +1880,8 @@ async function consolidateLocked($: EngineInterface): Promise<void> {
         add(`${central}/${name}`, name, name, await centralText(name), central)
       }
     }
+    // The source folders with a file that did not read: none of their files is a job this press, but the marks of their healthy files stay.
+    const heldFolders: string[] = []
     for (const source of sources) {
       const names = await mdFiles($, source.path, true).catch(() => undefined)
       if (names === undefined) {
@@ -1708,6 +1895,7 @@ async function consolidateLocked($: EngineInterface): Promise<void> {
         const text = why === undefined ? await readStrict($, `${source.path}/${name}`).catch(() => undefined) : undefined
         if (text === undefined) {
           read.length = 0
+          heldFolders.push(source.path)
           unreadable.push(why === undefined ? `${source.path}/${name}` : `${source.path}/${name} (${why})`)
           break
         }
@@ -1748,7 +1936,7 @@ async function consolidateLocked($: EngineInterface): Promise<void> {
     }
     // A mark whose source is no longer a job (emptied or deleted by hand) is done with; an unreadable source keeps its mark,
     // and so does one not copied for an open end. An unreadable entry may carry its reason in parentheses: the path is before it.
-    const kept = [...unreadable.map(one => one.replace(/ \([^()]*\)$/, '')), ...openSources, ...badNames]
+    const kept = [...unreadable.map(one => one.replace(/ \([^()]*\)$/, '')), ...heldFolders, ...openSources, ...badNames]
     for (const path of [...copiedNotEmptied.keys()]) {
       if (!jobs.some(job => job.path === path) && !kept.some(one => path === one || path.startsWith(`${one}/`))) {
         dropMark(path)
@@ -1781,7 +1969,12 @@ async function consolidateLocked($: EngineInterface): Promise<void> {
       const me = await sessionOf($)
       // The disk too, not only the board: a file may hold an ID the board has not seen yet.
       const onDisk = await diskIds($)
-      const picked = await freeIds($, [...reserved, ...used, ...onDisk], tCount)
+      // At most PICK_CHUNK IDs per pick: one pick holds at most CLAIM_SCAN blocks, so a larger count would fail every press.
+      let picked: string[] | undefined = []
+      for (let left = tCount; left > 0 && picked !== undefined; left -= PICK_CHUNK) {
+        const part = await freeIds($, [...reserved, ...used, ...onDisk, ...picked], Math.min(PICK_CHUNK, left))
+        picked = part === undefined ? undefined : [...picked, ...part]
+      }
       if (picked === undefined) {
         throw new Error('no new ticket IDs could be claimed for the renumbering, so nothing was moved')
       }
@@ -1901,7 +2094,7 @@ async function consolidateLocked($: EngineInterface): Promise<void> {
           progress.written.push(`${DIR}/${dest}`)
         } else {
           // Every source here was copied before: its copy must still be in the target, edited or not.
-          const now = (await $.fs.exists(path)) ? await readStrict($, path) : ''
+          const now = (await fsBounded($, () => $.fs.exists(path))) ? await readStrict($, path) : ''
           if (!mine.every(job => retryStep(copiedNotEmptied.get(job.path), job.heading, job.lines, now) === 'empty')) {
             skipped.push(`${DIR}/${dest}`)
             continue
@@ -1914,6 +2107,7 @@ async function consolidateLocked($: EngineInterface): Promise<void> {
             mark.isTold = true
             pendingRenames = [...pendingRenames, ...mark.told]
             told.push(...mark.told)
+            await saveToldNotes($)
           }
         }
         for (const job of mine) {
@@ -1949,34 +2143,37 @@ async function consolidateLocked($: EngineInterface): Promise<void> {
     await rediscoverFolders($)
     // Bounded: a scan that does not end in time frees the writer lock; it goes on, and its late result still counts.
     await boundedJob($, scan($, true).catch(() => undefined))
+    // One toast for the whole press: a host that keeps only the last toast of a burst would lose every refusal.
+    const notes: string[] = []
     if (openEnded.length > 0) {
-      showToast($, `Not written: ${openEnded.join(', ')} ends inside an unclosed code block or HTML block, so the moved tickets would not be tickets there. Their sources are as they were. Close it, then press Consolidate todos again.`)
+      notes.push(`Not written: ${openEnded.join(', ')} ends inside an unclosed code block or HTML block, so the moved tickets would not be tickets there. Their sources are as they were. Close it, then press Consolidate todos again.`)
     }
     if (openNote !== undefined) {
-      showToast($, openNote)
+      notes.push(openNote)
     }
     if (nameNote !== undefined) {
-      showToast($, nameNote)
+      notes.push(nameNote)
     }
     if (notSafe.length > 0) {
-      showToast($, `Not written, not safe to change: ${notSafe.join(', ')}. Their sources are as they were. Press Consolidate todos again.`)
+      notes.push(`Not written, not safe to change: ${notSafe.join(', ')}. Their sources are as they were. Press Consolidate todos again.`)
     }
     if (skipped.length > 0) {
-      showToast($, `Not written, changed meanwhile: ${skipped.join(', ')}. Their sources are as they were. Press Consolidate todos again.`)
+      notes.push(`Not written, changed meanwhile: ${skipped.join(', ')}. Their sources are as they were. Press Consolidate todos again.`)
     }
     if (left.length > 0) {
-      showToast($, `Left as they are, changed since the copy: ${left.join(', ')}`)
+      notes.push(`Left as they are, changed since the copy: ${left.join(', ')}`)
     }
     if (changedSince.length > 0) {
-      showToast($, `Not copied again, changed since an earlier copy: ${changedSince.join(', ')}. The central ${DIR}/ holds that copy under its "## From" heading. Empty the file, or take that section out, then press Consolidate todos again.`)
+      notes.push(`Not copied again, changed since an earlier copy: ${changedSince.join(', ')}. The central ${DIR}/ holds that copy under its "## From" heading. Empty the file, or take that section out, then press Consolidate todos again.`)
     }
     if (failed.length > 0) {
-      showToast($, `Not finished: ${failed.join('; ')}. Written to the target: ${progress.written.length > 0 ? progress.written.join(', ') : 'nothing'}. Emptied: ${emptied.length > 0 ? emptied.join(', ') : 'none'}. Press Consolidate todos again to finish.`)
+      notes.push(`Not finished: ${failed.join('; ')}. Written to the target: ${progress.written.length > 0 ? progress.written.join(', ') : 'nothing'}. Emptied: ${emptied.length > 0 ? emptied.join(', ') : 'none'}. Press Consolidate todos again to finish.`)
     }
     if (unreadNote !== undefined) {
-      showToast($, unreadNote)
+      notes.push(unreadNote)
     }
-    showToast($, `Moved ${emptied.length} ${emptied.length === 1 ? 'file' : 'files'} into ${DIR}/${target} at the repo root.${told.length > 0 ? ` Renumbered: ${told.map(line => line.slice(2)).join('; ')}` : ''}`)
+    const summary = `Moved ${emptied.length} ${emptied.length === 1 ? 'file' : 'files'} into ${DIR}/${target} at the repo root.${told.length > 0 ? ` Renumbered: ${told.map(line => line.slice(2)).join('; ')}` : ''}`
+    showToast($, pressToast(notes, summary, emptied.length))
   } catch (error) {
     showToast($, `Could not consolidate: ${error instanceof Error ? error.message : String(error)}. Written to the target: ${progress.written.length > 0 ? progress.written.join(', ') : 'nothing'}. Emptied: ${progress.emptied.length > 0 ? progress.emptied.join(', ') : 'none'}.`)
   } finally {
@@ -2008,7 +2205,7 @@ async function refreshArchiveLink($: EngineInterface): Promise<void> {
     if (await isTrustedDir($, folder.path)) {
       if (await hasEntry($, path)) {
         link = (await isArchiveFile($, path)) ? path : undefined
-      } else if (!(await $.fs.exists(dir).catch(() => false)) || samePath((await realOf($, dir)) ?? '', dir)) {
+      } else if (!(await fsBounded($, () => $.fs.exists(dir)).catch(() => false)) || samePath((await realOf($, dir)) ?? '', dir)) {
         link = path
       }
     }
@@ -2075,7 +2272,15 @@ async function archivePass($: EngineInterface): Promise<boolean> {
       return time - closedAt.get(sign)! >= ARCHIVE_AFTER_MS
     })
     // One file that fails leaves itself as it is; the others go on.
-    if (ready.length > 0 && (await moveBlocks($, file, path, text, ready).catch(() => false))) {
+    // A move that throws is told once per file, then retried at each scan (the cause may clear).
+    const moved =
+      ready.length > 0 &&
+      (await moveBlocks($, file, path, text, ready).catch(error => {
+        toldOnce(`${path}\0threw`, () => toastFailure($, `archive ${path} into ${file.folder}/archive`)(error))
+
+        return false
+      }))
+    if (moved) {
       isMoved = true
     }
   }
@@ -2207,6 +2412,17 @@ const notItemsToasted = new Set<string>()
 /** The archive files already named in an "unclosed code block" toast: one toast each, per session. */
 const unclosedToasted = new Set<string>()
 
+/** The refusals of the archive move already told, by file and cause: a cause that lasts is told once per session, not at each scan. */
+const archiveToldOnce = new Set<string>()
+
+/** Runs `tell` the first time `key` comes; the archive move's persistent failures use it so one cause gives one toast. */
+function toldOnce(key: string, tell: () => void): void {
+  if (!archiveToldOnce.has(key)) {
+    archiveToldOnce.add(key)
+    tell()
+  }
+}
+
 /**
  * A folder's `archive/` in the disk's spelling: on a disk that ignores case, `archive` answers
  * for `Archive/` or `ARCHIVE/`, but the symlink check compares the real path by exact case and refused
@@ -2216,10 +2432,10 @@ const unclosedToasted = new Set<string>()
  */
 async function archiveDirOf($: EngineInterface, folder: string): Promise<string> {
   const dir = `${folder}/archive`
-  if (!(await $.fs.exists(dir).catch(() => false))) {
+  if (!(await fsBounded($, () => $.fs.exists(dir)).catch(() => false))) {
     return dir
   }
-  const entries = await $.fs.list(folder).catch(() => undefined)
+  const entries = await fsBounded($, () => $.fs.list(folder)).catch(() => undefined)
 
   return entries === undefined ? dir : `${folder}/${listedName(entries.map(entry => entry.name), 'archive')}`
 }
@@ -2231,12 +2447,28 @@ async function archiveDirOf($: EngineInterface, folder: string): Promise<string>
  * keeps case apart has no `TODO.md` then, and a new one is made. A folder that will not list keeps the name.
  */
 async function archiveEntryName($: EngineInterface, dir: string, name: string): Promise<string> {
-  if (!(await $.fs.exists(`${dir}/${name}`).catch(() => false))) {
+  if (!(await fsBounded($, () => $.fs.exists(`${dir}/${name}`)).catch(() => false))) {
     return name
   }
-  const entries = await $.fs.list(dir).catch(() => undefined)
+  const entries = await fsBounded($, () => $.fs.list(dir)).catch(() => undefined)
 
   return entries === undefined ? name : listedName(entries.map(entry => entry.name), name)
+}
+
+/**
+ * The record after an archive write that did not land: the move stored its blocks as the record before
+ * the write, so a failed write leaves a record of blocks that are not in the archive, and a later equal
+ * block would be taken for a retry and dropped. The record goes back to what the move read (`wrote`,
+ * none cleared) unless the archive holds exactly `next`: a write that threw may have landed, and then the
+ * record stays, so the retry only cuts the source. An archive that does not read keeps the record too.
+ */
+async function forgetUnwritten($: EngineInterface, record: string, target: string, next: string, wrote: readonly (readonly string[])[]): Promise<void> {
+  // An archive that was never created is empty.
+  const now = (await fsBounded($, () => $.fs.exists(target)).catch(() => true)) ? await readStrict($, target).catch(() => undefined) : ''
+  if (now === undefined || now === next) {
+    return
+  }
+  await writeWrote($, record, wrote.length > 0 ? wrote.map(block => [...block]) : null)
 }
 
 /** One file's move; true when the file was rewritten without the blocks. */
@@ -2253,10 +2485,12 @@ async function moveBlocks($: EngineInterface, file: TodoFile, path: string, text
   if (wrote === undefined) {
     return false
   }
-  const isThere = await $.fs.exists(target)
+  const isThere = await fsBounded($, () => $.fs.exists(target))
   // Never written through a symlink: archive/ and an existing archive file must be their own real paths.
   // A missing archive file with anything at its name (a dangling symlink) is left alone.
-  if (((await $.fs.exists(dir)) && !samePath((await realOf($, dir)) ?? '', dir)) || (isThere ? !(await isPlainFile($, target)) : await hasEntry($, target))) {
+  if (((await fsBounded($, () => $.fs.exists(dir))) && !samePath((await realOf($, dir)) ?? '', dir)) || (isThere ? !(await isPlainFile($, target)) : await hasEntry($, target))) {
+    toldOnce(`${target}\0place`, () => showToast($, `Not archived: ${target} or its folder is a symlink or no plain file. The tickets stay in ${path}.`))
+
     return false
   }
   const before = isThere ? await readStrict($, target) : ''
@@ -2285,15 +2519,33 @@ async function moveBlocks($: EngineInterface, file: TodoFile, path: string, text
     // The checks, then the record stored, then the read and compare as the last call before the write.
     // Stored before the archive is written: a crash or reload after the write still finds the record.
     // A record that cannot be stored stops the move before the archive is touched.
-    const put = await writeIfUnchanged($, target, before, next, { mayCreate: true, before: () => writeWrote($, record, ready.map(block => [...block.lines])) })
+    let put: WriteOutcome
+    try {
+      put = await writeIfUnchanged($, target, before, next, { mayCreate: true, before: () => writeWrote($, record, ready.map(block => [...block.lines])) })
+    } catch (error) {
+      await forgetUnwritten($, record, target, next, wrote)
+
+      throw error
+    }
     if (put.kind !== 'written') {
+      // 'unsafe' and 'refused' come before the record is stored; 'unread' and 'changed' come after it: the record names blocks that are not in the archive.
+      if (put.kind === 'unread' || put.kind === 'changed') {
+        await forgetUnwritten($, record, target, next, wrote)
+      }
+      if (put.kind === 'unsafe') {
+        toldOnce(`${target}\0unsafe:${put.reason}`, () => showToast($, `Not archived: ${target} cannot be written (${put.reason}). The tickets stay in ${path}.`))
+      }
+
       return false
     }
     isWritten = true
   }
   // Confirmed from the disk before the source is touched.
   const after = (await readStrict($, target)).split('\n')
-  if (!ready.every(block => hasBlock(after, block.lines))) {
+  const stands = blockFinder(after)
+  if (!ready.every(block => stands(block.lines))) {
+    toldOnce(`${target}\0confirm`, () => showToast($, `Not archived: ${target} does not hold the moved tickets after the write. The tickets stay in ${path}.`))
+
     return false
   }
   // A write that throws leaves the archive and its record: the next pass finds the blocks there and only cuts the source.
@@ -2435,8 +2687,8 @@ let claimsPrunedAt: number | undefined
 /** The `.git` walk's file calls (`gitWhereUp`), through the engine. A call that fails gives undefined. */
 function gitFs($: EngineInterface): GitFs {
   return {
-    exists: path => $.fs.exists(path).catch(() => undefined),
-    kind: path => $.fs.stat(path).then(stat => stat.kind as string, () => undefined),
+    exists: path => fsBounded($, () => $.fs.exists(path)).catch(() => undefined),
+    kind: path => fsBounded($, () => $.fs.stat(path)).then(stat => stat.kind as string, () => undefined),
     read: path => $.fs.read(path).catch(() => undefined),
   }
 }
@@ -2515,7 +2767,7 @@ async function makeClaim($: EngineInterface, path: string): Promise<'made' | 'ta
     return 'made'
   }
 
-  return (await $.fs.exists(path).catch(() => false)) ? 'taken' : 'failed'
+  return (await fsBounded($, () => $.fs.exists(path)).catch(() => false)) ? 'taken' : 'failed'
 }
 
 /**
@@ -2549,11 +2801,11 @@ async function removeClaim($: EngineInterface, path: string): Promise<boolean> {
 /** The file calls of a block claim (`claimAcross`), through the engine. A presence check that fails counts as there. */
 function claimPort($: EngineInterface): ClaimPort {
   return {
-    list: dir => $.fs.list(dir).then(
+    list: dir => fsBounded($, () => $.fs.list(dir)).then(
       entries => entries.map(entry => ({ name: entry.name, mtimeMs: entry.mtimeMs })),
       () => undefined,
     ),
-    exists: path => $.fs.exists(path).catch(() => true),
+    exists: path => fsBounded($, () => $.fs.exists(path)).catch(() => true),
     make: path => makeClaim($, path),
     remove: path => removeClaim($, path),
   }
@@ -2589,7 +2841,7 @@ async function claimBlock($: EngineInterface, from: number, first: number): Prom
     other = dir
     dir = dirs.fallback
   }
-  const listed = await $.fs.list(dir).catch(() => undefined)
+  const listed = await fsBounded($, () => $.fs.list(dir)).catch(() => undefined)
   if (listed === undefined) {
     return `could not list ${dir}`
   }
@@ -2768,6 +3020,9 @@ async function numberPass($: EngineInterface): Promise<boolean> {
   // stop, as it names IDs to Claude before any file holds them.
   await syncReserved($)
   const seen = new Set<string>()
+  // The disk read once per pass, when the first file needs numbers: a read for every file would scale with the file count.
+  // The IDs this pass gives are reserved, so a later file never takes one the memo lacks.
+  let onDiskOnce: string[] | undefined
   // The leading IDs of every ticket on the board: a line that only names one of them refers to it.
   const owned = new Set(todoFiles.flatMap(file => file.items.flatMap(item => leadingId(item.text) ?? [])).map(id => id.toLowerCase()))
   let wrote = 0
@@ -2821,7 +3076,8 @@ async function numberPass($: EngineInterface): Promise<boolean> {
       // At most NUMBER_MAX lines per file per pass, which one pick can give; the rest wait for the next pass.
       at.splice(NUMBER_MAX)
       // Every file read again from the disk, inside the lock: the board may be older than the files.
-      const onDisk = await diskIds($)
+      onDiskOnce ??= await diskIds($)
+      const onDisk = onDiskOnce
       // The IDs are chosen now, above the board, the disk, the IDs reserved at this moment (a prompt may have
       // named some while this pass awaited) and the file's own text, which may be newer than the board. They come
       // from this session's claimed block, as the prompt offers do, and `freeIds` records each pick with no await
@@ -2856,6 +3112,7 @@ async function numberPass($: EngineInterface): Promise<boolean> {
       taken.length = 0
       const place = file.rel === undefined ? file.name : `${file.rel}/${file.name}`
       pendingNumbered = [...pendingNumbered, ...at.map((index, i) => numberedLine(place, ids[i]!, plainText(CHECKBOX.exec(lines[index]!)?.[2] ?? '')))]
+      await saveToldNotes($)
       numberFailed.delete(path)
       wrote += 1
     } catch (error) {
@@ -2903,7 +3160,7 @@ async function platformName($: EngineInterface): Promise<string> {
     const uname = ((asked === TIMED_OUT ? undefined : asked)?.stdout ?? '').trim()
     let hasMacSign = false
     for (const sign of uname === '' ? MAC_SIGNS : []) {
-      hasMacSign ||= await $.fs.exists(sign).catch(() => false)
+      hasMacSign ||= await fsBounded($, () => $.fs.exists(sign)).catch(() => false)
     }
     unameCache = platformFrom(uname, hasMacSign)
   }
@@ -2950,7 +3207,7 @@ async function readyArchive($: EngineInterface, path: string): Promise<string | 
   if (!(await isTrustedDir($, folder))) {
     return 'its folder is not safe to change'
   }
-  if (!(await $.fs.exists(dir).catch(() => false))) {
+  if (!(await fsBounded($, () => $.fs.exists(dir)).catch(() => false))) {
     // archive/ is made by the write below.
   } else if (!samePath((await realOf($, dir)) ?? '', dir)) {
     return 'archive/ is a symlink'
@@ -3011,7 +3268,7 @@ async function trashFile($: EngineInterface, path: string): Promise<{ isOk: bool
       tried.push(`${argv[0] ?? ''}: timed out after ${RUN_LIMIT_MS / 1000} s`)
       break
     }
-    if (result?.exitCode === 0 && !(await $.fs.exists(path).catch(() => true))) {
+    if (result?.exitCode === 0 && !(await fsBounded($, () => $.fs.exists(path)).catch(() => true))) {
       return { isOk: true, tried }
     }
     // Per command: not found (it did not start, or the shell said 127), or the code it exited with.
@@ -3100,7 +3357,7 @@ async function deleteEmptyLocked($: EngineInterface): Promise<void> {
     // A folder that is gone leaves the folder list.
     const gone = new Set<string>()
     for (const folder of folders) {
-      if (!(await $.fs.exists(folder).catch(() => true))) {
+      if (!(await fsBounded($, () => $.fs.exists(folder)).catch(() => true))) {
         gone.add(folder)
       }
     }
@@ -3153,28 +3410,34 @@ async function deleteDupTicketsLocked($: EngineInterface): Promise<void> {
     }
     const text = await readStrict($, path)
     const result = removeDuplicateTickets(text)
-    if (result.removed.length === 0) {
+    // Nothing to remove, but archive files a press before could not follow: only their references are fixed now.
+    if (result.removed.length === 0 && Object.keys(refsToFix).length === 0) {
       return
     }
-    const put = await writeIfUnchanged($, path, text, result.text, { folder: central })
-    if (put.kind !== 'written') {
-      showToast($, put.kind === 'changed' ? `Not changed, the file changed meanwhile: ${DIR}/${target}` : `Not changed: ${DIR}/${target} (${put.kind === 'unsafe' ? `not safe: ${put.reason}` : put.kind === 'unread' ? `could not be read: ${put.reason}` : 'not written'})`)
+    let done = ''
+    if (result.removed.length > 0) {
+      const put = await writeIfUnchanged($, path, text, result.text, { folder: central })
+      if (put.kind !== 'written') {
+        showToast($, put.kind === 'changed' ? `Not changed, the file changed meanwhile: ${DIR}/${target}` : `Not changed: ${DIR}/${target} (${put.kind === 'unsafe' ? `not safe: ${put.reason}` : put.kind === 'unread' ? `could not be read: ${put.reason}` : 'not written'})`)
 
-      return
+        return
+      }
+      // The target changed: Claude is told, and the toast is built, now, whatever happens to the archive files.
+      const mapped = Object.entries(result.map).map(([id, kept]) => `#${id.toUpperCase()} is now #${kept}`)
+      pendingRemoved = [...pendingRemoved, ...result.removed.map(one => `- #${one.id} removed, it repeated #${one.kept}`), ...mapped.map(line => `- ${line}`)]
+      await saveToldNotes($)
+      done = `Removed ${result.removed.length} duplicate ${result.removed.length === 1 ? 'ticket' : 'tickets'} from ${DIR}/${target}.${mapped.length > 0 ? ` ${mapped.join('; ')}` : ''}`
     }
-    // The target changed: Claude is told, and the toast is built, now, whatever happens to the archive files.
-    const mapped = Object.entries(result.map).map(([id, kept]) => `#${id.toUpperCase()} is now #${kept}`)
-    pendingRemoved = [...pendingRemoved, ...result.removed.map(one => `- #${one.id} removed, it repeated #${one.kept}`), ...mapped.map(line => `- ${line}`)]
-    const done = `Removed ${result.removed.length} duplicate ${result.removed.length === 1 ? 'ticket' : 'tickets'} from ${DIR}/${target}.${mapped.length > 0 ? ` ${mapped.join('; ')}` : ''}`
     // References in the central archive files follow; each file on its own, so one that fails names itself and stops no other.
     const changed: string[] = []
     const notFixed: string[] = []
-    if (Object.keys(result.map).length > 0) {
+    const fixMap = { ...refsToFix, ...result.map }
+    if (Object.keys(fixMap).length > 0) {
       for (const name of names.filter(one => one.includes('/'))) {
         const file = `${central}/${name}`
         try {
           const before = await readStrict($, file)
-          const after = renameRefs(before, result.map)
+          const after = renameRefs(before, fixMap)
           if (after === before) {
             continue
           }
@@ -3190,7 +3453,9 @@ async function deleteDupTicketsLocked($: EngineInterface): Promise<void> {
         }
       }
     }
-    showToast($, `${done}${changed.length > 0 ? ` References fixed in ${changed.join(', ')}.` : ''}${notFixed.length > 0 ? ` References not fixed in ${notFixed.join(', ')}.` : ''}`)
+    // A reference fix that failed is kept: the button stays, and the next press tries those files again.
+    refsToFix = notFixed.length > 0 ? fixMap : {}
+    showToast($, `${done}${changed.length > 0 ? `${done === '' ? '' : ' '}References fixed in ${changed.join(', ')}.` : ''}${notFixed.length > 0 ? `${done === '' && changed.length === 0 ? '' : ' '}References not fixed in ${notFixed.join(', ')}.` : ''}`)
     // Bounded: a scan that does not end in time frees the writer lock; it goes on, and its late result still counts.
     await boundedJob($, scan($, true).catch(() => undefined))
   } catch (error) {
@@ -3386,8 +3651,8 @@ async function scanOnce($: EngineInterface, isFull: boolean): Promise<boolean> {
     const sources: [string, string][] = [[folder.path, ''], [await archiveDirOf($, folder.path), 'archive/']]
     for (const [dir, prefix] of sources) {
       // A folder whose check or list fails is not known to be empty: its files stay as last read.
-      const exists = await $.fs.exists(dir).then(is => is, () => undefined)
-      const entries = exists === true ? await $.fs.list(dir).then(list => list, () => undefined) : []
+      const exists = await fsBounded($, () => $.fs.exists(dir)).then(is => is, () => undefined)
+      const entries = exists === true ? await fsBounded($, () => $.fs.list(dir)).then(list => list, () => undefined) : []
       if (exists === undefined || entries === undefined) {
         unlistedDirs.push(dir)
         unread.push(`${folder.rel ?? folder.path}${prefix === '' ? '' : '/archive'}`)
@@ -3503,6 +3768,20 @@ let sortBatchSize = SORT_BATCH
 /** The items whose reply did not parse when each was sent alone, by key, with the text they had: sent alone and last from then on. */
 const sortAlone = new Map<string, string>()
 
+/** The failures in a row after which the sort says so once. */
+const SORT_FAILS_TO_TOAST = 3
+/** Whether the toast for failures in a row was shown; shown again only after a sort is written. */
+let isSortToastShown = false
+
+/** Counts a failed sort and, at SORT_FAILS_TO_TOAST in a row, says once why: a sort that fails for good would otherwise leave the tickets unsorted with no word. */
+function sortFailed($: EngineInterface, why: string): void {
+  sortFailures += 1
+  if (sortFailures >= SORT_FAILS_TO_TOAST && !isSortToastShown) {
+    isSortToastShown = true
+    showToast($, `Sorting into categories failed ${sortFailures} times in a row (${why}). The tickets stay unsorted; it is tried again later.`)
+  }
+}
+
 /** The wait before the next sort: 30 s, doubled for each failure in a row. */
 function sortWaitMs(): number {
   return SORT_EVERY_MS * 2 ** Math.min(sortFailures, 6)
@@ -3545,12 +3824,12 @@ let bookSeen: string | null | undefined
 
 /** The text of a book file now: null when there is none, undefined when it cannot be told (a failed check or read). */
 async function bookOnDisk($: EngineInterface, path: string): Promise<string | null | undefined> {
-  const exists = await $.fs.exists(path).then(is => is, () => undefined)
+  const exists = await fsBounded($, () => $.fs.exists(path)).then(is => is, () => undefined)
   if (exists !== true) {
     return exists === false ? null : undefined
   }
   try {
-    const text: unknown = await $.fs.read(path)
+    const text: unknown = await fsBounded($, () => $.fs.read(path))
 
     return typeof text === 'string' ? text : ''
   } catch {
@@ -3653,7 +3932,7 @@ async function backUpBookNow($: EngineInterface, path: string, raw: string): Pro
   const names = bookBackups(path)
   // A folder that will not list would make every name look taken (hasEntry answers yes): say the true cause instead.
   const dir = path.slice(0, path.lastIndexOf('/'))
-  if ((await $.fs.list(dir).catch(() => undefined)) === undefined) {
+  if ((await fsBounded($, () => $.fs.list(dir)).catch(() => undefined)) === undefined) {
     if (!backupsListToasted) {
       backupsListToasted = true
       showToast($, `${path} is damaged and ${dir} cannot be listed, so no backup can be made. It is left as it is and nothing is sorted.`)
@@ -3726,16 +4005,18 @@ async function sortItems($: EngineInterface): Promise<void> {
       queue = queue.filter(one => !batch.includes(one))
       let reply: { isAnswered: boolean; text?: string; reason?: string; status?: unknown } | undefined
       let isThrown = false
+      let failure = 'the model call failed'
       try {
         reply = (await $.model.complete({ model: SORT_MODEL, prompt: sortPrompt(book.categories, batch.map(([, text]) => text)), maxTokens: 4000 })) as typeof reply
-      } catch {
+      } catch (error) {
         reply = undefined
         isThrown = true
+        failure = error instanceof Error ? error.message : String(error)
       }
       const kind = sortReplyKind(reply)
       if (kind === 'failed') {
         // The model call failed: wait longer before the next try.
-        sortFailures += 1
+        sortFailed($, reply?.reason === undefined || reply.reason === '' ? failure : reply.reason)
         // A throw, or an HTTP 4xx answer (a 400, a 413), may be the items' fault: the second
         // in a row for the same batch halves it, and a lone item goes last, with no try counted, so the
         // queue moves past it. A transport or capacity failure (no status, 5xx, 429, an abort) only waits.
@@ -3761,7 +4042,7 @@ async function sortItems($: EngineInterface): Promise<void> {
       if (next === undefined) {
         // A reply that does not parse is the model's fault, not the items': it waits longer, as a failed call does, and counts against no item in a batch of more than one.
         // The next call carries half the items, so one item that never gets a readable reply ends up alone and last, and the queue moves past it.
-        sortFailures += 1
+        sortFailed($, 'the reply could not be read')
         if (batch.length === 1) {
           const [key, text] = batch[0]!
           // Set again at the end of the order: the other lone items go first next time.
@@ -3810,12 +4091,13 @@ async function sortItems($: EngineInterface): Promise<void> {
       const written = `${JSON.stringify(next, null, 2)}\n`
       try {
         await $.fs.write(`${bookDir}/categories.json`, written)
-      } catch {
-        sortFailures += 1
+      } catch (error) {
+        sortFailed($, `categories.json could not be written: ${error instanceof Error ? error.message : String(error)}`)
 
         break
       }
       sortFailures = 0
+      isSortToastShown = false
       book = next
       bookSeen = written
       redraw($)
@@ -3943,9 +4225,9 @@ const MATCH_RETRY_MAX_MS = 10 * 60_000
 let isMatchToastShown = false
 
 /**
- * Asks Haiku, once per agent, which open or in-progress todo items the agent's task works on, and
+ * Asks Haiku, once per agent, which open, queued or in-progress todo items the agent's task works on, and
  * links them. Agents rarely name their items, and most items have no ID, so without this most
- * links never form. In-progress items are listed first.
+ * links never form. In-progress items are listed first, then queued, then open.
  */
 async function matchAgent($: EngineInterface, id: string, task: string): Promise<void> {
   // The one guard of the once-per-agent rule; matchNewAgents calls for every live row.
@@ -3958,7 +4240,7 @@ async function matchAgent($: EngineInterface, id: string, task: string): Promise
     .filter(file => file.isArchived !== true)
     .flatMap(file => file.items)
     .filter(item => item.status !== 'completed')
-  const texts = [...new Set([...open.filter(item => item.status === 'in_progress'), ...open.filter(item => item.status === 'pending')].map(item => item.text))].slice(0, MATCH_ITEMS)
+  const texts = [...new Set([...open.filter(item => item.status === 'in_progress'), ...open.filter(item => item.status === 'queued'), ...open.filter(item => item.status === 'pending')].map(item => item.text))].slice(0, MATCH_ITEMS)
   if (texts.length === 0) {
     return
   }
@@ -4044,6 +4326,10 @@ const seenTurns = new Map<string, number | undefined>()
  * already running when the mod loaded is known only from the agent list, which has none.
  */
 const stepModels = new Map<string, string>()
+/** The color slot each agent was first drawn with, by agent ID: a woken agent's replayed slot never moves another agent's color. */
+const slotPins = new Map<string, number>()
+/** Counts the refreshes started: the one that started last sets the view time. */
+let refreshSeq = 0
 let lastClock = 0
 /** When each live row was first missing from the agent list, by agent ID: the start of its grace. */
 let missingSince = new Map<string, number>()
@@ -4054,12 +4340,15 @@ let missingSince = new Map<string, number>()
  * CSS motion runs on between redraws.
  */
 async function refreshAgents($: EngineInterface, isForced = false): Promise<void> {
+  refreshSeq += 1
+  const seq = refreshSeq
   const time = await $.clock.now()
   wallMs = time
   await loadAgents($).catch(() => undefined)
   // The kept token count too: a load that no session.start follows (a plugin reload) still seeds the trace from it.
   await readUsage($).catch(() => undefined)
-  const listed = await $.agent.list()
+  // Bounded (-015): an agent list that never answers fails this refresh, which its caller counts, instead of holding every later tick.
+  const listed = await failAfter($.agent.list(), RUN_LIMIT_MS, (ms, fire) => $.clock.after(ms, fire))
   const rows = agentRows
   const known = new Map(rows.map(row => [row.id, row]))
   // The agents new in this refresh take places before a cut row returns, so a return never pushes out a live row.
@@ -4147,7 +4436,11 @@ async function refreshAgents($: EngineInterface, isForced = false): Promise<void
   noteEnds(rows, next)
   setRows(next)
   lastClock = time
-  clockMs = time
+  // Only the latest refresh to start sets the view time: one that read its time earlier can finish after a later one, and must not step the time back.
+  // A clock set back still moves it, as the latest refresh read it.
+  if (seq === refreshSeq) {
+    clockMs = time
+  }
   pruneAgentState()
   redraw($)
 }
@@ -4161,9 +4454,10 @@ async function refreshAgents($: EngineInterface, isForced = false): Promise<void
 function pruneAgentState(): void {
   const rowIds = new Set(agentRows.map(row => row.id))
   const isAgent = (id: string) => rowIds.has(id) || cutRowIds.has(id)
-  for (const held of [claimCheckedAt, matchedAgents, matchFailures, stepModels, nudgedAgents, pendingTokens, endedHere]) {
+  for (const held of [claimCheckedAt, matchedAgents, matchFailures, stepModels, nudgedAgents, pendingTokens, endedHere, slotPins]) {
     pruneTo(held, isAgent)
   }
+  pruneTo(seenTurns, key => isTurnKept(key, isAgent))
   pruneTo(namedAt, key => orchTickets.has(key))
   pruneTo(sortTries, bookKeep())
 }
@@ -4175,6 +4469,16 @@ function matchNewAgents($: EngineInterface, rows: readonly AgentRow[]): void {
       void matchAgent($, row.id, row.brief).catch(() => undefined)
     }
   }
+}
+
+/** Gives every row its color slot, keeping the slot each agent was first drawn with (the cards read it through agentColor). */
+function pinColorSlots(rows: readonly AgentRow[]): void {
+  const slots = colorSlots(
+    rows.map(row => ({ startedAt: row.startedAt, endedAt: row.endedAt, idleSince: row.idleSince, isEnded: isEnded(row.status), ...(slotPins.has(row.id) ? { pinned: slotPins.get(row.id)! } : {}) })),
+    AGENT_COLORS.length,
+  )
+  rows.forEach((row, i) => slotPins.set(row.id, slots[i]!))
+  setColorSlots(slots)
 }
 
 /** Marks an agent at work again: its tool call or model request ends its idle time. */
@@ -4253,9 +4557,17 @@ async function moveTicket($: EngineInterface, input: Record<string, unknown>, is
   }
   const key = `${folder}/${file}:${itemKey(item)}`
   const yes = 'Move it'
-  const answer = await $.ui
+  // A dialog that could not be shown is no answer: the user has not decided, so it is not read as "kept".
+  const asked = await $.ui
     .ask(moveQuestion(path, item, to, reason, userMoves.has(key)), { options: [yes, 'Keep it where it is'], header: 'Ticket' })
-    .catch(() => undefined)
+    .then(
+      (value): { value: string | undefined } => ({ value }),
+      () => undefined,
+    )
+  if (asked === undefined) {
+    return `Not moved: the confirmation could not be shown, so the user has not decided about ${quoteTicket(item.text, 80)}. Try again later.`
+  }
+  const answer = asked.value
   if (answer !== yes) {
     return `Not moved: the user kept ${quoteTicket(item.text, 80)} ${STATUS_WORDS[item.status]}${answer === undefined || answer === 'Keep it where it is' ? '' : ` and said: ${answer}`}. Do not move it again unless the user asks.`
   }
@@ -4393,7 +4705,7 @@ function noteEnds(before: readonly AgentRow[], after: readonly AgentRow[]): void
  * error messages can hold control characters, and a toast with ESC could move a terminal's cursor.
  */
 function showToast($: EngineInterface, text: string): void {
-  $.ui.toast(controlFree(text))
+  $.ui.toast(toastText(text))
 }
 
 /**
@@ -4506,6 +4818,8 @@ async function queueStopped($: EngineInterface, path: string, keys: readonly str
   const wanted = new Set(keys)
   const items = file.items.filter(item => wanted.has(keptKey(file, item)))
   const target = `${file.folder}/${file.name}`
+  // Why the queueing could not be written, when it could not: Claude is told, as the ticket stays at the open box its own edit set.
+  const failed: { reason?: string } = {}
   const written = await withWriteLock(async () => {
     if (!(await isTrustedDir($, file.folder)) || !(await isPlainFile($, target))) {
       return []
@@ -4524,9 +4838,21 @@ async function queueStopped($: EngineInterface, path: string, keys: readonly str
       return []
     }
     const put = await writeIfUnchanged($, target, text, next, { folder: file.folder })
+    // A box that changed since the read is left as the other writer made it: that is no failure.
+    if (put.kind !== 'written' && put.kind !== 'changed') {
+      failed.reason = 'reason' in put ? put.reason : 'the write was refused'
+    }
 
     return put.kind === 'written' ? done : []
-  }).catch(() => [] as TodoItem[])
+  }).catch((error: unknown) => {
+    failed.reason = error instanceof Error ? error.message : String(error)
+
+    return [] as TodoItem[]
+  })
+  if (failed.reason !== undefined) {
+    const lines = items.map(item => `${quoteTicket(item.text, 160)} in ${quoteName(path)} stayed open: the Claudeopticon pane could not set it to queued (${failed.reason}). If it is next work, set its box to \`- [>]\` yourself.`)
+    pendingClaimed = [...pendingClaimed, ...lines]
+  }
   if (written.length > 0) {
     pendingStopped = [...pendingStopped, ...written.map(item => moveLine(item.text, path, STATUS_WORDS.in_progress, STATUS_WORDS.queued))]
     await scan($).catch(() => undefined)
@@ -4775,6 +5101,8 @@ let peerHeld: ReadonlyMap<string, PeerClaim> = new Map()
 let lastPresence: Presence | undefined
 let presenceAt: number | undefined
 let peersAt: number | undefined
+/** When the last presence write failed: the retry waits PRESENCE_EVERY_MS from it. */
+let presenceFailedAt: number | undefined
 let isPeerBusy = false
 /** What the last drawn peer claims looked like (names, tickets, silent state), so the next read redraws on a change of any of them. */
 let peerShape = '[]'
@@ -4822,18 +5150,28 @@ async function peerStep($: EngineInterface, now: number): Promise<void> {
     }
     const held = holdings(todoFiles, agentRows, new Set(orchTickets.keys()), plannedTickets)
     const next = buildPresence(me, sessionName, root, held, now)
-    const sinceWrite = presenceAt === undefined ? Infinity : elapsedSince(presenceAt, now).ms
-    if (!samePresence(lastPresence, next) || sinceWrite >= PRESENCE_EVERY_MS) {
+    // Each wait is timed with waitOver: after a clock set back it starts over from the new time and is not held until the old one.
+    const written = waitOver(presenceAt, now, PRESENCE_EVERY_MS)
+    presenceAt = written.from
+    const retry = waitOver(presenceFailedAt, now, PRESENCE_EVERY_MS)
+    presenceFailedAt = retry.from
+    // Not written while the stored name was not read and none is known: the record would carry no name and replace the stored one.
+    // After a failed write the retry waits PRESENCE_EVERY_MS, not one tick.
+    if ((isNameRead || sessionName !== undefined) && (!samePresence(lastPresence, next) || written.isOver) && retry.isOver) {
       presenceAt = now
       await storeSet($, presenceKey(me), next).then(
         () => {
           lastPresence = next
+          presenceFailedAt = undefined
         },
-        () => undefined,
+        () => {
+          presenceFailedAt = now
+        },
       )
     }
-    const sinceRead = peersAt === undefined ? Infinity : elapsedSince(peersAt, now).ms
-    if (sinceRead < PEERS_EVERY_MS) {
+    const read = waitOver(peersAt, now, PEERS_EVERY_MS)
+    peersAt = read.from
+    if (!read.isOver) {
       return
     }
     peersAt = now
@@ -5044,7 +5382,7 @@ function start($: EngineInterface): void {
     void (async () => {
       const now = await $.clock.now()
       wallMs = now
-      if (recatNote !== undefined && now >= recatNote.until) {
+      if (recatNote !== undefined && isDeadlinePast(recatNote.until, now, NOTE_MS)) {
         recatNote = undefined
         redraw($)
       }
@@ -5080,8 +5418,32 @@ function start($: EngineInterface): void {
       if (ticks % SCAN_EVERY === 0) {
         await scan($)
       }
-    })().catch(() => undefined)
+    })().then(
+      () => {
+        tickFailures = 0
+        isTickToastShown = false
+      },
+      (error: unknown) => noteTickFailure($, error),
+    )
   })
+}
+
+/** The ticks in a row whose work threw: a board that cannot refresh says so once. */
+let tickFailures = 0
+const TICK_FAILS_TO_TOAST = 3
+let isTickToastShown = false
+
+/** Counts a tick that threw and, at TICK_FAILS_TO_TOAST in a row, says why once (shown again only after a tick works): the ticker goes on, and the board would otherwise go stale with no word. */
+function noteTickFailure($: EngineInterface, error: unknown): void {
+  tickFailures += 1
+  if (tickFailures >= TICK_FAILS_TO_TOAST && !isTickToastShown) {
+    isTickToastShown = true
+    try {
+      showToast($, `The board could not refresh ${tickFailures} times in a row (${error instanceof Error ? error.message : String(error)}). It is tried again every second.`)
+    } catch {
+      // A toast that fails has nowhere left to tell.
+    }
+  }
 }
 
 /** Header rows for the empty top-level todo files, so a file Consolidate emptied stays in view until Delete empty todos removes it. */
@@ -5099,8 +5461,12 @@ function todoCount(): number {
 /** The dim text after the Todo heading: the counts, then the number of files they come from. */
 function todoDetail(view: View): string {
   const files = todoCount()
-  const counts = view.total === 0 ? 'No checkbox items in .claude_todo/' : `${view.done} of ${view.total} done, ${view.active} in progress`
-  return files === 0 ? counts : `${counts}. Pulling todo from ${files} ${files === 1 ? 'file' : 'files'}`
+  // A file the scan could not read is said so; it is never shown as a file with no items.
+  const unread = unreadPlaces.length === 0 ? '' : `Could not read ${unreadPlaces.length} todo ${unreadPlaces.length === 1 ? 'file' : 'files'}`
+  const counts = view.total === 0 ? (unread === '' ? 'No checkbox items in .claude_todo/' : '') : `${view.done} of ${view.total} done, ${view.active} in progress`
+  const pulling = files === 0 ? '' : `Pulling todo from ${files} ${files === 1 ? 'file' : 'files'}`
+
+  return [counts, pulling, unread].filter(part => part !== '').join('. ')
 }
 
 /** The heading's buttons for many folders: Consolidate todos when the tickets are in more than one place or a copied file was not emptied, Delete empty todos and Delete duplicate tickets while they have work. */
@@ -5176,7 +5542,8 @@ export const register: Register = (on, options) => {
       })
       .catch(toastFailure($, 'register the move_ticket tool'))
     await pruneSessions($).catch(() => undefined)
-    await scan($).catch(() => undefined)
+    // A scan that fails is told: the board would otherwise stay empty with no word why.
+    await scan($).catch(toastFailure($, 'read the todo files'))
     await refreshAgents($).catch(() => undefined)
     await readUsage($).catch(() => undefined)
     start($)
@@ -5332,12 +5699,16 @@ export const register: Register = (on, options) => {
       }
     }
     // Moves made by hand reach the main conversation with its next tool result, mid-turn.
+    if (id === undefined) {
+      await loadToldNotes($)
+    }
     const told = pendingNotes()
     const queued = id === undefined ? queuedNotes() : []
     if (queued.length === 0 || ran.deny !== undefined) {
       return ran
     }
     forgetTold(told)
+    await saveToldNotes($)
 
     return { ...ran, context: [...(ran.context ?? []), ...queued] }
   })
@@ -5360,11 +5731,14 @@ export const register: Register = (on, options) => {
     // Moves not yet told with a tool result ride on the next prompt, a ticket button's own included.
     // They leave the waiting lists while the prompt is in flight, so a tool result of its turn does not
     // tell them twice, and go back when the prompt is dropped beneath the mod or fails.
+    await loadToldNotes($)
     const told = pendingNotes()
     const moves = queuedNotes()
     forgetTold(told)
     // Local state: the prompt's own result, set inside the try so a failure on any await puts the notes back.
     let ran: Awaited<ReturnType<typeof next>>
+    // The pane says "Working" only for a prompt that runs: a throw or a drop below this handler puts it back.
+    const wasActive = orchestrator.isActive
     try {
       const isLabeled = hasLabel(e.text)
       if (isLabeled) {
@@ -5381,10 +5755,17 @@ export const register: Register = (on, options) => {
       ran = await next(notes.length === 0 ? e : { ...e, context: [...(e.context ?? []), ...notes] })
     } catch (error) {
       restoreTold(told)
+      orchestrator = { ...orchestrator, isActive: wasActive }
+      redraw($)
       throw error
     }
     if ((ran as { drop?: unknown } | undefined)?.drop !== undefined) {
       restoreTold(told)
+      orchestrator = { ...orchestrator, isActive: wasActive }
+      redraw($)
+    } else if (told.renames.length + told.numbered.length + told.removed.length > 0) {
+      // Told: the store forgets them too, so a reload does not tell them twice.
+      await saveToldNotes($)
     }
 
     return ran
@@ -5412,7 +5793,7 @@ export const register: Register = (on, options) => {
       wake(agentId)
     }
     // A turn first seen past its first step began before this load: its steps from now are counted.
-    const turnKey = `${agentId ?? ''}:${e.turnId}`
+    const turnKey = turnKeyOf(agentId, e.turnId)
     if (!seenTurns.has(turnKey)) {
       seenTurns.set(turnKey, e.index > 0 ? 0 : undefined)
     }
@@ -5436,6 +5817,9 @@ export const register: Register = (on, options) => {
     // Counted once on every way out: done, a throw, or a consumer that stops reading
     // (return() at the yield, an interrupt), which runs only the finally.
     let isCounted = false
+    // Whether the upstream stream ended on its own (returned or threw): if not, the consumer stopped
+    // it, and the stream is owed a return() so its own cleanup runs.
+    let isDone = false
     try {
       for (;;) {
         let read: Awaited<ReturnType<typeof stream.next>>
@@ -5443,11 +5827,13 @@ export const register: Register = (on, options) => {
           read = await stream.next()
         } catch (error) {
           // A stream that breaks after its stop chunk still used the tokens the chunk reports.
+          isDone = true
           isCounted = true
           await count(stopUsage)
           throw error
         }
         if (read.done) {
+          isDone = true
           isCounted = true
           await count(stepUsage(read.value?.usage, stopUsage))
           if (agentId === undefined) {
@@ -5465,9 +5851,16 @@ export const register: Register = (on, options) => {
         yield read.value
       }
     } finally {
-      if (!isCounted) {
-        isCounted = true
-        await count(stopUsage)
+      try {
+        if (!isCounted) {
+          isCounted = true
+          await count(stopUsage)
+        }
+      } finally {
+        if (!isDone) {
+          // A consumer that stops reading must end the stream it took; a failing return() never hides the stop.
+          await Promise.resolve(stream.return?.(undefined)).catch(() => undefined)
+        }
       }
     }
   })
@@ -5477,7 +5870,7 @@ export const register: Register = (on, options) => {
   // The one exception is a turn that began before this load: its steps before the load
   // were never counted, so its usage less the steps counted since goes in at its end.
   on('turn.complete', async ($, e, next) => {
-    const turnKey = `${e.agentId ?? ''}:${e.turnId}`
+    const turnKey = turnKeyOf(e.agentId, e.turnId)
     const late = seenTurns.get(turnKey)
     seenTurns.delete(turnKey)
     if (late !== undefined && e.usage !== undefined) {
@@ -5518,7 +5911,7 @@ export const register: Register = (on, options) => {
     // a control character in a ticket, a todo file name or a command would make the engine refuse
     // the whole pane (the terminal surface draws them all as Text).
     const Text = ((props: Parameters<typeof RawText>[0]) => <RawText {...props}>{textChildren(props.children) as never}</RawText>) as typeof RawText
-    // A ticket's own button, and a press that changes nothing on the board, keep the spaces of tickets that left, so no card moves at the press;
+    // A press that changes nothing on the board keeps the spaces of the list view's rows that left, so no row moves at the press;
     // every other press clears them and forgets what was drawn, so the change it makes (a filter, a view switch, a search) reflows.
     // Every label is cleaned here, once, as Text is: a category name with a control character made the engine refuse the pane.
     const Button = ((props: Parameters<typeof RawButton>[0]) => (
@@ -5526,7 +5919,7 @@ export const register: Register = (on, options) => {
         {...props}
         label={controlFree(String(props.label))}
         onPress={() => {
-          if (!pressKeepsSpaces(props.key, String(props.label), TICKET_GLYPHS) && clearSpaces(layout, false)) {
+          if (!pressKeepsSpaces(props.key) && clearSpaces(layout, false)) {
             redraw($)
           }
           props.onPress?.()
@@ -5546,11 +5939,14 @@ export const register: Register = (on, options) => {
       void Promise.all([loadAgents($), readUsage($)]).then(() => redraw($)).catch(() => undefined)
     }
     axes = stepAxes(axes, series, time)
-    const view = { ...buildView(todoFiles, rows, time, orchestratorState(), peerHeld), ...(usage === undefined ? {} : { usage }), series, axes }
+    const built = buildView(todoFiles, rows, time, orchestratorState(), peerHeld)
+    pinColorSlots(rows)
+    const view = { ...built, ...(usage === undefined ? {} : { usage }), series, axes }
 
     const Svg = e.surface !== 'terminal' && 'Svg' in table ? table.Svg : undefined
     if (Svg !== undefined) {
       setWidth((e.props.bodyColumns ?? 48) * CELL_PX)
+      beginRender(layout)
       const { active, idle, finished, shown } = ledger(view, isFinishedShown)
       // Held, it is drawn with no agents too, so the held room starts with the timeline's empty card.
       const timeline = isRoomHeld || view.agents.length > 0 ? timelineSvg(view, shown) : undefined
@@ -5560,9 +5956,11 @@ export const register: Register = (on, options) => {
       agentRoom = held.room
       // Every card reaches the pane here, so its alt is cleaned here, once: one control character
       // in a ticket, a command or a file name would make the engine refuse the whole pane.
-      // The height is given too: without it a new card drew at no height until its image loaded, and moved the cards below it twice.
+      // No height is given: CELL_PX overestimates the cell, so the desktop scales each card down to the pane, and a
+      // given height kept the box at the unscaled height with the image centered in it: a gap under each card, and columns of
+      // different card heights starting at different tops. Without it the box takes the scaled image's own proportions.
       const card = (key: string, drawn: { source: string; width: number; height: number; alt: string; isInteractive?: true }) => (
-        <Svg key={keyText(key)} source={drawn.source} alt={altText(drawn.alt)} width={drawn.width} {...(drawn.height <= MAX_SVG_PX ? { height: drawn.height } : {})} {...(drawn.isInteractive === true ? { isInteractive: true } : {})} />
+        <Svg key={keyText(key)} source={drawn.source} alt={altText(drawn.alt)} width={drawn.width} {...(drawn.isInteractive === true ? { isInteractive: true } : {})} />
       )
       const section = (key: string, title: string, detail: string, buttonLabel: string | undefined, toggle: () => void, extra: { key: string; label: string; onPress: () => void }[] = [], showDone?: { label: string; onPress: () => void }) => (
         <Box key={keyText(key)} flexDirection="row" justifyContent="space-between" alignItems="center" marginTop={1}>
@@ -5581,7 +5979,7 @@ export const register: Register = (on, options) => {
 
       return (
         <Box flexDirection="column" gap={1}>
-          {(view.total > 0 || view.agents.length > 0 || view.usage !== undefined) && card('hero', heroSvg(pluginVersion === undefined ? view : { ...view, version: pluginVersion }))}
+          {(view.total > 0 || view.agents.length > 0 || view.usage !== undefined) && card('hero', heroCard(pluginVersion === undefined ? view : { ...view, version: pluginVersion }))}
           {/* The Orchestrator heading carries the room switch; pointing at it reveals its tip to its left, on the same line. */}
           <Box key="orchestrator-heading" flexDirection="row" justifyContent="space-between" alignItems="center" marginTop={1}>
             <Box flexDirection="row" gap={2}>
@@ -5655,13 +6053,14 @@ export const register: Register = (on, options) => {
           {/* The orchestrator leads, before A1; no Stop button, no timeline bar. */}
           {orchCard !== undefined && card('agent-orchestrator-card', orchCard)}
           {agentCards.map(({ agent, drawn }) => (
-            // A live agent's Stop button sits left of its status badge, in the room the card keeps free.
+            // A live agent's Stop button is drawn in its card at the right edge, right of the badge: the badge's row and height, red with a
+            // white stop sign, so it lines up at any cell size. A plain Button of blank text lies over it to take the press.
             // Keyed by the agent's ID: a cut at the front of the rows shifts every index, and index keys would remount every card.
             <Box key={keyText(`agent-${agent.id ?? agent.index}`)} flexDirection="column" position="relative">
               {card(`agent-${agent.id ?? agent.index}-card`, drawn)}
               {!agent.isEnded && (
-                <Box position="absolute" right={ACTION_RIGHT + Math.ceil(stopInsetPx(agent) / CELL_PX)} top={STOP_TOP}>
-                  <Button key={keyText(`agent-stop-${agent.id ?? agent.index}`)} label={STOP_GLYPH} onPress={() => (agent.id === undefined ? undefined : stopAgent($, agent.id).catch(toastFailure($, 'mark the agent stopped')))} />
+                <Box position="absolute" right={ACTION_RIGHT - STOP_PAD_CELLS} top={STOP_TOP}>
+                  <Button key={keyText(`agent-stop-${agent.id ?? agent.index}`)} label={STOP_HIT} plain onPress={() => (agent.id === undefined ? undefined : stopAgent($, agent.id).catch(toastFailure($, 'mark the agent stopped')))} />
                 </Box>
               )}
             </Box>
@@ -5677,69 +6076,67 @@ export const register: Register = (on, options) => {
             todoActions($),
             archiveLink === undefined ? undefined : { label: `Show completed (${view.archived})`, onPress: () => void openArchive($).catch(toastFailure($, 'open the archive')) },
           )}
-          {(
-            <Box key="todo-controls" flexDirection="row" gap={1} alignItems="center">
-              {Input !== undefined && (
-                <Input
-                  key="todo-search"
-                  placeholder="Search open, queued and in-progress items"
-                  value={controlFree(query)}
-                  submitLabel="Search"
-                  onInput={(value: string) => {
-                    clearSpaces(layout, false)
-                    // Cleaned before it is kept: the engine refuses an Input value with a control character, and the pane would stay refused until a reload.
-                    query = controlFree(String(value))
-                    redraw($)
-                  }}
-                  onSubmit={(value: string) => {
-                    clearSpaces(layout, false)
-                    query = controlFree(String(value))
-                    redraw($)
-                  }}
-                />
-              )}
-              <Button
-                key="todo-tickets"
-                label={isTicketView ? 'Show as list' : 'Show as tickets'}
-                onPress={() => {
-                  isTicketView = !isTicketView
+          <Box key="todo-controls" flexDirection="row" gap={1} alignItems="center">
+            {Input !== undefined && (
+              <Input
+                key="todo-search"
+                placeholder="Search open, queued and in-progress items"
+                value={controlFree(query)}
+                submitLabel="Search"
+                onInput={(value: string) => {
+                  clearSpaces(layout, false)
+                  // Cleaned before it is kept: the engine refuses an Input value with a control character, and the pane would stay refused until a reload.
+                  query = controlFree(String(value))
+                  redraw($)
+                }}
+                onSubmit={(value: string) => {
+                  clearSpaces(layout, false)
+                  query = controlFree(String(value))
                   redraw($)
                 }}
               />
-              {isTicketView && (
-                <Button
-                  key="todo-order"
-                  label={ticketOrder === 'recency' ? 'Rank by group' : 'Rank by recency'}
-                  onPress={() => {
-                    ticketOrder = ticketOrder === 'recency' ? 'group' : 'recency'
-                    redraw($)
-                  }}
-                />
-              )}
-              {openItems().length > 0 && (
-                <Button
-                  key="todo-recategorize"
-                  label="Recategorize"
-                  onPress={() => {
-                    void recategorize($).catch(() => undefined)
-                  }}
-                />
-              )}
-              {/* One line, cut to fit: a long note that wrapped made the row taller, and moved the board below, for its 4 s. */}
-              {(isRecategorizing || recatNote !== undefined) && <Text dimColor wrap="truncate-end">{isRecategorizing ? 'Recategorizing...' : recatNote!.text}</Text>}
-              {query.trim() === '' && !isTicketView && (
-                <Button
-                  key="todo-sort"
-                  label="Arrange by category"
-                  variant={sortBy === 'category' ? 'primary' : 'secondary'}
-                  onPress={() => {
-                    sortBy = sortBy === 'category' ? 'file' : 'category'
-                    redraw($)
-                  }}
-                />
-              )}
-            </Box>
-          )}
+            )}
+            <Button
+              key="todo-tickets"
+              label={isTicketView ? 'Show as list' : 'Show as tickets'}
+              onPress={() => {
+                isTicketView = !isTicketView
+                redraw($)
+              }}
+            />
+            {isTicketView && (
+              <Button
+                key="todo-order"
+                label={ticketOrder === 'recency' ? 'Rank by group' : 'Rank by recency'}
+                onPress={() => {
+                  ticketOrder = ticketOrder === 'recency' ? 'group' : 'recency'
+                  redraw($)
+                }}
+              />
+            )}
+            {openItems().length > 0 && (
+              <Button
+                key="todo-recategorize"
+                label="Recategorize"
+                onPress={() => {
+                  void recategorize($).catch(() => undefined)
+                }}
+              />
+            )}
+            {/* One line, cut to fit: a long note that wrapped made the row taller, and moved the board below, for its 4 s. */}
+            {(isRecategorizing || recatNote !== undefined) && <Text dimColor wrap="truncate-end">{isRecategorizing ? 'Recategorizing...' : recatNote!.text}</Text>}
+            {query.trim() === '' && !isTicketView && (
+              <Button
+                key="todo-sort"
+                label="Arrange by category"
+                variant={sortBy === 'category' ? 'primary' : 'secondary'}
+                onPress={() => {
+                  sortBy = sortBy === 'category' ? 'file' : 'category'
+                  redraw($)
+                }}
+              />
+            )}
+          </Box>
           {query.trim() === '' && filterNames(todoLedger(view), book).length > 0 && (
             <Box key="category-filter" flexDirection="row" flexWrap="wrap" gap={1} alignItems="center">
               <Text dimColor>Categories</Text>
@@ -5798,6 +6195,8 @@ export const register: Register = (on, options) => {
             const isStacked = columnCount === 1
             // What one ticket draws, worked out once per render: the slots need its height before it is placed.
             const prepared = new Map<ItemView, { sentKey: string; isSent: boolean; actions: TicketAction[]; drawn: ReturnType<typeof ticketSvg> }>()
+            // The tickets whose card cuts their text: the board offers the full text for them, as the list does.
+            const longTickets = new Set<ItemView>()
             // Each item is in one column, so the first call's width is its column's.
             const prepare = (item: ItemView, ticketW: number) => {
               const known = prepared.get(item)
@@ -5808,9 +6207,9 @@ export const register: Register = (on, options) => {
               const isSent = sentTickets.has(sentKey)
               // A ticket with no listed category is tagged Uncategorized, once the book has categories.
               const category = book.categories.length === 0 ? undefined : groupOf(book, storedKey(item.key))
-              const id = new RegExp(`#${ID_SRC}\\b`).exec(item.text)?.[0]
+              const id = itemChipId(item)
+              const send = isSent ? [] : [SEND_ACTION]
               // Every ticket, in every column, ends with the status question mark.
-                            const send = isSent ? [] : [SEND_ACTION]
               const actions: TicketAction[] =
                 item.status === 'completed'
                   ? [STATUS_ACTION]
@@ -5822,7 +6221,10 @@ export const register: Register = (on, options) => {
                       : [...(item.heldFrom === undefined ? [UNSTART_ACTION] : []), DONE_ACTION, ...(item.peer !== undefined ? send : []), STATUS_ACTION]
               // The tag's room: the card width less the buttons' cells (an overestimate, so the tag stays clear of them) and the card's padding.
               const peerTag = item.peer === undefined ? undefined : { tip: peerTip(item.peer), isDim: item.peer.silentSince !== undefined, room: ticketW - (ACTION_RIGHT + actions.length * ACTION_CELLS) * CELL_PX - 14 - 8 }
-              const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, actions: actions.length, ...(peerTag === undefined ? {} : { peerTag }) })
+              if (isTicketLong(item, id, ticketW)) {
+                longTickets.add(item)
+              }
+              const drawn = ticketSvg(item, view, ticketW, { ...(id === undefined ? {} : { id }), ...(category === undefined ? {} : { category }), isSent, isTextOpen, actions: actions.length, ...(peerTag === undefined ? {} : { peerTag }) })
               const one = { sentKey, isSent, actions, drawn }
               prepared.set(item, one)
 
@@ -5932,18 +6334,9 @@ export const register: Register = (on, options) => {
                                 return n === 0 ? base : `${base}#${n}`
                               }
                               const ids = shown.map(slotId)
-                              const byId = new Map(shown.map((item, i) => [ids[i]!, item]))
-                              // A ticket that left keeps an empty space of its height, until a press or SPACE_MS.
-                              // The tickets drawn above this column: the rows above, and stacked, the columns before it in its row.
-                              // One that went up from here leaves no space, so the cards below stay put.
-                              const columnsAbove = [...rowsOf(section.columns, columnCount).slice(0, r).flat(), ...(isStacked ? row.slice(0, row.indexOf(column)) : [])]
-                              const above = new Set(columnsAbove.flatMap(one => one.items.slice(0, isExpanded ? one.items.length : ITEMS_SHOWN).map(item => `${item.file ?? file.name}:${item.key}`)))
-                              // A margin above each ticket after the first sets the gap between stacked tickets; a space keeps it too.
-                              return columnSlots(layout, `${prefix}-${file.id}-col-${section.name}-${column.name}`, `${isExpanded}:${ticketW}:${isStacked}`, shown.map((item, i) => ({ id: ids[i]!, h: prepare(item, ticketW).drawn.height })), nowSync(), above).map((slot, i) => {
-                                const top = i > 0 ? TICKET_GAP_PX : 0
-
-                                return slot.isSpace === true ? card(`${prefix}-${file.id}-${slot.id}`, spaceSvg(ticketW + left, slot.h + top)) : ticket(byId.get(slot.id)!, slot.id, ticketW, left, top)
-                              })
+                              // A margin above each ticket after the first sets the gap between stacked tickets. A ticket that
+                              // leaves leaves no space on the board: the tickets below close up at once.
+                              return shown.map((item, i) => ticket(item, ids[i]!, ticketW, left, i > 0 ? TICKET_GAP_PX : 0))
                             })()}
                             </Box>
                           </Box>
@@ -5957,7 +6350,8 @@ export const register: Register = (on, options) => {
               : (() => {
                   // The list view keeps a row's place the same way.
                   const shown = file.items.slice(0, limit)
-                  const slots = columnSlots(layout, `list:${prefix}-${file.id}`, `${limit}:${isTextOpen}:${cardWidth()}`, shown.map(item => ({ id: `${item.file ?? file.name}:${item.key}`, h: listRowPx(item, isTextOpen) })), nowSync())
+                  const heights = listRowHeights(file, limit, isTextOpen)
+                  const slots = columnSlots(layout, `list:${prefix}-${file.id}`, `${limit}:${isTextOpen}:${cardWidth()}`, shown.map((item, i) => ({ id: `${item.file ?? file.name}:${item.key}`, h: heights[i] ?? 0 })), nowSync())
                   const gaps = new Map<number, number>()
                   let at = 0
                   for (const slot of slots) {
@@ -5970,10 +6364,12 @@ export const register: Register = (on, options) => {
 
                   return fileCards(file, view, limit, isTextOpen, gaps).map((drawn, k) => card(`${prefix}-${file.id}-${k}`, drawn))
                 })()
+            // The tickets the file offers in this view: the board's columns hold the open ones, the list holds every item.
+            const offered = isTicketView ? sections.flatMap(section => section.columns).reduce((sum, column) => sum + column.items.length, 0) : file.items.length
             const more = isTicketView
               ? sections.flatMap(section => section.columns).reduce((sum, column) => sum + Math.max(0, column.items.length - ITEMS_SHOWN), 0)
               : file.items.length - ITEMS_SHOWN
-            const long = isTicketView ? 0 : longItems(file, limit)
+            const long = isTicketView ? longTickets.size : longItems(file, limit)
             const toggle = (set: Set<string>) => () => {
               if (set.has(id)) {
                 set.delete(id)
@@ -5998,7 +6394,7 @@ export const register: Register = (on, options) => {
                     {more > 0 && (
                       <Button
                         key={keyText(`${prefix}-toggle-${file.id}`)}
-                        label={isExpanded ? 'Show fewer' : `Show all ${file.items.length} items`}
+                        label={isExpanded ? 'Show fewer' : `Show all ${offered} items`}
                         onPress={toggle(expandedFiles)}
                       />
                     )}
@@ -6033,7 +6429,7 @@ export const register: Register = (on, options) => {
             {entry.detail !== undefined && <Text dimColor>{`  ${clip(entry.detail, Math.max(10, columns - 20 - entry.line.length))}`}</Text>}
           </Text>
         ))}
-        {heading('Agents', view.agents.length === 0 ? '' : `${view.live} running, ${view.agents.some(agent => agent.isIdle) ? `${view.agents.filter(agent => agent.isIdle).length} idle, ` : ''}${finishedCount(view)} done`)}
+        {heading('Agents', view.agents.length === 0 ? '' : `${view.live} running, ${ledger(view, false).idle.length > 0 ? `${ledger(view, false).idle.length} idle, ` : ''}${ledger(view, false).finished.length} done`)}
         {ledger(view, isFinishedShown).finished.length > 0 && (
           <Button
             key="agents-toggle"
@@ -6059,10 +6455,10 @@ export const register: Register = (on, options) => {
             ))}
             <Text dimColor>
               {`  ${view.orchestrator.type} · `}
-              <Text color={view.orchestrator.isIdle ? undefined : ACCENT}>{view.orchestrator.isIdle ? 'idle' : 'running'}</Text>
+              <Text color={ACCENT}>running</Text>
               {` · ${view.orchestrator.toolCalls} tool call${view.orchestrator.toolCalls === 1 ? '' : 's'}`}
             </Text>
-            {view.orchestrator.doing !== undefined && <Text dimColor>{`  ${view.orchestrator.isIdle ? 'Last: ' : ''}${clip(view.orchestrator.doing, columns - 12)}`}</Text>}
+            {view.orchestrator.doing !== undefined && <Text dimColor>{`  ${clip(view.orchestrator.doing, columns - 12)}`}</Text>}
           </Box>
         )}
         {ledger(view, isFinishedShown).shown.map(agent => {
@@ -6094,7 +6490,7 @@ export const register: Register = (on, options) => {
             </Box>
           )
         })}
-        {heading('Todo', view.total === 0 && todoCount() === 0 ? '' : todoDetail(view))}
+        {heading('Todo', view.total === 0 && todoCount() === 0 && unreadPlaces.length === 0 ? '' : todoDetail(view))}
         {todoActions($).map(one => (
           <Button key={one.key} label={one.label} onPress={one.onPress} />
         ))}

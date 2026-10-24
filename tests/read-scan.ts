@@ -23,17 +23,17 @@ export const ALLOWED: readonly AllowedRead[] = [
   { file: 'register.tsx', fn: 'gitFs', line: 'read: path => $.fs.read(path).catch(() => undefined),', reason: "the engine port of the `.git` walk (`gitWhereUp`): reads a `.git` file for its gitdir line, no todo file; no text means the claim folders are unknown, and no ID is given" },
   { file: 'git-file.ts', fn: 'gitWhereUp', line: "const text = kind === 'file' ? await fs.read(path) : undefined", reason: "reads a `.git` file for its gitdir line through its port, no todo file; no text means the claim folders are unknown, and no ID is given" },
   { file: 'git-file.ts', fn: 'gitWhereUp', line: 'const linked = hasCommondir ? await fs.read(commondir) : undefined', reason: "reads a git dir's `commondir` file through its port, no todo file; a read that fails means the claim folders are unknown, and no ID is given" },
-  { file: 'register.tsx', fn: 'bookOnDisk', line: 'const text: unknown = await $.fs.read(path)', reason: 'reads categories.json, no todo file, for the book load and the check before each book write; a failed read is undefined, which clears the book folder and skips the write, never an empty book' },
+  { file: 'register.tsx', fn: 'bookOnDisk', line: 'const text: unknown = await fsBounded($, () => $.fs.read(path))', reason: 'reads categories.json, no todo file, for the book load and the check before each book write; a failed read is undefined, which clears the book folder and skips the write, never an empty book' },
   { file: 'repo-folders.ts', fn: 'mainOf', line: "const set = /^\\s*worktree\\s*=\\s*(.+)$/m.exec(await fs.read(`${common}/config`).catch(() => ''))?.[1]?.trim()", reason: 'reads the git config for core.worktree, no todo file; no text means the key is not set' },
   { file: 'repo-folders.ts', fn: 'mainOf', line: "const named = (await fs.read(`${dir}/commondir`).catch(() => '')).split('\\n')[0]?.replace(/\\r$/, '').trim() ?? ''", reason: "reads a git dir's `commondir` file, no todo file; no text means the git dir is no linked worktree's, as git reads it, so there is no other main checkout" },
-  { file: 'register.tsx', fn: 'readPluginVersion', line: 'const text: unknown = await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`).catch(() => undefined)', reason: "reads the mod's own plugin.json for its version, no todo file; a failed read shows no version" },
+  { file: 'register.tsx', fn: 'readPluginVersion', line: 'const text: unknown = await fsBounded($, () => $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`)).catch(() => undefined)', reason: "reads the mod's own plugin.json for its version, no todo file; a failed read shows no version" },
   { file: 'repo-folders.ts', fn: 'repoTodoDir', line: "const gitdir = /^gitdir:\\s*(.+)$/m.exec(await fs.read(git))?.[1]?.replace(/\\r$/, '').trim()", reason: "reads a worktree's `.git` file, no todo file; a failure throws" },
 ]
 
 /**
  * The reads that break the rule, as `file:line: why`: each `fs.read(` outside the layer that no entry
  * of `allowed` names by file, function and line, the ones that catch a failure into an empty value
- * (the class of ) named as such. An allowed line moved into another
+ * (the class of failed reads) named as such. An allowed line moved into another
  * function, or a second copy of it elsewhere, is not allowed. Every way around the `fs.read(` text
  * (an alias of the engine fs under any handle name, a destructured or bound read, optional chaining)
  * is named too, anywhere. Comments are skipped by a lexer, so code after a block comment is read.

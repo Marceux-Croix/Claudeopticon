@@ -1,6 +1,17 @@
 import { expect, test } from 'claude-code/testing'
 
-import { elapsedSince } from '../hooks/clock-elapsed'
+import { elapsedSince, isDeadlinePast } from '../hooks/clock-elapsed'
+
+test('a note deadline passes at its time, and at once when a clock set back leaves it further ahead than it was set', () => {
+  const span = 4000
+  // Inside its span: not past. At its time: past.
+  expect(isDeadlinePast(1000 + span, 1000, span)).toBe(false)
+  expect(isDeadlinePast(1000 + span, 1000 + span, span)).toBe(true)
+  // The clock went back one hour after the deadline was set: past now, not an hour later.
+  expect(isDeadlinePast(1000 + span, 1000 - 3_600_000, span)).toBe(true)
+  // One millisecond further ahead than the span is still a set-back.
+  expect(isDeadlinePast(1000 + span + 1, 1000, span)).toBe(true)
+})
 
 // ---------------------------------------------------------------- 
 

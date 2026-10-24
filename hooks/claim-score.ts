@@ -56,12 +56,23 @@ export function scoreInfo(claim: ClaimInfo, item: ItemInfo): number {
   return shared >= CLAIM_MIN_WORDS && share >= CLAIM_MIN_SHARE ? share : 0
 }
 
-/** For each claim, the one item that best matches it, if any matches (see claimScore). */
+/** For each claim, the one item that best matches it, if any matches (see claimScore). The first of equal scores wins. */
 export function bestMatches<T extends { item: TodoItem }>(open: readonly T[], claims: readonly string[]): T[] {
-  return claims.flatMap(claim => {
-    const scored = open.map(link => ({ link, score: claimScore(claim, link.item) })).filter(one => one.score > 0)
-    const best = scored.sort((x, y) => y.score - x.score)[0]
+  // Each item is worked out once, not once per claim.
+  const infos = open.map(link => itemInfo(link.item))
 
-    return best === undefined ? [] : [best.link]
+  return claims.flatMap(claim => {
+    const info = claimInfo(claim)
+    let best: T | undefined
+    let top = 0
+    open.forEach((link, i) => {
+      const score = scoreInfo(info, infos[i]!)
+      if (score > top) {
+        top = score
+        best = link
+      }
+    })
+
+    return best === undefined ? [] : [best]
   })
 }

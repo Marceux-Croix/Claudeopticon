@@ -6,8 +6,10 @@
  * light page tokens when light, LIGHT_CSS; STG-1 keeps the stage black in every theme), and each
  * live agent has a color that its todo items blink (AGENT_COLORS; COL-8 names no category by
  * color). Violet is progress and live (COL-1); failed is orange (COL-7). Motion is CSS, so reduced
- * motion stops it (MOT-2). A card's markup holds nothing that changes with the clock alone: a
- * redraw that changes no data sends the same markup, so the pane does not reload the image.
+ * motion stops it (MOT-2). A ticket card, a file card and the card of an ended agent hold nothing
+ * that changes with the clock alone: a redraw that changes no data sends the same markup, so the
+ * pane does not reload the image. The card of a live agent and the timeline show elapsed time, so
+ * they change with the clock.
  */
 
 import { esc } from './card-text'
@@ -15,7 +17,7 @@ import type { Card } from './card-types'
 
 // Stage UI tokens: section 3.3 (fixed) and 3.4 (stage palette).
 export const ACCENT = '#8B5CF6'
-export const PROGRESS_END = '#C084FC'
+const PROGRESS_END = '#C084FC'
 export const INDICATOR = '#7C3AED'
 export const SUGGESTED = '#10303B'
 export const DANGER = '#FB923C'
@@ -33,14 +35,22 @@ export const TRACK = 'rgba(255,255,255,.22)'
 export const RULE = 'rgba(255,255,255,.08)'
 
 export const PAD = 16
+/** The widest card the desktop draws, in CSS pixels. */
+const MAX_WIDTH = 4096
 export let W = 384
 export let INNER = W - PAD * 2
 /** The pane's width in CSS pixels: the board's ticket columns grow with it. Equal to `W` since the cards lost their 960 px cap (). */
 export let PANE = W
 
-/** The cards' width in CSS pixels, set once per draw from the pane's width: at least 300, with no upper cap. */
+/**
+ * The cards' width in CSS pixels, set once per draw from the pane's width: from 300 to 4096, the
+ * most the desktop draws. A width that is no finite number leaves the width as it is.
+ */
 export function setWidth(px: number): void {
-  W = Math.round(Math.max(300, px))
+  if (!Number.isFinite(px)) {
+    return
+  }
+  W = Math.round(Math.min(MAX_WIDTH, Math.max(300, px)))
   PANE = W
   INNER = W - PAD * 2
 }

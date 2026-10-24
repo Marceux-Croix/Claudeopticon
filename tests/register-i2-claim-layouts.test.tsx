@@ -6,10 +6,10 @@ import { expect, mock, test } from 'claude-code/testing'
 import { blockIds, CLAIM_MS } from '../hooks/id-blocks'
 import { ticketValue } from '../hooks/ticket-ids'
 
-// Hook cases of batch I2 (UCR loop 1, tail round 2): the claim folder in every git layout, a read-only
+// Engine cases: the claim folder in every git layout, a read-only
 // `.git`, Consolidate's renumbering from the claimed block, claim pruning, a press
 // from an out-of-date board, and a cut folder file whose first read fails. Fakes of their own,
-// ported from the verifier's H2 probes (probe-h2v).
+// ported from the H2 probes (probe-h2v).
 {
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 type TestApi = Parameters<Parameters<typeof test>[1]>[0]
@@ -197,7 +197,7 @@ test('a read-only .git: numbering and offers go on from the .claude_work claim f
   }
   await sleep(20)
   await $.prompt.submit({ text: 'go' } as never)
-  // The verifier's state: after the wait the new line has an ID, and the prompt names IDs.
+  // The state: after the wait the new line has an ID, and the prompt names IDs.
   expect(files[T]).toMatch(/^- \[ \] #T0001 a\n- \[ \] #T\w+ new one$/)
   expect(offered(prompt.line()).length).toBe(3)
   expect(claimMkdirs(fake.calls)).toEqual([`mkdir -- ${WORK_CLAIMS}/1`])
@@ -257,7 +257,7 @@ test('a prompt during a Consolidate press never names the ID the renumbering wri
     await sleep(5)
   }
   expect(isHeld).toBe(true)
-  // The verifier's V117 state: the target write is held, and a prompt comes in.
+  // The V117 state: the target write is held, and a prompt comes in.
   await $.prompt.submit({ text: 'go' } as never)
   const mine = offered(prompt.line())
   // The ID is in the store's reservations before the write lands, for another session too.
@@ -281,7 +281,7 @@ test('stale, used claims are deleted at the first claim, live ones stay, and not
   mock.clock(on)
   store(on, new Map())
   // IDs up to T000U (value 30): the first free block is 3 (values 24 to 31), and it has one free value.
-  // Changed by batch J2: the newest generation name of a block is never deleted, so blocks 0 and 1 have
+  // Changed later: the newest generation name of a block is never deleted, so blocks 0 and 1 have
   // an older generation that goes (`0`, `1`) and a newest one that stays (`0.1`, `1.1`).
   const claims = new Map<string, number>([
     [`${GIT_CLAIMS}/0`, -2 * CLAIM_MS],
@@ -325,7 +325,7 @@ test('a Mark done from an out-of-date board is refused with a toast, never writt
   const toasts = toastsOf(on)
   const fake = i2Repo(on, files, { listed: ['.claude_todo/TODO.md'] })
   const ui = await open($)
-  // The verifier's P025 state: the first line goes on the disk; the board (no new mtime) still draws the old lines.
+  // The P025 state: the first line goes on the disk; the board (no new mtime) still draws the old lines.
   files[T] = '- [~] Fix it\n- [ ] Fix it'
   await ui.press({ key: 'ticket-done-TODO.md-fix it%092' })
   await sleep(30)

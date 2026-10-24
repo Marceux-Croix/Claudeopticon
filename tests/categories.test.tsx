@@ -170,7 +170,7 @@ test('the sort prompt and a new category name never cut an emoji in half', () =>
   expect(book!.categories.some(hasLone)).toBe(false)
 })
 
-// ---------------------------------------------------------------- , batch H4
+// ---------------------------------------------------------------- 
 
 /**
  * Property: a Recategorize keeps every category the fresh sort names that some ticket
@@ -192,7 +192,7 @@ test('usedCategories keeps a category held only by tickets past the covered ones
   expect(merged.items['#t310']).toBeUndefined()
 })
 
-// ---------------------------------------------------------------- loop 2, batch J5
+// ---------------------------------------------------------------- more cases
 
 /** Whether a string holds a character the engine refuses in a Button label. */
 const hasControl = (text: string) => /[\x00-\x1F\x7F-\x9F]/.test(text)
@@ -247,7 +247,7 @@ test('pruneBookItems drops the keys of gone tickets, in three states', () => {
   expect(pruneBookItems(book, undefined)).toBe(book)
 })
 
-// ---------------------------------------------------------------- batch K3: remainder (folders left out of discovery)
+// ---------------------------------------------------------------- remainder (folders left out of discovery)
 
 /** Property: a book key is dropped only when its folder read this scan and does not hold it. */
 test('VJ-127 bookKeptBy keeps the keys of folders left out, and drops stale keys of folders that read', () => {
@@ -266,7 +266,7 @@ test('VJ-127 bookKeptBy keeps the keys of folders left out, and drops stale keys
   expect(pruneBookItems({ categories: ['Work'], items: { '#t1': 'Work', '#t9': 'Work', 'mods/y/.claude_todo::#t4': 'Work' } }, keep).items).toEqual({ '#t1': 'Work', 'mods/y/.claude_todo::#t4': 'Work' })
 })
 
-// ---------------------------------------------------------------- loop 3, batch L5: (prototype names in the book)
+// ---------------------------------------------------------------- (prototype names in the book)
 
 /** No-ID tickets named after Object.prototype members, with two plain ones (keys: constructor, proto, tostring, hasownproperty). */
 const PROTO_TEXTS = ['Fix the parser', 'constructor', 'Constructor', '**constructor**', '__proto__', 'toString', 'hasOwnProperty', 'Ship it']
@@ -282,7 +282,7 @@ test('categoryGroups orders each group linked, in progress, queued, open, done',
 test('categoryGroups draws every ticket named after a prototype member, sorted or not, and filterNames offers Uncategorized', () => {
   for (const book of [emptyBook(), { categories: ['Parser'], items: { 'fix the parser': 'Parser' } }]) {
     const out = categoryGroups(protoFiles(), book)[0]!
-    // The old code drew 3 of 5 in the verifier's probe: "constructor" read Object as its category, which no group holds.
+    // The old code drew 3 of 5 in the probe: "constructor" read Object as its category, which no group holds.
     expect(out.items.length).toBe(PROTO_TEXTS.length)
     expect(out.items.map(item => item.text).sort()).toEqual(protoFiles()[0]!.items.map(item => item.text).sort())
     expect(withoutHidden(protoFiles(), book, new Set(['Parser']))[0]!.items.length).toBe(book.categories.length === 0 ? PROTO_TEXTS.length : PROTO_TEXTS.length - 1)
@@ -346,4 +346,34 @@ test('an item that fits no category is kept as Uncategorized, never added as a c
   expect(categoryOf(next, '#t2')).toBe(UNSORTED)
   expect(groupOf(next, '#t2')).toBe(UNSORTED)
   expect(sortPrompt(['Legal'], ['x'])).toContain('"Uncategorized"')
+})
+
+test('readBook cuts a very long category name and its items to the same short name', async () => {
+  const long = 'x'.repeat(1_000_000)
+  const book = readBook(JSON.stringify({ categories: [long], items: { k1: long } }))
+  expect(book?.categories[0]?.length).toBeLessThanOrEqual(40)
+  expect(book?.items['k1']).toBe(book?.categories[0])
+})
+
+test('readBook never lists the Uncategorized name and so draws no unsorted ticket twice', async () => {
+  const book = readBook('{"categories":["Uncategorized","Work"],"items":{"k1":"Work"}}')
+  expect(book?.categories).toEqual(['Work'])
+  const view = buildView([{ name: 'A.md', folder: '.claude_todo', mtimeMs: 1, items: parseTodo('- [ ] #T1 one\n- [ ] #T2 two') }], [], 0)
+  const files = categoryGroups(todoLedger(view, true), { categories: book!.categories, items: bookItems([['#t1', 'Work']]) })
+  expect(files[0]?.groups.map(group => group.name)).toEqual(['Work', UNSORTED])
+  expect(files[0]?.items).toHaveLength(2)
+})
+
+test('a sort reply with a name over 40 units stores the assignment under the cut name, without a trailing space', async () => {
+  const name = `${'a'.repeat(39)} ${'b'.repeat(23)}`
+  const next = applySortReply(emptyBook(), ['k1'], JSON.stringify({ categories: [name], assign: { 1: name } }))
+  expect(next?.categories).toHaveLength(1)
+  expect(next?.categories[0]).toBe('a'.repeat(39))
+  expect(next?.items['k1']).toBe('a'.repeat(39))
+  expect(next?.categories.every(one => one === one.trim())).toBe(true)
+})
+
+test('a sort reply whose assign is an array assigns nothing', async () => {
+  const next = applySortReply(emptyBook(), ['k1', 'k2'], '{"categories":["Docs","Work"],"assign":["Docs","Work"]}')
+  expect(Object.keys(next?.items ?? {})).toEqual([])
 })

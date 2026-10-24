@@ -3,7 +3,7 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
-// Batch J4 (UCR loop 2, R4 and verify-HI): secrets in a step, claim or name (124, 134), the
+// Secrets in a step, claim or name (124, 134), the
 // Orchestrator call count (125), match retries (126), no-pick matches (131), the book prune (127),
 // store write backoff (128), the cut high-water mark and the base cap (129), a clock set back (130),
 // a throw that may be the items' fault (074), and the two-step clear of dropped sessions (123).

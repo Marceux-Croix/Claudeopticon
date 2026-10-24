@@ -5,7 +5,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import type { Series } from '../hooks/series'
 
-// Batch G4 (UCR loop 1): the token traces counted per model request, the seed on load, control characters in alts.
+// the token traces counted per model request, the seed on load, control characters in alts.
 {
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
@@ -107,7 +107,7 @@ test('main-loop model requests put points on the trace while the turn runs, befo
 test('an agent whose run straddles a compaction adds only its later requests to "since compact", and its whole run never again at its end', async ($, on) => {
   const { clock, step } = setup(on, {}, '- [ ] #T1 Ship the parser', [{ id: 'a1', description: 'Long run' }, { id: 'a2', description: 'Short run' }])
   await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
-  // Before the compaction: a1 uses 9M, the main loop 1M.
+  // Before the compaction: a1 uses 9M, the main conversation 1M.
   await step($, { result: used(9_000_000) }, 'a1')
   await step($, { result: used(1_000_000) })
   await clock.advance(31_000)
@@ -156,7 +156,7 @@ test('every usage is counted once, at its model request: a log of each source ag
 
 // ---------------------------------------------------------------- (narrowed)
 
-// The verifier's characters in a ticket text, in a todo file name and in a Bash command of the main conversation.
+// The characters in a ticket text, in a todo file name and in a Bash command of the main conversation.
 for (const bad of ['\x01', '\x07', '\x0B', '\x1B', '\x7F', '\x85', '\x9B']) {
   test(`a control character U+${bad.charCodeAt(0).toString(16).padStart(4, '0')} in a ticket, a file name or a command does not stop the pane drawing`, async ($, on) => {
     mock.clock(on)

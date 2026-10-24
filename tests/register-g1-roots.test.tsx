@@ -3,7 +3,7 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
-// Batch G1 (UCR loop 1): repo roots from a subfolder, separate git dirs, outside a repo, Windows env,
+// repo roots from a subfolder, separate git dirs, outside a repo, Windows env,
 // platform signs, the folder cut, folders made later, book backups, and Consolidate's untrusted sources.
 {
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
@@ -104,7 +104,7 @@ function g1Repo(on: On, files: Record<string, string>, opts: G1Opts) {
 
     return key === undefined ? path : `${links[key]}${path.slice(key.length)}`
   }
-  // (batch K1): the session folder exists, so the real path of `.` (the engine's own folder, read back as `cwd`) resolves.
+  // the session folder exists, so the real path of `.` (the engine's own folder, read back as `cwd`) resolves.
   const exists = (path: string) => !isHidden(path) && (path in files || Object.keys(files).some(key => key.startsWith(`${path}/`)) || gitDirs.has(path) || (opts.present ?? []).includes(path) || path === opts.cwd)
   const named = (dir: string) => {
     const names = new Set<string>()
@@ -505,8 +505,8 @@ test('the folder holding the book is a symlink, its items readable: the sorter c
 })
 
 // ---------------------------------------------------------------- 
-// Property: a Consolidate source folder that is not trusted (a symlink at it or above it) is named in
-// a toast, not dropped in silence; a trusted source beside it still moves.
+// Property: a source folder that is not trusted (a symlink at it or above it, out of the repo) is named in
+// a toast, not dropped in silence, and left as it is; a trusted source beside it still moves.
 
 const SOURCE_STATES: [string, { links: Record<string, string>; good: boolean; bad: string }][] = [
   ['the only source folder is a symlink', { links: { '/repo/mods/x/.claude_todo': '/elsewhere/x/.claude_todo' }, good: false, bad: '/repo/mods/x/.claude_todo' }],
@@ -521,12 +521,13 @@ for (const [name, state] of SOURCE_STATES) {
     g1Repo(on, files, { root: '/repo', cwd: '/repo', toasts, links: state.links, listed: ['.claude_todo/TODO.md', 'mods/x/.claude_todo/T.md', ...(state.good ? ['lib/.claude_todo/L.md'] : [])] })
     const ui = await open($)
     await settle()
-    await ui.press({ key: 'todo-consolidate' })
-    expect(toasts.join('\n')).toContain(`${state.bad} (not safe`)
-    expect(files['/repo/mods/x/.claude_todo/T.md']).toBe('- [ ] #T0002 linked away')
+    // Discovery names a source that resolves outside the repo and does not list it, so no press can move it.
+    expect(toasts.join('\n')).toContain(`skips ${state.bad}`)
     if (state.good) {
+      await ui.press({ key: 'todo-consolidate' })
       expect(files['/repo/.claude_todo/TODO.md']).toContain('good source')
     }
+    expect(files['/repo/mods/x/.claude_todo/T.md']).toBe('- [ ] #T0002 linked away')
   })
 }
 

@@ -49,6 +49,29 @@ export function sectionBodies(text: string, heading: string): string[][] {
   return out
 }
 
+/**
+ * Every possible body of a `## From <heading>` section: from each such heading to each later `## From `
+ * line (or the end). A `## From` line the source itself held is copied into the section's body, so the
+ * section can run past it; the mod cannot tell it from a heading it wrote, so a retry accepts the body
+ * that ends at any of them.
+ */
+export function sectionSpans(text: string, heading: string): string[][] {
+  const lines = text.split(/\r?\n/)
+  const out: string[][] = []
+  lines.forEach((line, at) => {
+    if (line !== `## From ${heading}`) {
+      return
+    }
+    for (let end = at + 1; end <= lines.length; end += 1) {
+      if (end === lines.length || lines[end]!.startsWith('## From ')) {
+        out.push(trimBlankLines(lines.slice(at + 1, end)))
+      }
+    }
+  })
+
+  return out
+}
+
 /** The line ending of a text: CRLF when it has one, else LF. */
 export const eolOf = (text: string): string => (text.includes('\r\n') ? '\r\n' : '\n')
 
@@ -145,7 +168,12 @@ export function renumberLines(lines: readonly string[], used: Set<string>, reser
     const all = [...used, ...own, ...reserved]
     if (letters.toLowerCase() === 't') {
       if (takeT === undefined) {
-        return nextTicketIds(all, 1)[0]!
+        const next = nextTicketIds(all, 1)[0]
+        if (next === undefined) {
+          throw new Error('no ticket ID left for the renumbering: the number line is used up')
+        }
+
+        return next
       }
       const given = takeT()
       if (given === undefined) {
@@ -206,3 +234,18 @@ export function appendSections(existing: string, sections: readonly { place: str
  */
 export const destOf = (name: string, target: string, archive = 'archive', archived: readonly string[] = []): string =>
   name.includes('/') ? `${archive}/${listedName(archived, name.slice(name.indexOf('/') + 1))}` : target
+
+/** The longest Consolidate result toast, in characters. */
+export const TOAST_MAX = 1500
+
+/**
+ * One toast from the notes of a press: the notes in order, joined with a space, cut at `max` characters
+ * with `...` when longer. A host that keeps only the last toast of a burst then still shows every refusal.
+ * `summary` (the "Moved N files" line) is left out when it moved nothing and a note says why, and goes last otherwise.
+ */
+export function pressToast(notes: readonly string[], summary: string, moved: number, max = TOAST_MAX): string {
+  const all = notes.length > 0 && moved === 0 ? [...notes] : [...notes, summary]
+  const text = all.join(' ')
+
+  return text.length <= max ? text : `${text.slice(0, max - 3)}...`
+}

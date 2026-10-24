@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-// UCR loop 3, batch L1: engine tests for 235, 236, 237, 238 and 240, with their own fakes (a copy of the l3-r1 probe fake).
+// engine tests for 235, 236, 237, 238 and 240, with their own fakes (a copy of the probe fake).
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
 type Test = Parameters<Parameters<typeof test>[1]>[0]
@@ -236,7 +236,7 @@ const run = async ($: Test, clock: { advance: (ms: number) => Promise<void> }, s
 // Property: the todo folder listing is either whole or a failure the user is told of; a folder past the
 // engine's 4 MiB stdout cap is never dropped with no word, and a failed listing is never an empty one.
 
-/** 90,002 index entries, 4.9 MB of output as git gives them for the l3-r1 `big` repo, with a todo folder that sorts after the 4 MiB cut. */
+/** 90,002 index entries, 4.9 MB of output as git gives them for a `big` repo, with a todo folder that sorts after the 4 MiB cut. */
 const bigListing = (): string[] => [
   '.claude_todo/TODO.md',
   ...Array.from({ length: 90_000 }, (_, i) => `packages/pkg-${String(i).padStart(5, '0')}/src/components/module-${String(i).padStart(5, '0')}.ts`),

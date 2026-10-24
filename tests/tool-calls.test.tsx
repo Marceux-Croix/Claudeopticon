@@ -78,7 +78,7 @@ test('the narrowed forms are hidden in the detail and the title of a Bash call w
   expect(callSummary('Bash', { command: 'docker run -p 8080:80 image' })).toBe('Bash: docker run -p 8080:80 image')
 })
 
-// ---------------------------------------------------------------- (batch H5): a stored current-call line
+// ---------------------------------------------------------------- a stored current-call line
 
 test('a stored current-call line with a secret is hidden, its tool kept', () => {
   // State 1: a valid tool prefix, then the secret.
@@ -88,4 +88,12 @@ test('a stored current-call line with a secret is hidden, its tool kept', () => 
   // State 3: inside the lines the check shows, a line that only names a secret word stays.
   expect(hideDoing('Bash: kubectl get secrets')).toBe('Bash: kubectl get secrets')
   expect(hideDoing('Starting')).toBe('Starting')
+})
+
+test('callSummary cuts a very long description to the detail limit and hides a secret before it cuts', () => {
+  expect(callSummary('Bash', { description: 'x'.repeat(1_000_000) }).length).toBeLessThanOrEqual(DETAIL_MAX)
+  // The secret sits past the cut: the whole line is judged, so the summary is hidden, not a cut line.
+  expect(callSummary('Bash', { description: `${'a'.repeat(400)} PGPASSWORD=hunter2` })).toBe('Bash: (hidden)')
+  // A secret that straddles the cut is hidden too.
+  expect(callSummary('Bash', { description: `${'a'.repeat(290)} PGPASSWORD=hunter2` })).toBe('Bash: (hidden)')
 })

@@ -65,10 +65,6 @@ function agentBadge(agent: AgentView): { label: string; kind: 'live' | 'ok' | 'd
   return { label: `${agent.status.charAt(0).toUpperCase()}${agent.status.slice(1)}`, kind: 'neutral' }
 }
 
-/**
- * The agents' timeline, from the first agent's start to now: one strip per agent. The right end
- * reads "Now" and a running strip pulses at its head.
- */
 /** The timeline's top margin, and the room each agent's strip takes. */
 const TIMELINE_TOP = 26
 const TIMELINE_ROW_H = 30
@@ -78,6 +74,10 @@ export function timelineHeight(n: number): number {
   return TIMELINE_TOP + Math.max(n, 1) * TIMELINE_ROW_H - 8 + 28
 }
 
+/**
+ * The agents' timeline, from the first agent's start to now: one strip per agent. The right end
+ * reads "Now" and a running strip pulses at its head.
+ */
 export function timelineSvg(view: View, all: readonly AgentView[]): Card {
   // No agent shown: the span is empty (Math.min() of nothing is Infinity and would draw NaN).
   const t0 = all.length === 0 ? view.now : Math.min(...all.map(a => a.startedAt))
@@ -114,7 +114,7 @@ export function timelineSvg(view: View, all: readonly AgentView[]): Card {
     const fill = agent.isEnded ? (failed ? STAGE_DANGER : TRACK) : 'url(#progress)'
     parts.push(`<rect x="${x0}" y="${y - 4}" width="${w}" height="4" rx="2" fill="${fill}"/>`)
     if (agent.status === 'completed' && end <= t1) {
-      parts.push(`<path d="M ${x0 + w + 5} ${y - 2} l 2.4 2.4 l 4.6 -5" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`)
+      parts.push(`<path d="M ${x0 + w + 5} ${y - 2} l 2.4 2.4 l 4.6 -5" fill="none" stroke="#FFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`)
     } else if (!agent.isEnded && !agent.isIdle) {
       parts.push(`<circle cx="${x0 + w}" cy="${y - 2}" r="4" fill="${ACCENT}" class="pulse"/>
 <circle cx="${x0 + w}" cy="${y - 2}" r="3.5" fill="${ACCENT}"/>`)
@@ -125,10 +125,16 @@ export function timelineSvg(view: View, all: readonly AgentView[]): Card {
   return stage(axisY + 28, parts.join('\n'), `Timeline of ${plural(n, 'agent')}`, blinks.css())
 }
 
-/** The room left of a live agent's badge that the card keeps free for the pane's Stop button. */
-export const STOP_PX = 44
+/**
+ * A live agent's Stop button, drawn in the card at its right edge, right of the badge: the badge's height and row, red with a white stop sign.
+ * The sign is stroked `#FFF`, not `#FFFFFF`: the light theme turns a `#FFFFFF` stroke dark.
+ */
+const STOP_W = 30
+const STOP_FILL = '#DC2626'
 /** The gap between a live agent's Stop button and its badge. */
 const STOP_GAP_PX = 8
+/** The room left of a live agent's badge that its Stop button and the gap take. */
+const STOP_PX = STOP_W + STOP_GAP_PX
 /**
  * How far an agent card's title row sits below its usual place: the pane places the Stop button
  * in whole text rows, and one row down puts its center 5 px below a badge at the usual place.
@@ -143,15 +149,22 @@ export function agentCardHeight(lines: number, hasProgress: boolean): number {
 /** The smallest agent card: its title line and its meta line. */
 export const AGENT_CARD_MIN_PX = agentCardHeight(2, false)
 
-/** How far a live agent's Stop button sits from the card's right padding: past the badge and a gap. */
-export function stopInsetPx(agent: AgentView): number {
-  return badgeWidth(agentBadge(agent).label) + STOP_GAP_PX
+
+/** The drawn Stop button whose right edge is at `right`, on the badge's row at baseline `y`: a 22 px red key with a white stop sign. */
+function stopKey(right: number, y: number): string {
+  const x = right - STOP_W
+  const cx = x + STOP_W / 2
+  const cy = y - 4
+
+  return `<rect x="${x}" y="${y - 15}" width="${STOP_W}" height="22" rx="4" fill="${STOP_FILL}"/>
+<circle cx="${cx}" cy="${cy}" r="6" fill="none" stroke="#FFF" stroke-width="1.5"/>
+<line x1="${cx - 3}" y1="${cy}" x2="${cx + 3}" y2="${cy}" stroke="#FFF" stroke-width="1.5" stroke-linecap="round"/>`
 }
 
 /** One agent: actor, name and status badge; the item it works on; meta; current tool call. */
 export function agentSvg(agent: AgentView, view: View): Card {
   const parts: string[] = []
-  // A live agent's title ends short of its Stop button, left of the badge.
+  // A live agent's title ends short of its badge, which sits left of the Stop button.
   const isOrch = agent.index === ORCH
   // The orchestrator has no Stop button: it is the main conversation, not a task to kill.
   const stop = agent.isEnded || isOrch ? 0 : STOP_PX
@@ -169,16 +182,18 @@ export function agentSvg(agent: AgentView, view: View): Card {
   if (hasLink && !agent.isEnded) {
     parts.push(`<rect x="1" y="1" width="${W - 2}" height="${h - 2}" rx="11" fill="none" stroke="${color}" stroke-opacity=".55"/>`)
   }
-  // An idle orchestrator keeps a steady dot and steady ticket dots; an idle agent still blinks.
-  const isCalm = isOrch && agent.isIdle === true
-  parts.push(actor(PAD + 12, 26 + HEAD_DROP_PX, agent.index, failed ? 'failed' : agent.isEnded ? 'none' : isCalm ? 'steady' : 'working', hasLink && !agent.isEnded, blinks))
+  parts.push(actor(PAD + 12, 26 + HEAD_DROP_PX, agent.index, failed ? 'failed' : agent.isEnded ? 'none' : 'working', hasLink && !agent.isEnded, blinks))
   let ty = 31 + HEAD_DROP_PX
   const tx = PAD + 36
   parts.push(`<text x="${tx}" y="${ty}" fill="${agent.isEnded ? SUB : LABEL}" font-size="14" font-weight="500">${esc(fit(agent.description, INNER - 44 - bw - stop, 14, 500))}</text>`)
-  parts.push(badge(W - PAD, ty, label, kind))
+  // A live agent's Stop key takes the right edge and its badge sits left of it; an ended agent's badge takes the edge.
+  parts.push(badge(W - PAD - stop, ty, label, kind))
+  if (stop > 0) {
+    parts.push(stopKey(W - PAD, ty))
+  }
   ty += 20
   for (const link of shownLinks) {
-    parts.push(`<circle cx="${tx + 4}" cy="${ty - 4}" r="4" fill="${color}"${isCalm ? '' : ` class="${blinks.cls([color])}"`}/>
+    parts.push(`<circle cx="${tx + 4}" cy="${ty - 4}" r="4" fill="${color}" class="${blinks.cls([color])}"/>
 <text x="${tx + 14}" y="${ty}" fill="${SUB}" font-size="12">Working on <tspan fill="${color}" font-weight="500">${esc(fit(link, INNER - 130, 12, 500))}</tspan></text>`)
     ty += 20
   }
@@ -196,7 +211,7 @@ export function agentSvg(agent: AgentView, view: View): Card {
   }
   const ran = elapsed((agent.endedAt ?? agent.idleSince ?? view.now) - agent.startedAt)
   const isIdle = agent.isIdle === true && agent.idleSince !== undefined
-  const when = agent.endedAt !== undefined ? [`ran ${ran}`, `ended ${elapsed(view.now - agent.endedAt)} ago`] : isIdle ? [`ran ${ran}`] : [ran]
+  const when = agent.endedAt !== undefined ? [`ran ${ran}`, `ended ${clock(agent.endedAt)}`] : isIdle ? [`ran ${ran}`] : [ran]
   // An idle agent's note leads, so a narrow card never cuts it off. The orchestrator has no run
   // time: the main conversation has been there since the session began.
   const meta = (isOrch

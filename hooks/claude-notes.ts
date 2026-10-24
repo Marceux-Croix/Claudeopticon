@@ -139,17 +139,20 @@ export function ticketRef(text: string, id: string | undefined): { label: string
 export function plannedLine(text: string, id: string | undefined): string {
   const ref = ticketRef(text, id)
 
-  return `${ref.label} is now claimed by this session as planned work. If you queued it for another session or only to order the work, release it: report_progress with release: [${ref.json}].`
+  // An ID is safe text; a ticket named by its quoted text is data, so the line ends with the data mark.
+  const mark = ref.label.startsWith('#') ? '' : ` ${DATA_MARK}`
+
+  return `${ref.label} is now claimed by this session as planned work. If you queued it for another session or only to order the work, release it: report_progress with release: [${ref.json}].${mark}`
 }
 
 /** One note line, told once per peer claim: a ticket this session claims is claimed by another session too. The name is quoted (it comes from the store). */
 export function peerClaimedLine(text: string, id: string | undefined, name: string | undefined, root: string): string {
   const ref = ticketRef(text, id).label
   if (name === undefined) {
-    return `${ref} is claimed by an unnamed peer session. Before you work on it, call ListAgents and send one SendMessage to each other session there, naming the ticket and this repo's root path ${quoteName(root)}, asking: "Do you claim this ticket? If you do and can give it up, release it with report_progress release; if it is not in your repo, ignore this." Start once the Peer owned tag clears; if every session said no and the tag stays, start only when the user says to take it anyway.`
+    return `${ref} is claimed by an unnamed peer session. Before you work on it, call ListAgents and send one SendMessage to each other session there, naming the ticket and this repo's root path ${quoteName(root)}, asking: "Do you claim this ticket? If you do and can give it up, release it with report_progress release; if it is not in your repo, ignore this." Start once the Peer owned tag clears; if every session said no and the tag stays, start only when the user says to take it anyway. ${DATA_MARK}`
   }
 
-  return `${ref} is claimed by session ${quoteName(name)}. Check in with that session (SendMessage) before you work on it; it releases the ticket with report_progress release.`
+  return `${ref} is claimed by session ${quoteName(name)}. Check in with that session (SendMessage) before you work on it; it releases the ticket with report_progress release. ${DATA_MARK}`
 }
 
 /** The note line for a session that never sent its name (one that started before 0.9.16 never got the rule): told once per load of the mod. */

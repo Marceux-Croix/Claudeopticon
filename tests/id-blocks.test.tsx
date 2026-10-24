@@ -4,7 +4,7 @@ import { BLOCK_SIZE, blockIds, blockOf, CLAIM_MS, CLAIM_PRUNE_MS, CLAIM_SCAN, CL
 import type { HeldBlock } from '../hooks/id-blocks'
 import { RESERVE_MS, ticketValue, VALUE_END } from '../hooks/ticket-ids'
 
-// ---------------------------------------------------------------- (batch H2): ID blocks
+// ---------------------------------------------------------------- ID blocks
 
 test('a claim outlives every reservation its holder made from it', () => {
   // The holder names new IDs for CLAIM_USE_MS; each lasts RESERVE_MS; the claim goes stale only after both.
@@ -30,7 +30,7 @@ test('nextClaim: the first name for a free block, none while a claim is live, th
   expect(claimName(4, 0)).toBe('4')
 })
 
-/** Property: a block gives only its own IDs, each above every taken one in it or below it (batch I2: an ID above the block no longer ends it). */
+/** Property: a block gives only its own IDs, each above every taken one in it or below it (an ID above the block no longer ends it). */
 test('blockIds and firstBlock: IDs of the block only, above every taken ID in or below the block', () => {
   // T0001 taken: the next free value is 2, in block 0.
   expect(firstBlock(['t0001'])).toBe(0)
@@ -39,7 +39,7 @@ test('blockIds and firstBlock: IDs of the block only, above every taken ID in or
   expect(blockIds(['t0005'], 0, 5)).toEqual(['T0006', 'T0007'])
   // A higher block starts at its first value, though taken is far below it.
   expect(blockIds(['t0001'], 2, 2).map(id => ticketValue(id))).toEqual([2 * BLOCK_SIZE, 2 * BLOCK_SIZE + 1])
-  // Batch I2 changed this from none: an ID above the block (another session's, from a later block) does not end
+  // changed this from none: an ID above the block (another session's, from a later block) does not end
   // it; the block gives its free values above the highest ID in use inside it.
   expect(blockIds(['t000z'], 1, 3)).toEqual(['T0008', 'T0009', 'T000A'])
   expect(blockIds(['t000z', 't0009'], 1, 3)).toEqual(['T000A', 'T000B', 'T000C'])
@@ -48,10 +48,10 @@ test('blockIds and firstBlock: IDs of the block only, above every taken ID in or
   expect(blockIds([], blockOf(10 * BLOCK_SIZE), 1).map(id => ticketValue(id))).toEqual([10 * BLOCK_SIZE])
 })
 
-// ---------------------------------------------------------------- batch I2: remainder
+// ---------------------------------------------------------------- remainder
 
 /**
- * A model of `freeIds` (register.tsx) with the real block rules, ported from the verifier's
+ * A model of `freeIds` (register.tsx) with the real block rules, ported from the probe
  * nodeprobe/gaps.ts: each session keeps its block and its given IDs; one claim folder, made with an
  * atomic create; every ID given is seen by the other session at once (a store sync or a file).
  */
@@ -102,7 +102,7 @@ test('two sessions taking turns: 30 IDs use at most 40 values, and no ID is give
   }
   expect(all.length).toBe(30)
   expect(new Set(all).size).toBe(30)
-  // The verifier measured 233 values for these 30 IDs before the fix.
+  // Measured 233 values for these 30 IDs before the fix.
   expect(model.highest() - before).toBeLessThanOrEqual(40)
   // At the limit: picks of 3 taking turns, 90 IDs; each session's blocks hold only its own IDs.
   const big = gapModel()
@@ -156,7 +156,7 @@ test('prunableClaims: stale and fully used claims go, every other entry stays', 
     { name: 'notes', mtimeMs: 0 },
   ]
   // Block 3 is the first free one: blocks 0 and 1 are stale and used. Their older generations go; the newest name of
-  // each block stays (changed by batch J2: it was ['0', '0.1', '1']).
+  // each block stays (Changed later: it was ['0', '0.1', '1']).
   expect(prunableClaims(entries, 3, now)).toEqual(['0'])
   // Behind a valid first case: block 2's newest generation is live, so its stale first generation stays too.
   expect(prunableClaims(entries, 3, now)).not.toContain('2')
@@ -190,7 +190,7 @@ test('claimDirs gives a fallback only for a common dir that ends in /.git, the s
   // Behind a valid first case: a `.git` folder's common dir gives its root's fallback; a trailing slash names the same.
   expect(claimDirs({ common: '/repo/.git' }).fallback).toBe('/repo/.claude_work/claudeopticon-id-claims')
   expect(claimDirs({ common: '/repo/.git/' })).toEqual(claimDirs({ common: '/repo/.git' }))
-  // The reviewer's layouts: a bare repo with worktrees, a separate git dir with a linked worktree, a submodule. One folder, no fallback.
+  // The layouts: a bare repo with worktrees, a separate git dir with a linked worktree, a submodule. One folder, no fallback.
   expect(claimDirs({ common: '/srv/bare.git' })).toEqual({ main: '/srv/bare.git/claudeopticon/id-claims' })
   expect(claimDirs({ common: '/store/sep.git' })).toEqual({ main: '/store/sep.git/claudeopticon/id-claims' })
   expect(claimDirs({ common: '/super/.git/modules/sub' })).toEqual({ main: '/super/.git/modules/sub/claudeopticon/id-claims' })
@@ -201,7 +201,7 @@ test('claimDirs gives a fallback only for a common dir that ends in /.git, the s
   expect(claimDirs({ common: '/srv/bare.git', looseBase: '/wt/one' })).toEqual(claimDirs({ common: '/srv/bare.git', looseBase: '/wt/two' }))
 })
 
-// ---------------------------------------------------------------- batch J2
+// ---------------------------------------------------------------- more cases
 
 /** Property: the newest generation name of a block is never deleted, so a deleted name is never made again as a live claim. */
 test('prunableClaims never names the newest generation of a block; only lower ones go', () => {
@@ -221,7 +221,7 @@ test('prunableClaims never names the newest generation of a block; only lower on
 
 /** Property: a block's IDs are its own values, wherever the block is on the number line. */
 test('blockIds keeps to its block above every ID form, and firstBlock stops at the end of the line', () => {
-  // The reviewer's state: a big taken value, a block above it. The floor was a 7-character form, dropped, and IDs came from below.
+  // The state: a big taken value, a block above it. The floor was a 7-character form, dropped, and IDs came from below.
   const big = 'T2024100512'
   const above = firstBlock([big]) + 1
   expect(blockIds([big], above, 3).every(id => blockOf(ticketValue(id)!) === above)).toBe(true)

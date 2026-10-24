@@ -1,7 +1,7 @@
 /**
- * The loop-3 reviewer's hero fuzz (UCR run 2026-10-17-1, slice R5), kept call for call so its state
+ * A seeded fuzz of top-card states, kept call for call so its state
  * names hold (s30-equal is the 31st state): 14 kinds of state built through the series API from a
- * mulberry32 source (seed 20261018), and the reviewer's own geometry check, independent of the
+ * mulberry32 source (seed 20261018), and its own geometry check, independent of the
  * code's: Helvetica Neue ink widths and segments sampled every 0.25 px.
  */
 
@@ -9,13 +9,13 @@ import type { View } from '../hooks/card-types'
 import { labelPx } from '../hooks/hero-card'
 import { addAgentPoint, addCompact, addStep, emptySeries, seedSeries, WINDOW_MS } from '../hooks/series'
 
-export const R5_KINDS = ['walk', 'late', 'equal', 'agentsOnly', 'tokensOnly', 'compactOnly', 'huge', 'tiny', 'burst', 'many', 'seeded', 'blip', 'flat', 'idle'] as const
-export const R5_WIDTHS = [300, 384, 520, 720, 960] as const
+export const SEEDED_KINDS = ['walk', 'late', 'equal', 'agentsOnly', 'tokensOnly', 'compactOnly', 'huge', 'tiny', 'burst', 'many', 'seeded', 'blip', 'flat', 'idle'] as const
+export const SEEDED_WIDTHS = [300, 384, 520, 720, 960] as const
 
 const M = 60_000
 const BASE = 1_792_000_000_000
 
-/** mulberry32 from `seed`, the reviewer's source. */
+/** mulberry32 from `seed`, the source. */
 function source(seed: number): () => number {
   let state = seed
 
@@ -82,12 +82,12 @@ function state(kind: string, rnd: () => number): View {
   return { files: [], agents: ag, done: 0, active: 0, total: 0, archived: 0, live, now, usage, series: s } as unknown as View
 }
 
-/** The reviewer's `n` states, named `s<i>-<kind>`, in the order the reviewer drew them. */
-export function r5States(n = 420): [string, View][] {
+/** The `n` states, named `s<i>-<kind>`, in the order they are drawn. */
+export function seededStates(n = 420): [string, View][] {
   const rnd = source(20261018)
 
   return Array.from({ length: n }, (_, i) => {
-    const kind = R5_KINDS[i % R5_KINDS.length]!
+    const kind = SEEDED_KINDS[i % SEEDED_KINDS.length]!
 
     return [`s${i}-${kind}`, state(kind, rnd)]
   })
@@ -116,11 +116,11 @@ function segHits(ax: number, ay: number, bx: number, by: number, b: Box): boolea
 }
 
 /**
- * The reviewer's check of one drawn top card at width `w`: "HARD" lines for a label on a dot or a
+ * The check of one drawn top card at width `w`: "HARD" lines for a label on a dot or a
  * label, a Compacted label on another, or anything out of the card; "SOFT" lines for a label on a
  * trace or on the Compacted label, or a Compacted label on a dot.
  */
-export function r5Check(svg: string, w: number): string[] {
+export function seededCheck(svg: string, w: number): string[] {
   const issues: string[] = []
   const labels: (Box & { t: string })[] = []
   for (const m of svg.matchAll(/<text x="([-\d.]+)" y="([-\d.]+)" text-anchor="end" font-size="12" stroke="[^"]+"[^>]*><tspan[^>]*class="(\w+)"[^>]*>([^<]*)<\/tspan>(?:<tspan[^>]*>([^<]*)<\/tspan>)?<\/text>/g)) {

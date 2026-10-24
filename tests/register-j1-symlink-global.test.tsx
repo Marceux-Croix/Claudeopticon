@@ -3,7 +3,7 @@
 
 import { expect, mock, test } from 'claude-code/testing'
 
-// Batch J1 (UCR loop 2): the global folder behind a symlink made after the start, a book
+// the global folder behind a symlink made after the start, a book
 // changed on disk before a sort writes it, REV_PARSE output for a path with a line break
 //, a case-only folder rename, an archive file in another letter case,
 // and Windows real paths with backslashes in Consolidate. j1Disk is this block's own fake.
@@ -493,6 +493,6 @@ test('the excluded population: a central archive folder that is a symlink, real 
 })
 }
 
-// ---------------------------------------------------------------- batch J3: todo write safety (167-176)
+// ---------------------------------------------------------------- todo write safety (167-176)
 // The fault-injection runs of the same writes (R3-G, R3-H) are in register-write-faults.test.tsx: 132 engine runs would push
 // this file further past the 600 s limit of one test file.

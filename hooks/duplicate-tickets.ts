@@ -19,7 +19,7 @@ export function foldParts(line: string): { key: string; id: string; inner?: { ke
 }
 
 /**
- * Finds identical tickets in a todo file's text: ticket lines whose bullet, box and text, after the
+ * Finds identical tickets in a todo file's text, within one `## From` section (or before the first): ticket lines whose bullet, box and text, after the
  * item's own leading ID, are letter for letter the same. The first of each group stays. Returns the
  * text without the others, with references to a removed ticket's ID rewritten to the kept one, the
  * removed tickets, and the ID map (old lowercase to kept). An ID that a kept ticket owns is never remapped.
@@ -44,10 +44,15 @@ export function removeDuplicateTickets(markdown: string): { text: string; remove
 
     return at < lines.length && /^[ \t]+\S/.test(lines[at]!)
   }
+  // The `## From` section a line stands in: equal text under two sections is two tickets, one per source, never folded.
+  let section = ''
   for (const [index, line] of lines.entries()) {
     if (isFenced[index] === true) {
       kept.push(line)
       continue
+    }
+    if (line.startsWith('## From ')) {
+      section = line.trimEnd()
     }
     // A subtask, or a ticket with lines indented under it, is never a duplicate: its place in the tree is part of it.
     const parts = /^[-*+] /.test(line) && !hasChild(index) ? foldParts(line) : undefined
@@ -60,10 +65,11 @@ export function removeDuplicateTickets(markdown: string): { text: string; remove
       continue
     }
     // A numbered copy (` Fix the parser`) repeats an earlier `Fix the parser`: the line it names by its second ID.
-    const inner = parts.inner === undefined ? undefined : seen.get(parts.inner.key)
-    const first = seen.get(parts.key) ?? (inner !== undefined && inner.toLowerCase() === parts.inner!.id.toLowerCase() ? inner : undefined)
+    const key = `${section}\0${parts.key}`
+    const inner = parts.inner === undefined ? undefined : seen.get(`${section}\0${parts.inner.key}`)
+    const first = seen.get(key) ?? (inner !== undefined && inner.toLowerCase() === parts.inner!.id.toLowerCase() ? inner : undefined)
     if (first === undefined) {
-      seen.set(parts.key, parts.id)
+      seen.set(key, parts.id)
       owned.add(parts.id.toLowerCase())
       kept.push(line)
     } else {

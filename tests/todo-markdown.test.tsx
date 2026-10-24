@@ -80,7 +80,7 @@ test('a reference line above its ticket has no ID of its own, and a move writes 
   expect(setBox(['```', '- [ ] #T6 Example', '```'].join('\n'), '#t6', 'completed')).toBeUndefined()
 })
 
-// ---------------------------------------------------------------- (HTML comments), (batch G2)
+// ---------------------------------------------------------------- (HTML comments), 
 
 test('a line inside an HTML comment is an example: never an item, never an ID', () => {
   // A comment that spans lines, before the live ticket (the defect behind a valid first case).
@@ -91,7 +91,7 @@ test('a line inside an HTML comment is an example: never an item, never an ID', 
   expect(parseTodo('- [ ] #T2 Live\n<!-- - [ ] #T3 Example -->').map(item => item.id)).toEqual(['T2'])
   expect(parseTodo('- [ ] #T2 Live\n<!--\n- [ ] #T3 Example, never closed').map(item => item.id)).toEqual(['T2'])
   // A comment after a ticket's text leaves it a ticket. A comment opened at the end of a ticket line opens no block
-  // (CommonMark; batch H2 changed this from hiding T5): the next lines stay tickets.
+  // (CommonMark; changed this from hiding T5): the next lines stay tickets.
   expect(parseTodo('- [ ] #T4 Fix <!-- note -->\n- [ ] #T5 Next').map(item => item.id)).toEqual(['T4', 'T5'])
   expect(parseTodo('- [ ] #T4 Fix <!-- note\n- [ ] #T5 Hidden\n-->\n- [ ] #T6 Next').map(item => item.id)).toEqual(['T4', 'T5', 'T6'])
   // A fence inside a comment opens nothing; a comment marker inside a fence opens nothing (the excluded population).
@@ -123,14 +123,14 @@ test('a leading ID-like word on two lines gives one key only; #T1st and #t2a are
   expect(parseTodo('- [ ] #T12 a\n- [ ] #T3C b\n- [ ] #t002a c\n- [ ] #T10000 d').map(item => item.id)).toEqual(['T12', 'T3C', 't002a', 'T10000'])
 })
 
-// ---------------------------------------------------------------- batch H2: remainder
+// ---------------------------------------------------------------- remainder
 
 /**
  * Property: a `<!--` in the middle of a line never hides the lines after it. An HTML comment
  * block starts only at a line start (up to 3 spaces), as CommonMark says, and runs to the line with `-->`.
  */
 test('a <!-- in the middle of a line never opens a comment: the rest of the file stays tickets', () => {
-  // The verifier's state: the opener inside a ticket's text, behind a valid first ticket.
+  // The state: the opener inside a ticket's text, behind a valid first ticket.
   const inline = ['- [ ] #T0001 Strip `<!--` markers from the export', '- [ ] #T0002 Next ticket', '- [ ] new ticket without id', '- [ ] #T0002 Next ticket'].join('\n')
   expect(exampleMask(inline.split('\n'))).toEqual([false, false, false, false])
   expect(parseTodo(inline).map(item => item.text)).toEqual(['#T0001 Strip `<!--` markers from the export', '#T0002 Next ticket', 'new ticket without id', '#T0002 Next ticket'])
@@ -168,16 +168,16 @@ test('three identical lines have three keys, and setBox on the third writes the 
   expect(fenced.map(itemKey)).toEqual(['b'])
 })
 
-// ---------------------------------------------------------------- batch I2: remainder
+// ---------------------------------------------------------------- remainder
 
 /** Property: an HTML comment's indent is measured from the content column of the list item that holds it, as CommonMark does. */
 test('a comment nested in a list item hides its lines; indent counts from the item content', () => {
-  // The verifier's P106 state: `    <!--` under `- [ ] #T1 parent` is a comment, so the subtask in it is no ticket.
+  // The P106 state: `    <!--` under `- [ ] #T1 parent` is a comment, so the subtask in it is no ticket.
   const nested = ['- [ ] #T1 parent', '    <!--', '    - [ ] hidden subtask', '    -->', '- [ ] #T2 after']
   expect(exampleMask(nested)).toEqual([false, true, true, true, false])
   expect(parseTodo(nested.join('\n')).map(item => item.text)).toEqual(['#T1 parent', '#T2 after'])
   // At the limit: 3 spaces past a nested item's content column (column 4) is still a comment; 4 past it is indented code.
-  // (batch L2) changed the last two flags from true: `  - [ ] c` leaves item b, which ends the comment in it
+  // changed the last two flags from true: `  - [ ] c` leaves item b, which ends the comment in it
   // (CommonMark, commonmark.js gives `<li>[ ] c\n--&gt;</li>`), so c is a ticket and `-->` is its text.
   expect(exampleMask(['- [ ] a', '  - [ ] b', '       <!--', '  - [ ] c', '-->'])).toEqual([false, false, true, false, false])
   expect(exampleMask(['- [ ] a', '  - [ ] b', '        <!--', '  - [ ] c'])).toEqual([false, false, false, false])
@@ -185,20 +185,20 @@ test('a comment nested in a list item hides its lines; indent counts from the it
   expect(exampleMask(['1. [ ] step', '   <!--', '   - [ ] hidden', '   -->'])).toEqual([false, true, true, true])
   // The excluded population: at the top level, 4 spaces is indented code, not a comment; a line that leaves the item
   // (indent below its content) measures from the outer level again; a mid-line `<!--` opens nothing.
-  // (batch L2): a 4-space first line is indented code (CommonMark), so its flag is now true; `- [ ] x` stays a ticket.
+  // a 4-space first line is indented code (CommonMark), so its flag is now true; `- [ ] x` stays a ticket.
   expect(exampleMask(['    <!--', '- [ ] x'])).toEqual([true, false])
-  // (batch L2): `prose` is a lazy line of item a, not a line that leaves it, so `    <!--` is a comment in a
+  // `prose` is a lazy line of item a, not a line that leaves it, so `    <!--` is a comment in a
   // (the third flag was false); the comment ends with the item, so `- [ ] x` stays a ticket.
   expect(exampleMask(['- [ ] a', 'prose', '    <!--', '- [ ] x'])).toEqual([false, false, true, false])
   expect(exampleMask(['- [ ] a', 'prose', '<!--', '- [ ] x'])).toEqual([false, false, true, true])
   expect(exampleMask(['- [ ] #T1 Fix <!-- note', '- [ ] #T2 next'])).toEqual([false, false])
 })
 
-// ---------------------------------------------------------------- batch J2: fences in list items, tabs, inline code
+// ---------------------------------------------------------------- fences in list items, tabs, inline code
 
 /** Property: a code fence inside a list item (indent measured from the item's content column) hides its lines. */
 test('a fence inside a list item hides its example lines; indent counts from the item content', () => {
-  // The reviewer's PA state: a 4-space fence under `- [ ] Document the grammar`.
+  // The PA state: a 4-space fence under `- [ ] Document the grammar`.
   const text = '- [ ] #T0001 Document the grammar\n    ```md\n    - [ ] example line\n    ```\n- [ ] #T0002 next'
   expect(parseTodo(text).map(item => item.text)).toEqual(['#T0001 Document the grammar', '#T0002 next'])
   // Behind a valid first case: a fence that opens under a later item, and a tilde fence under an ordered item (P1b).
@@ -210,22 +210,22 @@ test('a fence inside a list item hides its example lines; indent counts from the
   // A line that leaves the item ends the item, and the fence in it (CommonMark): the next ticket is a ticket.
   expect(exampleMask(['- [ ] a', '    ```', '    - [ ] x', '- [ ] after'])).toEqual([false, true, true, false])
   // The excluded population: at the top level a 4-space fence is indented code; a top-level fence still works.
-  // (batch L2): the 4-space first line is indented code (CommonMark), so its flag is now true; x and y stay tickets.
+  // the 4-space first line is indented code (CommonMark), so its flag is now true; x and y stay tickets.
   expect(exampleMask(['    ```', '- [ ] x', '- [ ] y'])).toEqual([true, false, false])
   expect(exampleMask(['```', '- [ ] x', '```', '- [ ] y'])).toEqual([true, true, true, false])
 })
 
 /** Property: a tab counts to the next multiple of 4 columns in the indent and column math. */
 test('a tab-indented comment or fence under a list item hides its lines', () => {
-  // The reviewer's PB state.
+  // The PB state.
   expect(parseTodo('- [ ] #T0001 parent\n\t<!--\n\t- [ ] commented out\n\t-->\n- [ ] #T0002 after').map(item => item.text)).toEqual(['#T0001 parent', '#T0002 after'])
   // Behind a valid first case: a tab-indented fence under the second item.
   expect(exampleMask(['- [ ] a', '- [ ] b', '\t```', '\t- [ ] x', '\t```'])).toEqual([false, false, true, true, true])
   // At the limit: two spaces then a tab reach column 4, as one tab does; a tab after the marker sets the content column.
-  // (batch L2): the last flag was true; `-->` at column 0 leaves the item, which ends the comment in it (CommonMark).
+  // the last flag was true; `-->` at column 0 leaves the item, which ends the comment in it (CommonMark).
   expect(exampleMask(['- [ ] a', '  \t<!--', '  \t- [ ] x', '-->'])).toEqual([false, true, true, false])
   expect(exampleMask(['-\t[ ] a', '    <!--', '    - [ ] x', '    -->'])).toEqual([false, true, true, true])
-  // The excluded population: a top-level tab is 4 columns, indented code: no comment. (batch L2): the first
+  // The excluded population: a top-level tab is 4 columns, indented code: no comment. the first
   // line is indented code (CommonMark), so its flag is now true; `- [ ] x` stays a ticket.
   expect(exampleMask(['\t<!--', '- [ ] x'])).toEqual([true, false])
   expect(expandTabs('a\tb')).toBe('a   b')
@@ -234,7 +234,7 @@ test('a tab-indented comment or fence under a list item hides its lines', () => 
 
 /** Property: an ID inside inline code is never a line's own ID. */
 test('an ID in inline code is no own ID; the leading ID rule and IDs outside code stay', () => {
-  // The reviewer's state: a documentation line.
+  // The state: a documentation line.
   expect(parseTodo('- [ ] Explain the `#T002B` form in the README')[0]!.id).toBeUndefined()
   // Behind a valid first case: inline code first, then a real trailing ID.
   expect(parseTodo('- [ ] Explain `#T002B` for #T0007')[0]!.id).toBe('T0007')
@@ -247,11 +247,11 @@ test('an ID in inline code is no own ID; the leading ID rule and IDs outside cod
   expect(codeSpansOut('x `#T1` y')).toBe(`x ${' '.repeat(5)} y`)
 })
 
-// ---------------------------------------------------------------- (batch K1)
+// ---------------------------------------------------------------- 
 
 /** Property: a checkbox line in an indented code block (CommonMark) is an example, never a ticket. */
 test('exampleMask treats an indented code block as an example, at the top level and in a list item', () => {
-  // The verifier's states: 4 spaces after a blank line at the top level; 4 past an item's content column after a blank line.
+  // The states: 4 spaces after a blank line at the top level; 4 past an item's content column after a blank line.
   expect(parseTodo('text\n\n    - [ ] ex\n- [ ] #T0002 real').map(item => item.id)).toEqual(['T0002'])
   expect(parseTodo('- [ ] #T0001 a\n\n      - [ ] ex\n').map(item => item.id)).toEqual(['T0001'])
   // Behind a valid first case: the block goes on through blank lines and ends at a line indented less.
@@ -267,14 +267,14 @@ test('exampleMask treats an indented code block as an example, at the top level 
   expect(parseTodo('para\n    - [ ] #T0005 lazy').map(item => item.id)).toEqual(['T0005'])
 })
 
-// ---------------------------------------------------------------- (batch L2)
+// ---------------------------------------------------------------- 
 
 /**
  * Property: an example in indented code that repeats a real ticket's ID above the ticket never owns the ID,
- * so numbering never gives the real ticket a new one. The reviewer's p198first states.
+ * so numbering never gives the real ticket a new one. The p198first states.
  */
 test('an indented-code example above a real ticket with its ID owns no ID; the real ticket keeps it', () => {
-  // The reviewer's states: the example on line 1, and right under a heading (the old reading gave the example the ID).
+  // The states: the example on line 1, and right under a heading (the old reading gave the example the ID).
   expect(lineOwnIds(['    - [ ] #T0001 example of the form', '', '- [ ] #T0001 Fix the parser'])).toEqual([undefined, undefined, 'T0001'])
   expect(lineOwnIds(['## Form', '    - [ ] #T0001 example', '', '- [ ] #T0001 Fix the parser'])).toEqual([undefined, undefined, undefined, 'T0001'])
   // Behind a valid first ticket, and with the real ticket as the last line under a second heading.
@@ -314,7 +314,7 @@ function oldCodeSpansOut(text: string): string {
 /** A backtick. */
 const TICK = String.fromCharCode(96)
 
-/** The reviewer's adversarial line (spans.ts): runs of lengths 1 to k, each after a letter, none closed. */
+/** The adversarial line (spans.ts): runs of lengths 1 to k, each after a letter, none closed. */
 const unclosedRuns = (k: number): string => {
   const parts = ['- [ ] x ']
   for (let i = 1; i <= k; i += 1) {
@@ -370,12 +370,12 @@ test('codeSpansOut is linear on unclosed backtick runs: a 1 MB adversarial line,
 
 /**
  * Property: U+2028 and U+2029 are text in a line, never line ends, so a checkbox line that holds one is an
- * item, with the character read as a space. The reviewer's p201 state.
+ * item, with the character read as a space. The p201 state.
  */
 test('a checkbox line holding U+2028 or U+2029 is an item, the character read as a space', () => {
   const ls = String.fromCharCode(0x2028)
   const ps = String.fromCharCode(0x2029)
-  // The reviewer's state, behind a valid first ticket.
+  // The state, behind a valid first ticket.
   expect(parseTodo(`- [ ] #T0001 a\n- [ ] Fix${ls}the parser\n- [ ] #T0002 b`).map(item => item.text)).toEqual(['#T0001 a', 'Fix the parser', '#T0002 b'])
   // At the limit: U+2029 as the last character of the last line, and U+2028 right after the box; the ID still leads.
   expect(parseTodo(`- [ ] #T0001 a\n- [x] #T0003 done${ps}`).map(item => [item.id, item.text, item.status])).toEqual([['T0001', '#T0001 a', 'pending'], ['T0003', '#T0003 done', 'completed']])

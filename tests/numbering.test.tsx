@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { insertIds, lineHolding, lineIds, NUMBER_AFTER_MS, NUMBER_MAX, textIds } from '../hooks/numbering'
-import { BLOCK_SIZE, CLAIM_SCAN } from '../hooks/id-blocks'
+import { BLOCK_SIZE, blockIds, CLAIM_SCAN } from '../hooks/id-blocks'
 import { nextTicketIds } from '../hooks/ticket-ids'
 
 test('lineIds reads the ID a checkbox line carries', async () => {
@@ -32,6 +32,13 @@ test('every T ID of a line counts, after another ID word, at the end of the line
 /** Property: a pass numbers no more lines of a file than one pick of IDs can give. */
 test('NUMBER_MAX fits in one pick, with room for blocks other sessions hold', async () => {
   expect(NUMBER_MAX).toBeGreaterThan(0)
+  // Other sessions hold every other block in the range one pick scans: the blocks left still give a full pass.
+  let given = 0
+  for (let block = 0; block < CLAIM_SCAN; block += 2) {
+    given += blockIds([], block, BLOCK_SIZE).length
+  }
+  expect(given).toBeGreaterThanOrEqual(NUMBER_MAX)
+  // A full pass needs a quarter of the scanned range, so other sessions can hold three blocks in four.
   expect(NUMBER_MAX * 4).toBeLessThanOrEqual(CLAIM_SCAN * BLOCK_SIZE)
 })
 
@@ -47,11 +54,11 @@ test('insertIds leaves a line that is no checkbox alone, keeps CRLF, and the del
   expect(NUMBER_AFTER_MS).toBe(5000)
 })
 
-// ---------------------------------------------------------------- (batch K1)
+// ---------------------------------------------------------------- 
 
 /** Property: a stray tag in an example never moves the number line, and the toast for a full line can name its line. */
 test('an example tag past the end of the line is no taken value, and lineHolding finds the line of an ID', async () => {
-  // The verifier's states: `0` and `Z` in a fenced example; their IDs are read but carry no value.
+  // The states: `0` and `Z` in a fenced example; their IDs are read but carry no value.
   const fenced = (tag: string) => `- [ ] #T0001 a\n\`\`\`\n- [ ] ci ${tag}\n\`\`\`\n- [ ] new`
   for (const tag of ['#T202410', '#T9ZZZZZ']) {
     const ids = textIds(fenced(tag))
@@ -68,10 +75,10 @@ test('an example tag past the end of the line is no taken value, and lineHolding
 
 /**
  * Property: the toast of a used-up number line names the checkbox line that holds the ID, the line whose ID
- * counts, never a prose line that only names it. The reviewer's p197line state.
+ * counts, never a prose line that only names it. The p197line state.
  */
 test('lineHolding names only a checkbox line that holds the ID, never a prose line', () => {
-  // The reviewer's state: a prose line names the ID first; the checkbox line below it is the cause.
+  // The state: a prose line names the ID first; the checkbox line below it is the cause.
   expect(lineHolding('The highest form is #T1ZZZZ.\n- [ ] #T0001 a\n- [ ] #T1ZZZZ last', 'T1ZZZZ')).toBe('- [ ] #T1ZZZZ last')
   // Behind a valid first case: a heading and a table row that name it, then the checkbox line as the last line of a CRLF file.
   expect(lineHolding('## About #T1ZZZZ\r\n| #T1ZZZZ | x |\r\n  - [x] see #t1zzzz\r\n', 'T1ZZZZ')).toBe('- [x] see #t1zzzz')

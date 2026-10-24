@@ -6,7 +6,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import { blockIds, CLAIM_MS } from '../hooks/id-blocks'
 import { ticketValue } from '../hooks/ticket-ids'
 
-// Batch J2: claims across the two claim folders, numbering of many lines, files that never
+// claims across the two claim folders, numbering of many lines, files that never
 // read, a store that does not read, fences and tabs in list items, and claim pruning. The fakes are a copy of the
 // I2 fake repo, with a git call that may fail and a `mkdir -p` that may fail a set number of times.
 {
@@ -168,7 +168,7 @@ const settle = async (clock: { advance: (ms: number) => Promise<unknown> }) => {
 test('a session with a writable .git never claims a block another session holds in the fallback folder', async ($, on) => {
   mock.clock(on)
   store(on, new Map())
-  // The reviewer's PD state: session B's `mkdir -p` of the git folder failed once, so it holds block 0 in the fallback.
+  // The PD state: session B's `mkdir -p` of the git folder failed once, so it holds block 0 in the fallback.
   const claims = new Map<string, number>([[`${WORK_CLAIMS}/0`, 0]])
   const fake = j2Repo(on, { [T]: '- [ ] #T0001 a' }, { listed: ['.claude_todo/TODO.md'], claims })
   const prompt = promptOf(on)
@@ -181,7 +181,7 @@ test('a session with a writable .git never claims a block another session holds 
 test('a session whose git call fails (exit 128) claims in the git folder and passes over its held block', async ($, on) => {
   mock.clock(on)
   store(on, new Map())
-  // The reviewer's PD2 state: session A (git works) holds block 0 in the git common dir; this session's rev-parse exits 128.
+  // The PD2 state: session A (git works) holds block 0 in the git common dir; this session's rev-parse exits 128.
   const claims = new Map<string, number>([[`${GIT_CLAIMS}/0`, 0]])
   const fake = j2Repo(on, { [T]: '- [ ] #T0001 a' }, { listed: ['.claude_todo/TODO.md'], claims, revFails: true })
   const prompt = promptOf(on)
@@ -327,7 +327,7 @@ test('a todo file that never read in this load is never skipped: its IDs are nev
     await $.prompt.submit({ text: 'go' } as never)
     lines.push(prompt.line())
   }
-  // The reviewer's PE state: after 3 passes the offer named, ,.
+  // The PE state: after 3 passes the offer named, ,.
   expect(lines).toEqual([undefined, undefined, undefined, undefined, undefined])
   const locked = toasts.filter(one => one.includes('LOCKED.md did not read'))
   expect(locked.length).toBe(1)
@@ -353,7 +353,7 @@ test('a store that cannot be read: numbering writes from its own claimed block o
   const prompt = promptOf(on)
   await open($)
   await settle(clock)
-  // The reviewer's PF state wrote ``; the ID now comes from block 1, the one this session claimed.
+  // The PF state wrote ``; the ID now comes from block 1, the one this session claimed.
   const id = /#(T\w+) new one/.exec(files[T]!)?.[1]
   expect(id).toBe(blockIds([], 1, 1)[0])
   expect(claimMkdirs(fake.calls)).toEqual([`mkdir -- ${GIT_CLAIMS}/1`])

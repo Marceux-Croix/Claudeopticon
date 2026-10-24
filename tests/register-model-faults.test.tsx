@@ -5,7 +5,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 // Hook cases on a fake model: a damaged category book, Recategorize faults and the sort retry limits.
 {
-// UCR loop 1, batch D: categories book.
+// batch D: categories book.
 
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 

@@ -4,17 +4,33 @@ import type { Progress } from '../types'
 import { cleanText, cutText, cutUnits } from './card-text'
 import { hideSecretLines } from './secrets'
 
+/** The most steps a report plans: a larger total (`1e300`) is cut to it. */
+export const PROGRESS_MAX = 10_000
+
 /**
- * An agent's report, held to sense: whole steps, at least one planned, never more done than planned.
+ * A count as a report gives it: a finite number, or text that is one (`"5"`). Anything else is none:
+ * `null`, `""`, `true` and `[]`, which Number() reads as 0 or 1, are no count.
+ */
+function countOf(value: unknown): number | undefined {
+  const count = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN
+
+  return Number.isFinite(count) ? count : undefined
+}
+
+/**
+ * An agent's report, held to sense: whole steps, at least one planned and at most PROGRESS_MAX, never
+ * more done than planned; undefined when a count is no number.
  * A step line that holds a secret is hidden: the step is drawn and stored. It is hidden
  * before the cut, so a cut cannot leave a part of a secret the check no longer knows.
  */
 export function readProgress(input: Record<string, unknown>): Progress | undefined {
-  const total = Math.max(1, Math.round(Number(input.total)))
-  const done = Math.min(total, Math.max(0, Math.round(Number(input.done))))
-  if (!Number.isFinite(total) || !Number.isFinite(done)) {
+  const planned = countOf(input.total)
+  const finished = countOf(input.done)
+  if (planned === undefined || finished === undefined) {
     return undefined
   }
+  const total = Math.min(PROGRESS_MAX, Math.max(1, Math.round(planned)))
+  const done = Math.min(total, Math.max(0, Math.round(finished)))
   const step = typeof input.step === 'string' && input.step.trim() !== '' ? cutUnits(hideSecretLines(input.step.trim()), 120) : undefined
 
   return step === undefined ? { done, total } : { done, total, step }
@@ -56,10 +72,14 @@ export function progressReply(claims: readonly string[] | undefined, isDue: bool
   return `Noted. You said you handle: ${claims.map(claim => `"${cutUnits(claim, 80)}"`).join('; ')}. If that changed, pass the current items in your next report.`
 }
 
-/** A headline from the main conversation: a few words, one line, at most TITLE_MAX characters. */
-export const TITLE_MAX = 80
+/**
+ * A headline from the main conversation: a few words, one line, at most TITLE_MAX characters. A secret
+ * in it is hidden before the cut, its ticket IDs kept, so a cut cannot leave part of a secret the check
+ * no longer knows.
+ */
+const TITLE_MAX = 80
 export function readTitle(input: unknown): string | undefined {
-  const text = typeof input === 'string' ? cutText(cleanText(input.trim().split(/[\r\n]/)[0] ?? '').replace(/[\x7F-\x9F]/g, '').trim(), TITLE_MAX) : ''
+  const text = typeof input === 'string' ? cutText(hideSecretLines(cleanText(input.trim().split(/[\r\n]/)[0] ?? '').replace(/[\x7F-\x9F]/g, '').trim()), TITLE_MAX) : ''
 
   return text === '' ? undefined : text
 }

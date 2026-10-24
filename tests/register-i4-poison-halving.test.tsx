@@ -5,7 +5,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import { KEPT_SESSIONS, readKeptTickets } from '../hooks/kept-records'
 
-// ---------------------------------------------------------------- I4: (ported probes of the H4 verifier)
+// ---------------------------------------------------------------- 
 {
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
@@ -142,7 +142,7 @@ function rawModel(on: On, reply: (prompt: string) => string) {
   on('model.complete', (_$, e) => {
     prompts.push(e.prompt)
     const out = reply(e.prompt)
-    // Batch J4: 'throw' is a transport failure as the engine gives it (an unanswered api-error with no status), which only
+    // 'throw' is a transport failure as the engine gives it (an unanswered api-error with no status), which only
     // waits. A real throw, or an HTTP 4xx, may be the items' fault and halves after two (see the J4 block).
     if (out === 'throw') { return { value: { isAnswered: false, reason: 'api-error', status: null, error: 'network', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } } as never }
     if (out === 'empty') { return { value: { isAnswered: false, reason: 'empty-reply', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } } as never }
@@ -151,7 +151,7 @@ function rawModel(on: On, reply: (prompt: string) => string) {
   return prompts
 }
 
-// (loop 3): 300 s per test, half the 600 s per-file kill, so a hung test fails as itself
+// 300 s per test, half the 600 s per-file kill, so a hung test fails as itself
 // and the other tests of the file still report; three times the slowest measured run (90 s, in a
 // full suite at load 10). A larger clock step does not make these cheaper: the mod's 1 s ticker
 // fires once per simulated second however the clock is moved (growth test: 81.4 s at 10 s steps,

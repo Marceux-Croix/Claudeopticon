@@ -29,3 +29,33 @@ test('an agent marks its own items by quote, paraphrase or ID, with no ID in its
   expect(readClaims({ items: [] })).toBeUndefined()
   expect(readClaims({})).toBeUndefined()
 })
+
+const itemOf = (text: string) => parseTodo(`- [ ] ${text}`)[0]!
+
+test('a claim that is part of the item text counts from 12 characters: 11 do not, 12 and 13 do', () => {
+  const item = itemOf('internationalization pipeline')
+  expect(claimScore('internation', item)).toBe(0)
+  expect(claimScore('internationa', item)).toBe(1)
+  expect(claimScore('internationali', item)).toBe(1)
+  // The item may be the shorter text: an item of 11 characters inside the claim does not count, 12 does.
+  expect(claimScore('see internationa then', itemOf('internation'))).toBe(0)
+  expect(claimScore('see internationa then', itemOf('internationa'))).toBe(1)
+})
+
+test('shared words count from 3: 2 shared words give nothing, 3 and 4 give the share', () => {
+  const item = itemOf('alpha bravo charlie delta')
+  // Each claim is out of order, so it is no part of the item text.
+  expect(claimScore('bravo alpha', item)).toBe(0)
+  expect(claimScore('charlie bravo alpha', item)).toBeGreaterThan(0)
+  expect(claimScore('delta charlie bravo alpha', item)).toBeGreaterThan(0)
+})
+
+test('a paraphrase counts from a 70% share of the shorter word set: 6 of 10 give nothing, 7 and 8 give their share', () => {
+  const ten = Array.from({ length: 10 }, (_, i) => `w0${i}`)
+  const item = itemOf(ten.join(' '))
+  // k shared words in reverse order (so no part of the item text), then words the item lacks, 10 words in all.
+  const claim = (k: number) => [...ten.slice(0, k).reverse(), ...Array.from({ length: 10 - k }, (_, i) => `x0${i}`)].join(' ')
+  expect(claimScore(claim(6), item)).toBe(0)
+  expect(claimScore(claim(7), item)).toBe(0.7)
+  expect(claimScore(claim(8), item)).toBe(0.8)
+})

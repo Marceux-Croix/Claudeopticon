@@ -17,3 +17,12 @@ test('deferredIds names each ticket once, and needs the # of a ticket ID', () =>
   expect(deferredIds('After lunch, #T0042. After that, #T0042 again.')).toEqual(['T0042'])
   expect(deferredIds('After this, T0042 comes next.')).toEqual([])
 })
+
+test('a dot inside a file name does not end the sentence', () => {
+  expect(deferredIds('After parser.ts is fixed, take #T0042.')).toEqual(['T0042'])
+  expect(deferredIds('Once parser.ts and lexer.ts land I take #T0007 next to a.b.')).toEqual(['T0007'])
+  // A dot that ends the sentence still does.
+  expect(deferredIds('The parser.ts is fine. #T0042 is done.')).toEqual([])
+  // The limit: the name ends the text.
+  expect(deferredIds('Next #T0042 for parser.ts')).toEqual(['T0042'])
+})

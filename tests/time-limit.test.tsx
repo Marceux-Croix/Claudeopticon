@@ -52,3 +52,12 @@ test('failAfter fails a call that never answers, passes one that does, and fails
   await expect(failAfter(Promise.reject(new Error('late')), 10, refused)).rejects.toThrow()
   await expect(failAfter(new Promise<number>(() => undefined), 10, () => Promise.reject(new Error('refused')))).rejects.toThrow('refused')
 })
+
+/** Property: a timer the engine refuses leaves the call unbounded, and the work's own value or error still reaches the caller. */
+test('inTime with a timer that throws or rejects still gives the work its own value and error', async () => {
+  const refuses = () => { throw new Error('session ended') }
+  expect(await inTime(Promise.resolve(5), 10, refuses)).toBe(5)
+  await expect(inTime(Promise.reject(new Error('boom')), 10, refuses)).rejects.toThrow('boom')
+  // A timer call that answers with a rejected promise is not an unhandled rejection and does not change the result.
+  expect(await inTime(Promise.resolve(6), 10, () => Promise.reject(new Error('refused')))).toBe(6)
+})

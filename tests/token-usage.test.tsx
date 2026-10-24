@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-import { readKeptUsage, stepUsage, turnTokens } from '../hooks/token-usage'
+import { isTurnKept, readKeptUsage, stepUsage, turnKey, turnTokens } from '../hooks/token-usage'
+import { pruneTo } from '../hooks/key-prune'
 
 test('turnTokens sums every kind', async () => {
   expect(turnTokens({ input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 30, cache_creation_input_tokens: 400 })).toBe(433)
@@ -66,4 +67,18 @@ test('readKeptUsage clamps the count at compact to the total, so "since compact"
   expect(readKeptUsage({ tokens: 1000, since: 0, atCompact: 400 })).toEqual({ tokens: 1000, since: 0, atCompact: 400 })
   // A total of 0 clamps any count at compact to 0.
   expect(readKeptUsage({ tokens: 0, since: 0, atCompact: 7 })).toEqual({ tokens: 0, since: 0, atCompact: 0 })
+})
+
+test('the turns of an agent that left with no turn end are pruned, the main conversation and live agents keep theirs', async () => {
+  const live = new Set(['a1'])
+  const seen = new Map<string, number | undefined>([
+    [turnKey(undefined, 't1'), undefined],
+    [turnKey('a1', 't2'), 0],
+    [turnKey('gone', 't3'), 5],
+    // The limit of the key: a turn ID that holds a colon is still its agent's.
+    [turnKey('gone', 't4:x'), 1],
+  ])
+  pruneTo(seen, key => isTurnKept(key, id => live.has(id)))
+  expect([...seen.keys()]).toEqual([':t1', 'a1:t2'])
+  expect(isTurnKept('no-colon', id => id === 'no-colon')).toBe(true)
 })

@@ -40,7 +40,7 @@ export const AGENT_COLORS = [
 ]
 
 /** The orchestrator's color: a teal, apart from the agent colors and from the violet progress. */
-export const ORCH_COLOR = '#1fa7b8'
+const ORCH_COLOR = '#1fa7b8'
 
 /** Each agent's color slot by its index, set with each view. */
 let slots: readonly number[] = []

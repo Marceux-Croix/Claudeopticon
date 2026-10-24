@@ -5,7 +5,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import { readKeptTickets } from '../hooks/kept-records'
 
-// Hook cases of batch G3 on a fake repo, store and model that can fail: per-key store loads, the archive record, session pruning, cut rows, the unlisted grace, orchestrator claims, move_ticket, the scan wait and the sort.
+// Engine cases:on a fake repo, store and model that can fail: per-key store loads, the archive record, session pruning, cut rows, the unlisted grace, orchestrator claims, move_ticket, the scan wait and the sort.
 {
 const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
@@ -257,7 +257,7 @@ test('a running session notes itself again in the session list, moving to its en
   const clock = mock.clock(on)
   const { store } = rig(on, {}, { agents: () => [LIVE] })
   await $.session.start({ cwd: '/repo' } as never).catch(() => undefined)
-  // Batch H4: the time is in the list entry itself, [ID, time], not in sessions-seen.
+  // the time is in the list entry itself, [ID, time], not in sessions-seen.
   const recent = () => store.get('sessions-recent') as [string, number][]
   const first = recent().find(([id]) => id === 'sess-1')![1]
   // Others start after it.
@@ -305,7 +305,7 @@ test('a session list that cannot be read is not written, and nothing is cleared'
  * Property: past KEPT_AGENTS rows, a cut row that ended stays cut: the agent list never adds it back
  * as a new row, so labels, the label base and the stored rows stay as they were from tick to tick.
  * Three states: the cut rows ended, a cut row still live in the list, and after a reload. A cut row
- * still live comes back once, in the place of an ended row (batch H4: this case expected it
+ * still live comes back once, in the place of an ended row (this case expected it
  * to stay cut, so its agent left the board while it worked); the base then moves on by that one row
  * and stays put as before.
  */

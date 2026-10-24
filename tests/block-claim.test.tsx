@@ -58,7 +58,7 @@ const own = (claims: Map<string, number>, dir: string): ClaimEntry[] => [...clai
 /** Property: a block is never claimed while the repo's other claim folder holds a claim on it. */
 test('a claim passes over a block the other claim folder holds, before and after its own claim', async () => {
   const now = 10 * CLAIM_MS
-  // The reviewer's PD state: the fallback folder holds block 0, live; a session of the git folder claims block 1.
+  // The PD state: the fallback folder holds block 0, live; a session of the git folder claims block 1.
   const claims = new Map([[`${WORK}/0`, now]])
   expect(await claimAcross(fakePort(claims, { now }), GIT, WORK, [], 0, now)).toEqual({ block: 1, path: `${GIT}/1` })
   // PD2, the other way round: the git folder holds block 0; a session claiming in the fallback folder takes block 1.
@@ -83,7 +83,7 @@ test('a claim passes over a block the other claim folder holds, before and after
   for (let block = 0; block < CLAIM_SCAN - 1; block += 1) {
     full.set(`${GIT}/${block}`, now)
   }
-  expect(await claimAcross(fakePort(full, { now }), GIT, WORK, own(full, GIT), 0, now)).toBe(`every block from 0 on is claimed`)
+  expect(await claimAcross(fakePort(full, { now }), GIT, WORK, own(full, GIT), 0, now)).toBe(`no block is free among the ${CLAIM_SCAN} blocks scanned from 0 on (${CLAIM_SCAN} held by a live claim, 0 claimed by another session first, 0 held in the other claim folder)`)
   // Inside the population the check lets through (a stale claim in the other folder may be taken over): another
   // session takes it over there first, with a new generation, between this list and this claim: given up.
   const stale = new Map([[`${WORK}/0`, now - CLAIM_MS]])
@@ -135,13 +135,13 @@ test('the other folder: missing is empty, there but unlisted stops the claim, an
   expect(mustYield([{ name: '1', mtimeMs: now }, { name: 'notes', mtimeMs: now }], [], 0, now)).toBe(false)
 })
 
-// ---------------------------------------------------------------- (batch K1)
+// ---------------------------------------------------------------- 
 
 /** Property: no block past the end of the number line is ever claimed: such a block gives no ID. */
 test('claimAcross claims no block at or past END_BLOCK, and makes no entry there', async () => {
   const now = 10 * CLAIM_MS
   expect(END_BLOCK).toBe(blockOf(VALUE_END))
-  // The verifier's N1 state: the first free block is past the end (an ID at the end of the line). No call at all.
+  // The N1 state: the first free block is past the end (an ID at the end of the line). No call at all.
   const past = fakePort(new Map(), { now })
   expect(await claimAcross(past, GIT, WORK, [], END_BLOCK, now)).toBe('the number line of ticket IDs is used up')
   expect(past.calls).toEqual([])
@@ -156,4 +156,27 @@ test('claimAcross claims no block at or past END_BLOCK, and makes no entry there
   const low = fakePort(new Map([[`${GIT}/0`, now]]), { now })
   expect(await claimAcross(low, GIT, WORK, [{ name: '0', mtimeMs: now }], 0, now)).toEqual({ block: 1, path: `${GIT}/1` })
   expect(CLAIM_SCAN).toBeGreaterThan(1)
+})
+
+/** Property: the failure text says what the scan covered and why each block was passed over, so a taken block and a live hold read differently. */
+test('claimAcross failure text separates live holds, lost races and the other folder', async () => {
+  const now = 1_000_000
+  const live = new Map<string, number>()
+  for (let block = 0; block < CLAIM_SCAN; block += 1) {
+    live.set(`${GIT}/${block}`, now)
+  }
+  const heldText = (await claimAcross(fakePort(live, { now }), GIT, WORK, own(live, GIT), 0, now)) as string
+  // A race lost on every block: the claim is listed as free, then another session makes it first.
+  const racing = new Map<string, number>()
+  const port = fakePort(racing, { now, before: (op, path) => {
+    if (op === 'make') {
+      racing.set(path, now)
+    }
+  } })
+  const racedText = (await claimAcross(port, GIT, WORK, [], 0, now)) as string
+  expect(heldText).not.toBe(racedText)
+  expect(heldText).toContain(`${CLAIM_SCAN} blocks scanned from 0`)
+  expect(heldText).toContain(`${CLAIM_SCAN} held by a live claim`)
+  expect(racedText).toContain(`${CLAIM_SCAN} claimed by another session first`)
+  expect(racedText).not.toContain('every block')
 })

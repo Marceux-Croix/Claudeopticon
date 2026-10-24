@@ -49,7 +49,7 @@ test('a reference finds an ID with letters in it', () => {
   expect(findTickets(list, 'T0005').map(one => one.item.text)).toEqual(['#T0005 Beta'])
 })
 
-// ---------------------------------------------------------------- (batch G2)
+// ---------------------------------------------------------------- 
 
 test('an older ID after the text is no item ID, but a reference to it still finds its line', () => {
   const mk = (text: string): TodoFile[] => [{ name: 'A.md', folder: '/repo/.claude_todo', mtimeMs: 1, items: parseTodo(text) }]
@@ -64,7 +64,7 @@ test('an older ID after the text is no item ID, but a reference to it still find
   expect(findTickets(mk('- [ ] #PROJ7 Lead\n- [ ] see #PROJ7'), '#PROJ7').map(one => one.item.text)).toEqual(['#PROJ7 Lead'])
 })
 
-// ---------------------------------------------------------------- (batch H2)
+// ---------------------------------------------------------------- 
 
 /**
  * Property: a bare word of a description never picks a ticket by a `#` tag in its text; only a `#`
@@ -73,7 +73,7 @@ test('an older ID after the text is no item ID, but a reference to it still find
 test('the tag fallback needs the # form or a whole-ID reference: a bare word goes to the text match', () => {
   const list: TodoFile[] = [{ name: 'T.md', folder: '/r/.claude_todo', mtimeMs: 1, items: parseTodo('- [ ] #T0008 Fix the parser #PROJ7\n- [ ] #T0009 Port the encoder #h264\n- [ ] #T0010 Decoder for h264 streams') }]
   const texts = (ref: string) => findTickets(list, ref).map(one => one.item.text)
-  // The verifier's state: a bare word in the middle of a description. It shares too few words with T0010 for a text
+  // The state: a bare word in the middle of a description. It shares too few words with T0010 for a text
   // match, so nothing is found: never the #h264 line by its tag.
   expect(texts('Fix the h264 decoder streams')).toEqual([])
   // At the limits of the reference: the bare word first, and last.
@@ -86,13 +86,13 @@ test('the tag fallback needs the # form or a whole-ID reference: a bare word goe
   expect(texts(' #PROJ7 ')).toEqual(['#T0008 Fix the parser #PROJ7'])
 })
 
-// ---------------------------------------------------------------- batch I2: remainder
+// ---------------------------------------------------------------- remainder
 
 /** Property: the ID lookup follows the # rule too: a short or other-letter bare word of a description never picks a ticket by ID. */
 test('a bare short ID word in a description is text: "Update the T2 dashboard" goes to the text match', () => {
   const list: TodoFile[] = [{ name: 'A.md', folder: '/r/.claude_todo', mtimeMs: 0, items: parseTodo('- [ ] #T0004 Update the dashboard\n- [ ] #T0009 Fix the decoder #h264\n- [ ] #T2 Old') }]
   const ids = (ref: string) => findTickets(list, ref).map(one => one.item.id)
-  // The verifier's P109 state.
+  // The P109 state.
   expect(ids('Update the T2 dashboard')).toEqual(['T0004'])
   // At the limits of the reference: the bare short word first, and last.
   expect(ids('T2 update the dashboard')).toEqual(['T0004'])
@@ -105,7 +105,7 @@ test('a bare short ID word in a description is text: "Update the T2 dashboard" g
 
 /** Property: an ID inside inline code names no ticket, by ID or as a tag. */
 test('a lookup of an ID that a line holds only in inline code does not find that line', () => {
-  // The reviewer's state: a documentation line and an unrelated one.
+  // The state: a documentation line and an unrelated one.
   const list: TodoFile[] = [{ name: 'TODO.md', folder: '/r', mtimeMs: 1, items: parseTodo('- [ ] Explain the `#T002B` form in the README\n- [ ] Fix the cache') }]
   const texts = (ref: string) => findTickets(list, ref).map(one => one.item.text)
   expect(texts('#T002B')).toEqual([])

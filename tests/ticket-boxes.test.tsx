@@ -16,7 +16,7 @@ test('setBox sets one item\'s box by its key, and leaves the rest of the file as
   expect(movesNote(['- "First": open -> in progress'])).toContain('Do not act on it')
 })
 
-// ---------------------------------------------------------------- batch I2: remainder
+// ---------------------------------------------------------------- remainder
 
 /**
  * Property: a press writes only the line the board drew: the line its key names must still have the
@@ -27,7 +27,7 @@ test('a press from an out-of-date board is refused: the keyed line must have the
   const after = '- [~] Fix it\n- [ ] Fix it'
   const drawn = parseTodo(before)
   const second = { key: itemKey(drawn[1]!), drawn: { text: drawn[1]!.text, status: drawn[1]!.status } }
-  // The verifier's P025 state: the first line went, the board still shows the old second line (`[~]`).
+  // The P025 state: the first line went, the board still shows the old second line (`[~]`).
   expect(isDrawnLine(after, second.key, second.drawn)).toBe(false)
   expect(setBox(after, second.key, 'completed', second.drawn)).toBeUndefined()
   // At the limit: the last line of the drawn board, after a line was added above every identical one.
@@ -43,7 +43,7 @@ test('a press from an out-of-date board is refused: the keyed line must have the
   expect(isDrawnLine(after, 'gone', { text: 'gone', status: 'pending' })).toBe(false)
 })
 
-// ---------------------------------------------------------------- batch J3: remainder (sections)
+// ---------------------------------------------------------------- remainder (sections)
 
 /**
  * Property: identical lines with the same box in two sections are told apart by their place (the
@@ -55,7 +55,7 @@ test('a stale press on identical lines in two sections is refused by the line pl
   const drawn = parseTodo(before)
   const places = linePlaces(before)
   const frontend = { key: itemKey(drawn[1]!), drawn: { text: drawn[1]!.text, status: drawn[1]!.status, place: places.get(itemKey(drawn[1]!))! } }
-  // The verifier's HI-025 state, behind a valid first line: the top line went, the stale key now names the Backend line.
+  // The HI-025 state, behind a valid first line: the top line went, the stale key now names the Backend line.
   const after = before.split('\n').slice(1).join('\n')
   expect(isDrawnLine(after, frontend.key, frontend.drawn)).toBe(false)
   expect(setBox(after, frontend.key, 'completed', frontend.drawn)).toBeUndefined()
@@ -69,7 +69,7 @@ test('a stale press on identical lines in two sections is refused by the line pl
   expect(isDrawnLine('## Core\n- [ ] Fix it\n## Other\n- [ ] Fix it', itemKey(second), sameSection)).toBe(false)
   // The excluded population: a current board writes the drawn line; a heading in a code fence or comment is no heading.
   expect(setBox(before, frontend.key, 'completed', frontend.drawn)).toBe(before.replace('## Frontend\n- [ ]', '## Frontend\n- [x]'))
-  // Compared with the place under `## A` alone: the place's form changed with batch K3 (heading path, occurrence, count).
+  // Compared with the place under `## A` alone: the place's form changed later (heading path, occurrence, count).
   expect(linePlaces('## A\n```\n## B\n```\n- [ ] Fix').get('fix')).toBe(linePlaces('## A\n- [ ] Fix').get('fix'))
   expect(linePlaces('## A\n<!--\n## B\n-->\n- [ ] Fix').get('fix')).toBe(linePlaces('## A\n- [ ] Fix').get('fix'))
   // A board with no place (no scan read of the file) checks text and box alone, as before.
@@ -102,7 +102,7 @@ test('setBox writes the queued box [>], and from it any other box', () => {
   expect(setBox(setBox(text, '#t2', 'queued')!, '#t2', 'pending')).toBe('- [ ] #T1 a\n- [ ] #T2 b')
 })
 
-// ---------------------------------------------------------------- batch K3: remainder (same heading text, prose labels)
+// ---------------------------------------------------------------- remainder (same heading text, prose labels)
 
 /** The key and the drawn state of item `n` of `text`, as the board keeps them after a scan. */
 const drawnOf = (text: string, n: number) => {
@@ -152,7 +152,7 @@ test('VJ-025b sections marked by prose lines: a stale press is refused when the 
   expect(setBox(before.replace('- [ ] Write tests', '- [~] Write tests'), second.key, 'in_progress', second.drawn)).toBe('Frontend:\n- [~] Write tests\nBackend:\n- [~] Write tests')
 })
 
-// ---------------------------------------------------------------- batch L3: 
+// ---------------------------------------------------------------- 
 
 /** What the board keeps for the nth item of a text: its key, and the drawn item with the place and hash of `drawnPlaces`. */
 const keptOf = (text: string, n: number) => {
@@ -166,7 +166,7 @@ const keptOf = (text: string, n: number) => {
  * board read changed, also when the count and the rank of the identical lines stayed the same.
  */
 test('L3R3-025m one identical line moved under prose labels, count unchanged: the stale press is refused', () => {
-  // The probe zz-l3r3-places.ts: the defect behind a valid first case (prose labels, the first moved to the end).
+  // The defect behind a valid first case (prose labels, the first moved to the end).
   const before = 'Frontend:\n- [ ] Write tests\nBackend:\n- [ ] Write tests'
   const first = keptOf(before, 0)
   expect(first.drawn.sum).toBe(textSum(before))
@@ -210,18 +210,18 @@ test('L3R3-8b a parent heading added above a unique ticket does not refuse its p
   expect(isDrawnLine('## Tasks\n## Tasks\n- [ ] Write tests\n  - note: pytest', shared.key, shared.drawn)).toBe(false)
 })
 
-// ---------------------------------------------------------------- batch L2: remainder (identical lines reordered)
+// ---------------------------------------------------------------- remainder (identical lines reordered)
 
 /**
  * Property: a press from an out-of-date board never writes another of identical lines, also when they were
  * reordered with the same count (two blocks swapped, or one deleted and a copy added): a line with identical twins
  * is pressed only while the lines drawn around it (the previous and next non-blank lines) still match. The
- * reviewer's p025 states.
+ * p025 states.
  */
 test('identical lines reordered with the same count: a stale press is refused by the drawn neighbors', () => {
   const labels = 'Frontend:\n- [ ] Write tests\n  - note: jest\nBackend:\n- [ ] Write tests\n  - note: pytest'
   const first = drawnOf(labels, 0)
-  // The reviewer's states: prose labels with the two blocks swapped; one heading with the two blocks swapped.
+  // The states: prose labels with the two blocks swapped; one heading with the two blocks swapped.
   const swapped = 'Backend:\n- [ ] Write tests\n  - note: pytest\nFrontend:\n- [ ] Write tests\n  - note: jest'
   expect(isDrawnLine(swapped, first.key, first.drawn)).toBe(false)
   expect(setBox(swapped, first.key, 'in_progress', first.drawn)).toBeUndefined()
@@ -244,4 +244,15 @@ test('identical lines reordered with the same count: a stale press is refused by
   expect(setBox('- [ ] Y\n- [x] Y', top.key, 'in_progress', top.drawn)).toBe('- [~] Y\n- [x] Y')
   const unique = drawnOf('Backend:\n- [ ] Only once\n  - note', 0)
   expect(isDrawnLine('Changed label:\n- [ ] Only once\n  - other note', unique.key, unique.drawn)).toBe(true)
+})
+
+/** Property: a heading with up to 3 spaces of indent is a heading for the place of a line, and one with 4 is code; the archive reads the same headings. */
+test('linePlaces reads an indented heading as a section, and a 4-space line as code', () => {
+  const indented = linePlaces('## A\n   ## B\n- [ ] Fix').get('fix')!
+  expect(indented).toContain('## B')
+  expect(indented).not.toBe(linePlaces('## A\n- [ ] Fix').get('fix'))
+  expect(linePlaces('## A\n    ## B\n- [ ] Fix').get('fix')).toBe(linePlaces('## A\n- [ ] Fix').get('fix'))
+  expect(linePlaces('## A\n####### seven\n- [ ] Fix').get('fix')).toBe(linePlaces('## A\n- [ ] Fix').get('fix'))
+  // A heading with no text counts.
+  expect(linePlaces('#\n- [ ] Fix').get('fix')).not.toBe(linePlaces('- [ ] Fix').get('fix'))
 })

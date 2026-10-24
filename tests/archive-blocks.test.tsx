@@ -5,7 +5,7 @@ import { parseTodo } from '../hooks/todo-markdown'
 
 // ---------------------------------------------------------------- archiving closed tickets
 
-const PLAN_TEXT = ['# Plan', '', '## Core', '- [x] #T1 Done parser', '  note under it', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', '- [x] #T5 Done docs', 'prose stays'].join('\n')
+const PLAN_TEXT = ['# Plan', '', '## Core', '- [x] #T1 Done parser', '  note under it', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', '- [x] #T5 Done docs', '', 'prose stays'].join('\n')
 
 test('closedBlocks finds a top-level done ticket with its indented lines, only when every box in the block is done', () => {
   const blocks = closedBlocks(PLAN_TEXT)
@@ -29,7 +29,7 @@ test('closedBlocks finds a top-level done ticket with its indented lines, only w
   // A block with no heading above it has none.
   expect(closedBlocks('- [x] Top')[0]?.heading).toBeUndefined()
   // Removing the blocks leaves everything else exactly.
-  expect(removeBlocks(PLAN_TEXT, blocks)).toBe(['# Plan', '', '## Core', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', 'prose stays'].join('\n'))
+  expect(removeBlocks(PLAN_TEXT, blocks)).toBe(['# Plan', '', '## Core', '- [ ] #T2 Open lexer', '- [x] #T3 Done with open child', '  - [ ] #T4 child open', '', '## Docs', '', 'prose stays'].join('\n'))
 })
 
 test('addToArchive groups blocks under their heading, never twice', () => {
@@ -69,11 +69,11 @@ test('addToArchive skips a block only when it stands whole in the archive and th
   expect(addToArchive('- [x] #T1 Done parser\n  note\n', one, [one[0]!.lines])).toBe('- [x] #T1 Done parser\n  note\n- [x] #T1 Done parser\n')
 })
 
-// ---------------------------------------------------------------- batch J3: 
+// ---------------------------------------------------------------- 
 
 /** Property: a done line inside an HTML comment is an example: it never starts or joins a block, so the archive never cuts it out of the comment. */
 test('closedBlocks never takes a line of an HTML comment', () => {
-  // The reviewer's R3-D state: the comment example sits behind a valid first case, a real done ticket after it.
+  // The R3-D state: the comment example sits behind a valid first case, a real done ticket after it.
   const text = ['# Plan', '<!-- Example of the format:', '- [x] #T0001 Example done item', '-->', '- [x] #T2 Real done', '- [ ] #T3 Open'].join('\n')
   expect(closedBlocks(text).map(block => block.lines)).toEqual([['- [x] #T2 Real done']])
   // At the limit: a comment that opens on the last lines and never closes.
@@ -87,12 +87,12 @@ test('closedBlocks never takes a line of an HTML comment', () => {
   expect(closedBlocks('- [x] #T6 Strip <!-- markers').map(block => block.lines)).toEqual([['- [x] #T6 Strip <!-- markers']])
 })
 
-// ---------------------------------------------------------------- batch L3: 
+// ---------------------------------------------------------------- 
 
 /**
  * Property: a moved block lands where it is items: a heading inside an HTML comment or a code
  * fence of the archive is no heading, neither as the place to go nor as the end of a section.
- * The three states of the probe zz-l3r3-archive.ts.
+ * Three states.
  */
 test('addToArchive never puts a block under a heading inside an HTML comment, and the items check holds', () => {
   const blocks = closedBlocks('## Work\n- [x] #T5 Ship the parser\n- [ ] #T6 Open')
@@ -155,4 +155,92 @@ test('addToArchive puts a blank line after an open <details> block, so the moved
   expect(addToArchive('```\nx\n```\n', loose)).toBe('```\nx\n```\n- [x] #T6 Loose\n')
   expect(addToArchive('<pre>\nx\n</pre>\n', loose)).toBe('<pre>\nx\n</pre>\n- [x] #T6 Loose\n')
   expect(addToArchive('> note\n', loose)).toBe('> note\n- [x] #T6 Loose\n')
+})
+
+// ---------------------------------------------------------------- wrapped text, headings, retries and scale
+
+/** Property: a done ticket whose wrapped text is not indented still holds back for an open subtask below the wrap, and moves whole when every subtask is done. */
+test('closedBlocks keeps a ticket with an unindented wrap line and an open subtask below it', () => {
+  const wrap = '- [x] #T0001 Long ticket text that\nwraps onto an unindented line\n'
+  expect(closedBlocks(`${wrap}  - [ ] #T0002 open subtask`)).toEqual([])
+  expect(closedBlocks(`${wrap}  - [~] #T0002 going`)).toEqual([])
+  const done = closedBlocks(`${wrap}  - [x] #T0002 done subtask`)
+  expect(done.map(block => block.lines)).toEqual([['- [x] #T0001 Long ticket text that', 'wraps onto an unindented line', '  - [x] #T0002 done subtask']])
+  expect(removeBlocks(`${wrap}  - [x] #T0002 done subtask`, done)).toBe('')
+  // Two wrap lines in a row.
+  expect(closedBlocks('- [x] #T0001 a\nb\nc\n  - [ ] #T0002 open')).toEqual([])
+  // The excluded population: prose after a blank line, a heading, a list item or a thematic break ends the block.
+  expect(closedBlocks('- [x] #T0001 a\n\nprose\n  - [ ] #T0002 x').map(block => block.lines)).toEqual([['- [x] #T0001 a']])
+  expect(closedBlocks('- [x] #T0001 a\n# Head\n  - [ ] x').map(block => block.lines)).toEqual([['- [x] #T0001 a']])
+  expect(closedBlocks('- [x] #T0001 a\n- [x] #T0002 b').map(block => block.lines)).toEqual([['- [x] #T0001 a'], ['- [x] #T0002 b']])
+  expect(closedBlocks('- [x] #T0001 a\n  ---\nprose\n  - [ ] x').map(block => block.lines)).toEqual([['- [x] #T0001 a', '  ---']])
+})
+
+/** Property: a heading with up to 3 spaces of indent is a heading: the ticket is filed under it, and the archive finds the same section. */
+test('closedBlocks and addToArchive file a ticket under an indented heading', () => {
+  const blocks = closedBlocks('## Core\n   ## Indented\n- [x] #T0001 Done\n')
+  expect(blocks[0]?.heading).toBe('## Indented')
+  const next = addToArchive('## Core\n\n- [x] #T0000 old\n\n  ## Indented\n\n- [x] #T0009 older\n', blocks)
+  expect(next).toBe('## Core\n\n- [x] #T0000 old\n\n  ## Indented\n\n- [x] #T0009 older\n- [x] #T0001 Done\n')
+  // A heading with no text, and a tab after the marks.
+  expect(closedBlocks('#\n- [x] #T0002 a')[0]?.heading).toBe('#')
+  expect(closedBlocks('##\tTab\n- [x] #T0002 a')[0]?.heading).toBe('##\tTab')
+  // The excluded population: 4 spaces is code, and 7 marks or no space after them is text.
+  expect(closedBlocks('    ## code\n- [x] #T0002 a')[0]?.heading).toBeUndefined()
+  expect(closedBlocks('####### seven\n- [x] #T0002 a')[0]?.heading).toBeUndefined()
+  expect(closedBlocks('##nospace\n- [x] #T0002 a')[0]?.heading).toBeUndefined()
+})
+
+/**
+ * Property: a retry skips a block only when the archive holds it under the block's own heading. A stale
+ * record of a block, with an equal older block under another heading, never makes the new block vanish.
+ */
+test('addToArchive adds a block that equals an older archived one under another heading, though the record names it', () => {
+  const blocks = closedBlocks('## Today\n- [x] #T0005 water the plants')
+  const archive = '## Last week\n\n- [x] #T0005 water the plants\n'
+  const next = addToArchive(archive, blocks, [['- [x] #T0005 water the plants']])
+  expect(next).toBe('## Last week\n\n- [x] #T0005 water the plants\n\n## Today\n\n- [x] #T0005 water the plants\n')
+  // The same retry with the block under its own heading adds nothing.
+  const landed = '## Today\n\n- [x] #T0005 water the plants\n'
+  expect(addToArchive(landed, blocks, [['- [x] #T0005 water the plants']])).toBe(landed)
+  // At the limit: the heading's section is the last one of its name, and an earlier equal section does not count.
+  const twice = '## Today\n\n- [x] #T0005 water the plants\n\n## Other\n\n## Today\n\n- [x] #T0001 other\n'
+  expect(addToArchive(twice, blocks, [['- [x] #T0005 water the plants']])).toContain('- [x] #T0001 other\n- [x] #T0005 water the plants\n')
+  // A block with no heading is still found anywhere.
+  const loose = closedBlocks('- [x] #T0006 loose')
+  expect(addToArchive('## A\n\n- [x] #T0006 loose\n', loose, [['- [x] #T0006 loose']])).toBe('## A\n\n- [x] #T0006 loose\n')
+})
+
+/** The least time of three runs of `job`, in ms. */
+function leastMs(job: () => void): number {
+  let least = Infinity
+  for (let i = 0; i < 5; i += 1) {
+    const from = performance.now()
+    job()
+    least = Math.min(least, performance.now() - from)
+  }
+
+  return least
+}
+
+/** A todo text of `n` done tickets under one heading each of 50, and an archive of `lines` lines. */
+const doneText = (n: number) => Array.from({ length: n }, (_, i) => `## S${i % 50}\n- [x] #T${String(i).padStart(5, '0')} done ticket ${i}`).join('\n')
+const archiveText = (lines: number) => Array.from({ length: lines }, (_, i) => (i % 4 === 0 ? `## Old${i}` : `- [x] #T9${String(i).padStart(4, '0')} old ${i}`)).join('\n')
+
+/** Property: the archive text work grows linearly in blocks and in archive lines; 8 times the blocks and archive lines cost at most 16x (linear is 8x, quadratic 64x). */
+test('the archive text work is linear in the number of blocks and archive lines', () => {
+  const run = (n: number) => {
+    const text = doneText(n)
+    const blocks = closedBlocks(text)
+    const archive = archiveText(n * 4)
+    const wrote = blocks.map(block => block.lines)
+    const next = addToArchive(archive, blocks, wrote)
+    expect(blocksStandAsItems(next, blocks)).toBe(true)
+    expect(removeBlocks(text, blocks)).not.toContain('[x]')
+    expect(blocks.length).toBe(n)
+  }
+  run(30)
+  const small = leastMs(() => run(100))
+  const large = leastMs(() => run(800))
+  expect(large / Math.max(small, 1)).toBeLessThan(16)
 })

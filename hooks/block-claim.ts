@@ -86,14 +86,19 @@ export async function claimAcross(port: ClaimPort, dir: string, other: string | 
     return `could not list ${other!}`
   }
   const entries = [...own, ...before]
-  for (let block = from; block < Math.min(from + CLAIM_SCAN, END_BLOCK); block += 1) {
+  // Why each scanned block was passed over, for the failure text: a live claim, a claim another session made first, or the other folder's claim.
+  const passed = { live: 0, raced: 0, other: 0 }
+  const last = Math.min(from + CLAIM_SCAN, END_BLOCK)
+  for (let block = from; block < last; block += 1) {
     const name = nextClaim(entries, block, time)
     if (name === undefined) {
+      passed.live += 1
       continue
     }
     const path = `${dir}/${name}`
     const got = await port.make(path)
     if (got === 'taken') {
+      passed.raced += 1
       continue
     }
     if (got === 'failed') {
@@ -108,8 +113,9 @@ export async function claimAcross(port: ClaimPort, dir: string, other: string | 
     if (after === undefined) {
       return `could not list ${other!}`
     }
+    passed.other += 1
     entries.push(...after)
   }
 
-  return `every block from ${from * BLOCK_SIZE} on is claimed`
+  return `no block is free among the ${last - from} blocks scanned from ${from * BLOCK_SIZE} on (${passed.live} held by a live claim, ${passed.raced} claimed by another session first, ${passed.other} held in the other claim folder)`
 }

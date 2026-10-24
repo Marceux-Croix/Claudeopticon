@@ -50,7 +50,7 @@ export function groupOf(current: CategoryBook, key: string): string {
   return name !== undefined && current.categories.includes(name) ? name : UNSORTED
 }
 
-export const MAX_CATEGORIES = 5
+const MAX_CATEGORIES = 5
 /** The group, filter and ticket tag of a ticket with no listed category: not sorted yet, or fits none. */
 export const UNSORTED = 'Uncategorized'
 export const SORT_BATCH = 60
@@ -87,16 +87,23 @@ export function readBook(raw: string): CategoryBook | undefined {
   // A name is drawn as a Button label, which the engine refuses with a control character in it:
   // names are cleaned here, and an item's category with them, so the two stay equal. A name that
   // cleans to nothing, or to one already held, is dropped.
-  const clean = [...new Set((categories as string[]).map(altText).filter(name => name !== ''))].slice(0, MAX_CATEGORIES)
+  // The name Uncategorized is the view's own last group, so a book never lists it (a listed copy drew the unsorted items twice).
+  const clean = [...new Set((categories as string[]).map(categoryName).filter(name => name !== '' && name !== UNSORTED))].slice(0, MAX_CATEGORIES)
   // JSON.parse makes "__proto__" an own key; bookItems keeps it one (a plain object would take it as the prototype).
   const cleanItems = bookItems(
     Object.entries(items as Record<string, string>)
-      .map(([key, name]): [string, string] => [key, altText(name)])
+      .map(([key, name]): [string, string] => [key, categoryName(name)])
       .filter(([, cleaned]) => cleaned !== ''),
   )
 
   return { categories: clean, items: cleanItems }
 }
+
+/** The longest category name, in UTF-16 units. */
+const NAME_MAX = 40
+
+/** A category name as the book keeps it: control characters cleaned, cut to NAME_MAX units, trimmed. One rule for the file, the reply and the assignment, so they stay equal. */
+const categoryName = (name: string): string => cutUnits(altText(name), NAME_MAX).trim()
 
 /** The most copies of damaged books kept side by side. */
 export const BOOK_BACKUPS = 10
@@ -143,21 +150,24 @@ export function applySortReply(current: CategoryBook, keys: readonly string[], r
     return undefined
   }
   const record = parsed as { categories?: unknown; assign?: unknown }
-  const proposed = Array.isArray(record.categories) ? record.categories.filter((name): name is string => typeof name === 'string' && altText(name) !== '' && altText(name) !== UNSORTED) : []
+  const proposed = Array.isArray(record.categories)
+    ? record.categories.filter((name): name is string => typeof name === 'string').map(categoryName).filter(name => name !== '' && name !== UNSORTED)
+    : []
   const categories = [...current.categories]
-  for (const name of proposed.map(one => cutUnits(altText(one), 40))) {
+  for (const name of proposed) {
     if (categories.length < MAX_CATEGORIES && !categories.includes(name)) {
       categories.push(name)
     }
   }
   const items = bookItems(Object.entries(current.items))
-  const assign = typeof record.assign === 'object' && record.assign !== null ? (record.assign as Record<string, unknown>) : {}
+  const assign = typeof record.assign === 'object' && record.assign !== null && !Array.isArray(record.assign) ? (record.assign as Record<string, unknown>) : {}
   keys.forEach((key, i) => {
     const number = String(i + 1)
     const name = Object.hasOwn(assign, number) ? assign[number] : undefined
     // An item that fits none is kept as Uncategorized, so it is not sent again each sort.
-    if (!Object.hasOwn(items, key) && typeof name === 'string' && (categories.includes(altText(name)) || altText(name) === UNSORTED)) {
-      items[key] = altText(name)
+    const chosen = typeof name === 'string' ? categoryName(name) : ''
+    if (!Object.hasOwn(items, key) && chosen !== '' && (categories.includes(chosen) || chosen === UNSORTED)) {
+      items[key] = chosen
     }
   })
 

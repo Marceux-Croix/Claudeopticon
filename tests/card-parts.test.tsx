@@ -5,22 +5,21 @@ import { actor, badge, badgeWidth, isBlinking, moreDisk, ownerDot, ownersFit, st
 import { Blinks } from '../hooks/card-stage'
 import type { View } from '../hooks/card-types'
 
-const view = (status?: 'running' | 'idle') => ({ orchestrator: status === undefined ? undefined : { status } }) as unknown as View
+const view = (status?: 'running') => ({ orchestrator: status === undefined ? undefined : { status } }) as unknown as View
 
-test('isBlinking: an agent always blinks, the orchestrator only while it runs', async () => {
+test('isBlinking: an agent always blinks, the orchestrator only while its card shows it running', async () => {
   expect(isBlinking(0, view())).toBe(true)
   expect(isBlinking(ORCH, view('running'))).toBe(true)
-  expect(isBlinking(ORCH, view('idle'))).toBe(false)
   expect(isBlinking(ORCH, view())).toBe(false)
 })
 
-test('ownerDot blinks in the first live color, and is steady for an idle orchestrator alone', async () => {
+test('ownerDot blinks in the first live color, and is steady for an orchestrator that does not run alone', async () => {
   const blinks = new Blinks()
-  const live = ownerDot(10, 20, 4, [ORCH, 0], view('idle'), blinks)
+  const live = ownerDot(10, 20, 4, [ORCH, 0], view(), blinks)
   expect(live).toContain('class="k0"')
   expect(live).toContain('fill="#3987e5"')
   expect(live).toContain('cx="10" cy="20" r="4"')
-  const steady = ownerDot(1, 2, 3, [ORCH], view('idle'), blinks)
+  const steady = ownerDot(1, 2, 3, [ORCH], view(), blinks)
   expect(steady).not.toContain('class=')
   expect(steady).toContain('fill="#1fa7b8"')
   // No owners at all draws a steady dot, not a crash.

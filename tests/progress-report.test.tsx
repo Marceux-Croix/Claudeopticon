@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { progressReply, readClaims, readProgress, readTitle } from '../hooks/progress-report'
+import { PROGRESS_MAX, progressReply, readClaims, readProgress, readTitle } from '../hooks/progress-report'
 
 test('readProgress keeps a report sane: whole steps, at least one planned, never more done than planned', async () => {
   expect(readProgress({ done: 3, total: 7, step: ' Run tests ' })).toEqual({ done: 3, total: 7, step: 'Run tests' })
@@ -8,6 +8,37 @@ test('readProgress keeps a report sane: whole steps, at least one planned, never
   expect(readProgress({ done: -2, total: 0 })).toEqual({ done: 0, total: 1 })
   expect(readProgress({ done: 'x', total: 5 })).toBeUndefined()
   expect(readProgress({})).toBeUndefined()
+})
+
+/** Property: a report is read only when its counts are numbers (or numeric text), and its plan is held to PROGRESS_MAX steps. */
+test('readProgress refuses counts that are no numbers and caps a huge plan: a valid report first, the counts at their limits, and the refused forms', () => {
+  // State 1: a valid report, then a null total or done: no report, not "0 of 1".
+  expect(readProgress({ done: 2, total: 5 })).toEqual({ done: 2, total: 5 })
+  expect(readProgress({ done: '2', total: '5' })).toEqual({ done: 2, total: 5 })
+  expect(readProgress({ done: null, total: null })).toBeUndefined()
+  expect(readProgress({ done: 1, total: null })).toBeUndefined()
+  expect(readProgress({ done: null, total: 3 })).toBeUndefined()
+  // State 2: at the limits: the cap is kept, more is cut to it, 1e300 too.
+  expect(readProgress({ done: PROGRESS_MAX, total: PROGRESS_MAX })).toEqual({ done: PROGRESS_MAX, total: PROGRESS_MAX })
+  expect(readProgress({ done: 1, total: PROGRESS_MAX + 1 })).toEqual({ done: 1, total: PROGRESS_MAX })
+  expect(readProgress({ done: 1e300, total: 1e300 })).toEqual({ done: PROGRESS_MAX, total: PROGRESS_MAX })
+  // State 3: the forms Number() reads as 0 or a number: empty text, a space, a boolean, an array; and Infinity.
+  for (const bad of ['', ' ', true, false, [], [3], {}, Number.POSITIVE_INFINITY, '1e400']) {
+    expect([bad, readProgress({ done: 0, total: bad })]).toEqual([bad, undefined])
+  }
+})
+
+/** Property: a title is hidden when it holds a secret before it is cut, so a cut cannot leave part of a secret the check no longer finds. */
+test('readTitle hides a secret before the cut: a clean title first, a secret across the cut, and a secret inside the first line only', () => {
+  // State 1: a clean title is kept.
+  expect(readTitle('Fix the parser #T0037')).toBe('Fix the parser #T0037')
+  // State 2: across the cut: a token of fixed length that the cut makes too short to know.
+  const title = readTitle(`${'x'.repeat(65)} hf_abcdefghijklmnopqrstuvwxyz`) ?? ''
+  expect(title).not.toContain('hf_')
+  expect(title).toBe('(hidden)')
+  // State 3: the secret on the first line, with an ID; a secret on a later line is cut away with it.
+  expect(readTitle('Deploy DB_PASSWORD=Hunter2xyz #T0037')).toBe('(hidden) #T0037')
+  expect(readTitle('Deploy\nDB_PASSWORD=Hunter2xyz')).toBe('Deploy')
 })
 
 test('the progress reply asks an agent to confirm its claim when one is due, and says only Noted otherwise', async () => {

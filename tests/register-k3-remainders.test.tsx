@@ -6,7 +6,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import { psPath } from '../hooks/path-forms'
 import { parseTodo } from '../hooks/todo-markdown'
 
-// ---------------------------------------------------------------- batch K3: remainders (verify J3/J4 probes)
+// ---------------------------------------------------------------- remainders (verify J3/J4 probes)
 {
   const PANE = { component: 'Pane', requestId: 'claudeopticon', props: { title: 'Claudeopticon', isFocused: false, bodyColumns: 60, placement: 'dock' } } as never as { component: 'Pane'; requestId: string; props: never }
 
@@ -100,7 +100,7 @@ import { parseTodo } from '../hooks/todo-markdown'
         throw new Error('ENOENT')
       }
 
-      // (batch K1): the engine hands `.` over as its own folder, outside the fake repo; that session folder is the repo root.
+      // the engine hands `.` over as its own folder, outside the fake repo; that session folder is the repo root.
       return (opts.log?.push(`stat:${abs(e.path)}`), { value: { kind: abs(e.path) in files ? 'file' : 'dir', size: 0, mtimeMs: 1, isLink: false, realPath: opts.links?.[abs(e.path)] ?? (inside(abs(e.path)) ? abs(e.path) : !abs(e.path).includes('.claude_todo') && !abs(e.path).includes('.git') ? R : `${R}/.claude_todo`) } }) as never
     })
     on('fs.list', (_$, e) => ({ value: [...(inside(abs(e.path)) ? names(abs(e.path)) : state.hasNearest ? names(`${R}/.claude_todo`) : []), ...(opts.dangling ?? []).filter(path => path.slice(0, path.lastIndexOf('/')) === abs(e.path)).map(path => path.slice(path.lastIndexOf('/') + 1))].map(name => ({ name, kind: 'file', size: 1, mtimeMs: 2 + stamp, isLink: false })) }))

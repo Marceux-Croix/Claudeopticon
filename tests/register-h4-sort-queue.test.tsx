@@ -5,7 +5,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import { readKeptTickets } from '../hooks/kept-records'
 
-// Hook cases of batch H4 (the loop-1 tail of G3): the sort queue past a poison item, Recategorize
+// Engine cases:the sort queue past a poison item, Recategorize
 // past 300, a failed rollback, the archive record by real path, claims and unread folders, a
 // move_ticket whose scan throws, a failed session note, and the label base.
 {
@@ -141,7 +141,7 @@ const assignAll = (name: string) => (prompt: string) => JSON.stringify({ categor
 
 /**
  * Property: one item whose reply never parses, or a reply cut off at the token limit,
- * never stops the sort of the items behind it. Three states: the poison item first (the verifier's
+ * never stops the sort of the items behind it. Three states: the poison item first (
  * V074, behind nothing), the poison item last (the end of the queue), and a reply that is cut off
  * whenever a call carries more than 8 items (no item at fault: the excluded population, which the
  * halving sorts whole). A reply that fails once and then parses counts against nothing: the 
@@ -173,7 +173,7 @@ for (const [label, lines, isBad, sorted] of [
 
 // ---------------------------------------------------------------- regression
 
-/** Property: a category that the fresh sort names and only tickets past 300 hold is kept, with their assignments (the verifier's V075). */
+/** Property: a category that the fresh sort names and only tickets past 300 hold is kept, with their assignments (the V075). */
 test('Recategorize keeps a category the model names, held only by tickets past 300', async ($, on) => {
   const clock = mock.clock(on)
   const ids = Array.from({ length: 310 }, (_, i) => `t${String(i + 1).padStart(4, '0')}`)
@@ -196,7 +196,7 @@ test('Recategorize keeps a category the model names, held only by tickets past 3
 
 // ---------------------------------------------------------------- regression
 
-/** Property: a rollback whose write fails keeps the record, so the next pass does not add the block again (the verifier's V031). */
+/** Property: a rollback whose write fails keeps the record, so the next pass does not add the block again (the V031). */
 test('a failed rollback write does not lead to the block twice in the archive', async ($, on) => {
   const clock = mock.clock(on)
   const files: Record<string, string> = { [TODO]: `${DONE}\n- [ ] #T2 Open` }
@@ -256,7 +256,7 @@ test('a record written under the real path is found by a session that sees the f
 /**
  * Property: a claim on a ticket that is gone stays only while the folder that could hold
  * it did not read, and at most MISSING_CLAIM_MS. Three states: an unrelated folder will not list
- * (the verifier's V015: the claim ends), the claim's own folder will not list for longer than the
+ * (the V015: the claim ends), the claim's own folder will not list for longer than the
  * bound (it ends), and (the kept population) its own folder will not list inside the bound (it stays).
  */
 test('the ticket is gone from a folder that reads and an unrelated folder will not list: the claim ends', async ($, on) => {

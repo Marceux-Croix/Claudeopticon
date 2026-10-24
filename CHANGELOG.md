@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.9.24
+
+### Changes
+
+- Board columns and stacked tickets are 10 px apart, not 15 px (`TICKET_GAP_PX`).
+
+### Fixes
+
+- An empty board column keeps its share of the width. In 0.9.22 and 0.9.23 a column with no tickets shrank to the width of its heading, so the next column's heading ran into it ("In progress 0Queued").
+
+## 0.9.23
+
+### Fixes
+
+- The 15 px gaps between board columns and between stacked tickets now show. In 0.9.22 the desktop drew the empty spacer cards at no size, so the tickets touched both ways. Each gap is now a transparent margin inside the ticket's own image, left of a ticket after the first column and above a ticket after the first in its column (`padCard`). The buttons stay on the card, and the column headings start over their tickets.
+
+## 0.9.22
+
+### Fixes
+
+- Board columns are 15 px apart, and tickets stacked in a column are 15 px apart. After the desktop update of 2026-10-24 the desktop drew no gap between stacked tickets, so they touched, and the gap between columns grew wider than 15 px. The mod now draws both gaps itself as transparent spacer cards (`TICKET_GAP_PX`), so the desktop's own card spacing and cell width no longer set them. `COLUMN_WIDEN_PX` and `columnShare` are gone.
+
 ## 0.9.21
 
 ### Fixes

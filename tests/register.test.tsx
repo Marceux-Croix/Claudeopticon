@@ -2610,29 +2610,46 @@ test('the next prompt names the in-progress tickets the orchestrator claimed, an
   expect(contexts[3] ?? '').toContain('Still in progress from earlier: "#T0026 Ship the parser"')
 })
 
-test('side-by-side tickets are drawn 5 px narrower than their column', async ($, on) => {
+test('side-by-side columns are 10 px apart: a 10 px margin inside each ticket after the first column', async ($, on) => {
   const { edit } = orchSetup($, on)
   await begin($)
   const wide = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE, props: { ...PANE.props, bodyColumns: 240 } } as never)
   await edit('- [~] #T1 First thing\n- [>] #T2 Second thing\n- [ ] #T3 Third thing')
   await wide.press({ key: 'todo-tickets' })
   await wide.press({ key: 'todo-tickets' })
-  // 240 cells of 8.5 px: three columns that fill the pane less two one-cell gaps, each ticket 5 px narrower.
+  // 240 cells of 8.5 px: three columns that fill the pane less two 10 px gaps; the second and third carry the gap as a left margin.
+  const ticketW = Math.floor((240 * 8.5 - 2 * 10) / 3)
   const sideBySide = JSON.stringify(await wide.findAll({ type: 'Svg' }))
-  expect(sideBySide.split(`"width":${Math.floor((240 * 8.5 - 2 * 8.5) / 3) - 5}`).length - 1).toBe(3)
+  expect(sideBySide.split(`"width":${ticketW},`).length - 1).toBe(1)
+  expect(sideBySide.split(`"width":${ticketW + 10},`).length - 1).toBe(2)
+  expect(sideBySide).toContain('<svg x=\\"10\\" y=\\"0\\"')
 })
 
-test('stacked tickets take the full width', async ($, on) => {
+test('an empty column side by side keeps its share of the width', async ($, on) => {
   const { edit } = orchSetup($, on)
   await begin($)
-  await edit('- [~] #T1 First thing\n- [>] #T2 Second thing\n- [ ] #T3 Third thing')
+  const wide = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE, props: { ...PANE.props, bodyColumns: 240 } } as never)
+  await edit('- [>] #T2 Second thing\n- [ ] #T3 Third thing')
+  await wide.press({ key: 'todo-tickets' })
+  await wide.press({ key: 'todo-tickets' })
+  // 240 cells of 8.5 px: In progress is empty, and keeps the width of a first-column ticket.
+  const paneW = 240 * 8.5
+  const share = Math.floor((Math.floor((paneW - 2 * 10) / 3) / paneW) * 100)
+  expect(JSON.stringify(await wide.findAll({ type: 'Box' }))).toContain(`"width":"${share}%"`)
+})
+
+test('stacked tickets take the full width, with a 10 px margin above each after the first', async ($, on) => {
+  const { edit } = orchSetup($, on)
+  await begin($)
+  await edit('- [~] #T1 First thing\n- [~] #T2 Second thing\n- [ ] #T3 Third thing')
   const narrow = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE })
   await narrow.press({ key: 'todo-tickets' })
   await narrow.press({ key: 'todo-tickets' })
-  // 60 cells: the columns stack, and each ticket is the full width.
+  // 60 cells: the columns stack, each ticket is the full width, and the second In progress ticket carries the gap above it.
   const stacked = JSON.stringify(await narrow.findAll({ type: 'Svg' }))
   expect(stacked.split(`"width":${60 * 8.5}`).length - 1).toBeGreaterThanOrEqual(3)
-  expect(stacked).not.toContain(`"width":${60 * 8.5 - 5}`)
+  expect(stacked).toContain('<svg x=\\"0\\" y=\\"10\\"')
+  expect(stacked).not.toContain('<svg x=\\"10\\"')
 })
 
 test('a ticket leaving In progress keeps its space until the next press, and a space expires after 60 seconds', async ($, on) => {

@@ -180,6 +180,24 @@ export function listRowPx(item: ItemView, isTextOpen = false): number {
   return 34 + (wrap(item.text, room, 13, item.owners.length > 0 ? 500 : 400, isTextOpen ? Number.POSITIVE_INFINITY : MAX_LINES).length - 1) * LINE_H
 }
 
+/**
+ * A card with a transparent margin `left` px wide on its left and `top` px high above it: the gaps between
+ * board columns and between stacked tickets. The margin is part of the card's own image, since the desktop drew
+ * empty spacer cards at no size. The card keeps its right and bottom edges, so buttons set from them stay on it.
+ */
+export function padCard<T extends Card>(card: T, left: number, top: number): T {
+  const l = Math.max(0, Math.round(left))
+  const t = Math.max(0, Math.round(top))
+  if (l === 0 && t === 0) {
+    return card
+  }
+  const w = card.width + l
+  const h = card.height + t
+  const inner = card.source.replace(/^<svg\b/, `<svg x="${l}" y="${t}"`)
+
+  return { ...card, source: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${inner}</svg>`, width: w, height: h }
+}
+
 /** An empty space `height` px high: a transparent card with no text and no buttons, that holds a ticket's place. */
 export function spaceSvg(width: number, height: number): Card {
   const w = Math.max(1, Math.round(width))

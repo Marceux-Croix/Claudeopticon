@@ -6,7 +6,7 @@ import type { View } from '../hooks/card-types'
 import { readTitle } from '../hooks/progress-report'
 import { fileCards } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
-import { buildView, columnPx, columnShare, columnsThatFit, ledger, orchestratorTitle, rowsOf, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
+import { buildView, columnPx, columnsThatFit, ledger, orchestratorTitle, rowsOf, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
 import { readBook } from '../hooks/categories'
 import { PEER_DIM_MS } from '../hooks/peer-sessions'
 import type { PeerClaim } from '../hooks/peer-sessions'
@@ -301,12 +301,6 @@ test('rowsOf keeps every column: three columns two to a row give a second row wi
   expect(rowsOf(['In progress', 'Queued', 'Open'], 2)).toEqual([['In progress', 'Queued'], ['Open']])
   expect(rowsOf(['a', 'b', 'c'], 3)).toEqual([['a', 'b', 'c']])
   expect(rowsOf(['a', 'b'], 0)).toEqual([['a'], ['b']])
-})
-
-test('columnShare: three to a row at 32%, two at 49%, a column alone in its row at the full width', () => {
-  expect(columnShare(3)).toBe(0.32)
-  expect(columnShare(2)).toBe(0.49)
-  expect(columnShare(1)).toBe(1)
 })
 
 // ---------------------------------------------------------------- tickets another session holds

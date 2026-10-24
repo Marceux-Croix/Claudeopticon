@@ -5,7 +5,7 @@ import { AGENT_COLORS } from '../hooks/agent-identity'
 import { ACCENT, setWidth } from '../hooks/card-stage'
 import type { FileView, ItemView } from '../hooks/card-types'
 import { heroSvg } from '../hooks/hero-card'
-import { boardHead, fileCards, listRowPx, spaceSvg, ticketSvg } from '../hooks/todo-cards'
+import { boardHead, fileCards, listRowPx, padCard, spaceSvg, ticketSvg } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
 import { buildView, todoLedger } from '../hooks/view-model'
 import type { AgentRow, TodoFile } from '../types'
@@ -119,6 +119,16 @@ test('a space is a transparent card of its height with no text and no buttons', 
   expect(space.source).not.toContain('<text')
   expect(space.source).not.toContain('<rect')
   expect(space.source).not.toContain('fill=')
+})
+
+test('padCard adds a transparent margin on the left and above, and keeps the card inside whole', async () => {
+  const card = { source: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100" viewBox="0 0 300 100"><rect/></svg>', width: 300, height: 100, alt: 'a' }
+  const padded = padCard(card, 15, 15)
+  expect([padded.width, padded.height]).toEqual([315, 115])
+  expect(padded.source).toContain('width="315" height="115" viewBox="0 0 315 115"')
+  expect(padded.source).toContain('<svg x="15" y="15" xmlns="http://www.w3.org/2000/svg" width="300" height="100"')
+  expect(padded.alt).toBe('a')
+  expect(padCard(card, 0, 0)).toBe(card)
 })
 
 test('the list view keeps the place of a row that left', async () => {

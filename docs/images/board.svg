@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="720" height="706" viewBox="0 0 720 706">
-<rect width="720" height="706" rx="12" fill="#07080F"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="698" viewBox="0 0 720 698">
+<rect width="720" height="698" rx="12" fill="#07080F"/>
 <svg x="0" y="0" xmlns="http://www.w3.org/2000/svg" width="720" height="104" viewBox="0 0 720 104" role="img" aria-label="release.md: 24 of 40 done; docs.md: 3 of 6 done">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
 <style>
@@ -25,7 +25,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="360" y="79" width="114.66666666666666" height="4" rx="2" fill="rgba(255,255,255,.38)"/>
 <rect x="16" y="79" width="344" height="4" rx="2" fill="url(#progress)"/></svg>
 <text x="4" y="134" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">In progress</text>
-<svg x="0" y="144" xmlns="http://www.w3.org/2000/svg" width="354" height="92" viewBox="0 0 354 92" role="img" aria-label="In progress: Write the migration for the v2 config format">
+<svg x="0" y="144" xmlns="http://www.w3.org/2000/svg" width="355" height="92" viewBox="0 0 355 92" role="img" aria-label="In progress: Write the migration for the v2 config format">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
@@ -33,10 +33,10 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 .c5k0{animation:c5k0 1.2s steps(1,end) infinite}@keyframes c5k0{0.00%{fill:#3987e5;opacity:1}50.00%{fill:#3987e5;opacity:.25}}
 @media (prefers-reduced-motion:reduce){.c5k0{animation:none}}
 </style>
-<rect x="0.75" y="0.75" width="352.5" height="90.5" rx="12" fill="#171A26" stroke="#3987e5" stroke-width="1.5"/><rect x="0" y="12" width="3" height="68" rx="1.5" fill="#3987e5"/>
+<rect x="0.75" y="0.75" width="353.5" height="90.5" rx="12" fill="#171A26" stroke="#3987e5" stroke-width="1.5"/><rect x="0" y="12" width="3" height="68" rx="1.5" fill="#3987e5"/>
 <circle cx="18" cy="19" r="4.5" fill="#3987e5" class="c5k0"/>
-<rect x="258" y="9" width="82" height="22" rx="4" fill="#7C3AED"/>
-<text x="299" y="24" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">In progress</text>
+<rect x="259" y="9" width="82" height="22" rx="4" fill="#7C3AED"/>
+<text x="300" y="24" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">In progress</text>
 <rect x="30" y="9" width="42" height="20" rx="8" fill="rgba(255,255,255,.1)"/>
 <text x="51" y="23" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" class="mono">#T25</text>
 <rect x="78.5" y="9.5" width="52" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>
@@ -45,7 +45,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="14" y="58" width="28" height="18" rx="9" fill="#3987e5"/>
 <text x="28" y="71" text-anchor="middle" fill="#FFFFFF" font-size="10.5" font-weight="700">A1</text>
 <text x="50" y="71" fill="rgba(255,255,255,.62)" font-size="11">Write the v2 config migration</text></svg>
-<svg x="0" y="248" xmlns="http://www.w3.org/2000/svg" width="354" height="92" viewBox="0 0 354 92" role="img" aria-label="In progress: Document the plugin API">
+<svg x="0" y="246" xmlns="http://www.w3.org/2000/svg" width="355" height="92" viewBox="0 0 355 92" role="img" aria-label="In progress: Document the plugin API">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
@@ -53,10 +53,10 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 .c6k0{animation:c6k0 1.2s steps(1,end) infinite}@keyframes c6k0{0.00%{fill:#a05001;opacity:1}50.00%{fill:#a05001;opacity:.25}}
 @media (prefers-reduced-motion:reduce){.c6k0{animation:none}}
 </style>
-<rect x="0.75" y="0.75" width="352.5" height="90.5" rx="12" fill="#171A26" stroke="#a05001" stroke-width="1.5"/><rect x="0" y="12" width="3" height="68" rx="1.5" fill="#a05001"/>
+<rect x="0.75" y="0.75" width="353.5" height="90.5" rx="12" fill="#171A26" stroke="#a05001" stroke-width="1.5"/><rect x="0" y="12" width="3" height="68" rx="1.5" fill="#a05001"/>
 <circle cx="18" cy="19" r="4.5" fill="#a05001" class="c6k0"/>
-<rect x="258" y="9" width="82" height="22" rx="4" fill="#7C3AED"/>
-<text x="299" y="24" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">In progress</text>
+<rect x="259" y="9" width="82" height="22" rx="4" fill="#7C3AED"/>
+<text x="300" y="24" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">In progress</text>
 <rect x="30" y="9" width="42" height="20" rx="8" fill="rgba(255,255,255,.1)"/>
 <text x="51" y="23" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" class="mono">#T26</text>
 <rect x="78.5" y="9.5" width="40" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>
@@ -65,7 +65,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="14" y="58" width="28" height="18" rx="9" fill="#a05001"/>
 <text x="28" y="71" text-anchor="middle" fill="#FFFFFF" font-size="10.5" font-weight="700">A2</text>
 <text x="50" y="71" fill="rgba(255,255,255,.62)" font-size="11">Draft the plugin API docs</text></svg>
-<svg x="0" y="352" xmlns="http://www.w3.org/2000/svg" width="354" height="92" viewBox="0 0 354 92" role="img" aria-label="In progress: Fix the parser crash on empty input">
+<svg x="0" y="348" xmlns="http://www.w3.org/2000/svg" width="355" height="92" viewBox="0 0 355 92" role="img" aria-label="In progress: Fix the parser crash on empty input">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
@@ -73,10 +73,10 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 .c7k0{animation:c7k0 1.2s steps(1,end) infinite}@keyframes c7k0{0.00%{fill:#1fa7b8;opacity:1}50.00%{fill:#1fa7b8;opacity:.25}}
 @media (prefers-reduced-motion:reduce){.c7k0{animation:none}}
 </style>
-<rect x="0.75" y="0.75" width="352.5" height="90.5" rx="12" fill="#171A26" stroke="#1fa7b8" stroke-width="1.5"/><rect x="0" y="12" width="3" height="68" rx="1.5" fill="#1fa7b8"/>
+<rect x="0.75" y="0.75" width="353.5" height="90.5" rx="12" fill="#171A26" stroke="#1fa7b8" stroke-width="1.5"/><rect x="0" y="12" width="3" height="68" rx="1.5" fill="#1fa7b8"/>
 <circle cx="18" cy="19" r="4.5" fill="#1fa7b8" class="c7k0"/>
-<rect x="258" y="9" width="82" height="22" rx="4" fill="#7C3AED"/>
-<text x="299" y="24" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">In progress</text>
+<rect x="259" y="9" width="82" height="22" rx="4" fill="#7C3AED"/>
+<text x="300" y="24" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">In progress</text>
 <rect x="30" y="9" width="42" height="20" rx="8" fill="rgba(255,255,255,.1)"/>
 <text x="51" y="23" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" class="mono">#T27</text>
 <rect x="78.5" y="9.5" width="52" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>
@@ -85,83 +85,83 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <rect x="14" y="58" width="21" height="18" rx="9" fill="#1fa7b8"/>
 <text x="24.5" y="71" text-anchor="middle" fill="#FFFFFF" font-size="10.5" font-weight="700">O</text>
 <text x="43" y="71" fill="rgba(255,255,255,.62)" font-size="11">Harden the parser against bad input</text></svg>
-<text x="370" y="134" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">Queued</text>
-<svg x="366" y="144" xmlns="http://www.w3.org/2000/svg" width="354" height="66" viewBox="0 0 354 66" role="img" aria-label="Queued: Add a man page">
+<text x="369" y="134" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">Queued</text>
+<svg x="365" y="144" xmlns="http://www.w3.org/2000/svg" width="355" height="66" viewBox="0 0 355 66" role="img" aria-label="Queued: Add a man page">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
 
 </style>
-<rect x="0.75" y="0.75" width="352.5" height="64.5" rx="12" fill="#171A26" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
+<rect x="0.75" y="0.75" width="353.5" height="64.5" rx="12" fill="#171A26" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
 <circle cx="18" cy="19" r="4.5" fill="none" stroke="rgba(255,255,255,.38)" stroke-width="1.2"/>
-<rect x="290" y="9" width="50" height="22" rx="4" fill="rgba(255,255,255,.1)"/>
-<text x="315" y="24" text-anchor="middle" fill="#9AA0B4" font-size="12" font-weight="500">Queued</text>
+<rect x="291" y="9" width="50" height="22" rx="4" fill="rgba(255,255,255,.1)"/>
+<text x="316" y="24" text-anchor="middle" fill="#9AA0B4" font-size="12" font-weight="500">Queued</text>
 <rect x="30" y="9" width="42" height="20" rx="8" fill="rgba(255,255,255,.1)"/>
 <text x="51" y="23" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" class="mono">#T30</text>
 <rect x="78.5" y="9.5" width="40" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>
 <text x="98" y="23" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="11" font-weight="500">Docs</text>
 <text x="14" y="48" fill="rgba(255,255,255,.88)" font-size="13"><tspan x="14" dy="0">Add a man page</tspan></text></svg>
-<svg x="366" y="222" xmlns="http://www.w3.org/2000/svg" width="354" height="66" viewBox="0 0 354 66" role="img" aria-label="Queued: Run the release checklist">
+<svg x="365" y="220" xmlns="http://www.w3.org/2000/svg" width="355" height="66" viewBox="0 0 355 66" role="img" aria-label="Queued: Run the release checklist">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
 
 </style>
-<rect x="0.75" y="0.75" width="352.5" height="64.5" rx="12" fill="#171A26" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
+<rect x="0.75" y="0.75" width="353.5" height="64.5" rx="12" fill="#171A26" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
 <circle cx="18" cy="19" r="4.5" fill="none" stroke="rgba(255,255,255,.38)" stroke-width="1.2"/>
-<rect x="290" y="9" width="50" height="22" rx="4" fill="rgba(255,255,255,.1)"/>
-<text x="315" y="24" text-anchor="middle" fill="#9AA0B4" font-size="12" font-weight="500">Queued</text>
+<rect x="291" y="9" width="50" height="22" rx="4" fill="rgba(255,255,255,.1)"/>
+<text x="316" y="24" text-anchor="middle" fill="#9AA0B4" font-size="12" font-weight="500">Queued</text>
 <rect x="30" y="9" width="42" height="20" rx="8" fill="rgba(255,255,255,.1)"/>
 <text x="51" y="23" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" class="mono">#T35</text>
 <rect x="78.5" y="9.5" width="58" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>
 <text x="107" y="23" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="11" font-weight="500">Release</text>
 <text x="14" y="48" fill="rgba(255,255,255,.88)" font-size="13"><tspan x="14" dy="0">Run the release checklist</tspan></text></svg>
-<text x="4" y="474" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">Open</text>
-<svg x="0" y="484" xmlns="http://www.w3.org/2000/svg" width="354" height="66" viewBox="0 0 354 66" role="img" aria-label="Open: Draft the release notes">
+<text x="4" y="470" font-family='"Instrument Sans","Helvetica Neue",Arial,sans-serif' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">Open</text>
+<svg x="0" y="480" xmlns="http://www.w3.org/2000/svg" width="355" height="66" viewBox="0 0 355 66" role="img" aria-label="Open: Draft the release notes">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
 
 </style>
-<rect x="0.75" y="0.75" width="352.5" height="64.5" rx="12" fill="#171A26" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
+<rect x="0.75" y="0.75" width="353.5" height="64.5" rx="12" fill="#171A26" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
 <circle cx="18" cy="19" r="4.5" fill="none" stroke="rgba(255,255,255,.38)" stroke-width="1.2"/>
-<rect x="302" y="9" width="38" height="22" rx="4" fill="rgba(255,255,255,.1)"/>
-<text x="321" y="24" text-anchor="middle" fill="#9AA0B4" font-size="12" font-weight="500">Open</text>
+<rect x="303" y="9" width="38" height="22" rx="4" fill="rgba(255,255,255,.1)"/>
+<text x="322" y="24" text-anchor="middle" fill="#9AA0B4" font-size="12" font-weight="500">Open</text>
 <rect x="30" y="9" width="42" height="20" rx="8" fill="rgba(255,255,255,.1)"/>
 <text x="51" y="23" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" class="mono">#T29</text>
 <rect x="78.5" y="9.5" width="58" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>
 <text x="107" y="23" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="11" font-weight="500">Release</text>
 <text x="14" y="48" fill="rgba(255,255,255,.88)" font-size="13"><tspan x="14" dy="0">Draft the release notes</tspan></text></svg>
-<svg x="0" y="562" xmlns="http://www.w3.org/2000/svg" width="354" height="66" viewBox="0 0 354 66" role="img" aria-label="Open: Review the error messages">
+<svg x="0" y="556" xmlns="http://www.w3.org/2000/svg" width="355" height="66" viewBox="0 0 355 66" role="img" aria-label="Open: Review the error messages">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
 
 </style>
-<rect x="0.75" y="0.75" width="352.5" height="64.5" rx="12" fill="#171A26" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
+<rect x="0.75" y="0.75" width="353.5" height="64.5" rx="12" fill="#171A26" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
 <circle cx="18" cy="19" r="4.5" fill="none" stroke="rgba(255,255,255,.38)" stroke-width="1.2"/>
-<rect x="302" y="9" width="38" height="22" rx="4" fill="rgba(255,255,255,.1)"/>
-<text x="321" y="24" text-anchor="middle" fill="#9AA0B4" font-size="12" font-weight="500">Open</text>
+<rect x="303" y="9" width="38" height="22" rx="4" fill="rgba(255,255,255,.1)"/>
+<text x="322" y="24" text-anchor="middle" fill="#9AA0B4" font-size="12" font-weight="500">Open</text>
 <rect x="30" y="9" width="42" height="20" rx="8" fill="rgba(255,255,255,.1)"/>
 <text x="51" y="23" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" class="mono">#T31</text>
 <rect x="78.5" y="9.5" width="40" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>
 <text x="98" y="23" text-anchor="middle" fill="rgba(255,255,255,.62)" font-size="11" font-weight="500">Docs</text>
 <text x="14" y="48" fill="rgba(255,255,255,.88)" font-size="13"><tspan x="14" dy="0">Review the error messages</tspan></text></svg>
-<svg x="0" y="640" xmlns="http://www.w3.org/2000/svg" width="354" height="66" viewBox="0 0 354 66" role="img" aria-label="Open: Announce the release">
+<svg x="0" y="632" xmlns="http://www.w3.org/2000/svg" width="355" height="66" viewBox="0 0 355 66" role="img" aria-label="Open: Announce the release">
 <style>
 text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 .mono{font-family:"Fragment Mono",ui-monospace,Menlo,monospace}
 @media (prefers-color-scheme:light){[fill="#07080F"]{fill:#FFFFFF}[stroke="#07080F"]{stroke:#FFFFFF}[fill="rgba(255,255,255,.88)"]{fill:#10131C}[fill="rgba(255,255,255,.62)"]{fill:#5A6072}[fill="rgba(255,255,255,.38)"]{fill:rgba(16,19,28,.45)}[stroke="rgba(255,255,255,.38)"]{stroke:rgba(16,19,28,.45)}[fill="rgba(255,255,255,.22)"]{fill:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.22)"]{stroke:rgba(16,19,28,.12)}[stroke="rgba(255,255,255,.08)"]{stroke:rgba(16,19,28,.08)}[fill="rgba(255,255,255,.1)"]{fill:rgba(16,19,28,.06)}[stroke="rgba(255,255,255,.6)"]{stroke:rgba(16,19,28,.35)}[fill="#171A26"]{fill:#F1F3F8}[fill="#1E2233"]{fill:#E1E4EE}[fill="#10303B"]{fill:#DDF6FB}[fill="#9AA0B4"]{fill:#6B7186}[stroke="#FFFFFF"]{stroke:#10131C}[stroke="#9AA0B4"]{stroke:#6B7186}[fill="#FB923C"]{fill:#B83C0B}[fill="rgba(251,146,60,.16)"]{fill:#FFEDE3}[fill="#34D399"]{fill:#047857}[fill="#22D3EE"]{fill:#0E7490}rect[fill="#07080F"]{stroke:rgba(16,19,28,.12);stroke-width:2}}
 
 </style>
-<rect x="0.75" y="0.75" width="352.5" height="64.5" rx="12" fill="#171A26" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
+<rect x="0.75" y="0.75" width="353.5" height="64.5" rx="12" fill="#171A26" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
 <circle cx="18" cy="19" r="4.5" fill="none" stroke="rgba(255,255,255,.38)" stroke-width="1.2"/>
-<rect x="302" y="9" width="38" height="22" rx="4" fill="rgba(255,255,255,.1)"/>
-<text x="321" y="24" text-anchor="middle" fill="#9AA0B4" font-size="12" font-weight="500">Open</text>
+<rect x="303" y="9" width="38" height="22" rx="4" fill="rgba(255,255,255,.1)"/>
+<text x="322" y="24" text-anchor="middle" fill="#9AA0B4" font-size="12" font-weight="500">Open</text>
 <rect x="30" y="9" width="42" height="20" rx="8" fill="rgba(255,255,255,.1)"/>
 <text x="51" y="23" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" class="mono">#T36</text>
 <rect x="78.5" y="9.5" width="58" height="19" rx="9.5" fill="none" stroke="rgba(255,255,255,.22)"/>

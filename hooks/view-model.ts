@@ -336,17 +336,9 @@ export function columnsThatFit(width: number, columns: number, gap: number, min:
 }
 
 /**
- * A board column's share of the pane, by the number of columns in its row: the width each column starts from,
- * before the columns grow to fill their row. A last row with fewer columns widens them to fill it
- * (): Open goes double wide under the other two.
- */
-export function columnShare(inRow: number): number {
-  return inRow >= 3 ? 0.32 : inRow === 2 ? 0.49 : 1
-}
-
-/**
  * A board column's width in px once the columns of its row fill the pane: the pane less the gaps between the
- * columns, shared alike.
+ * columns, shared alike. A last row with fewer columns widens them to fill it (): Open goes
+ * double wide under the other two.
  */
 export function columnPx(paneW: number, inRow: number, gapPx: number): number {
   const n = Math.max(1, Math.floor(inRow))

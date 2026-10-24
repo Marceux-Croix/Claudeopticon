@@ -15,6 +15,8 @@ import { agents, entries, heroView, orchestrator, openTickets, progressTickets, 
 
 const WIDTH = 720
 const GAP = 12
+/** The gap between board columns and between stacked tickets: TICKET_GAP_PX in register.tsx. */
+const TICKET_GAP = 10
 const FONT = '"Instrument Sans","Helvetica Neue",Arial,sans-serif'
 const out = resolve(dirname(fileURLToPath(import.meta.url)), '../docs/images')
 
@@ -45,11 +47,11 @@ function stack(cards: Card[]): string {
 /** The narrowest ticket before the board columns wrap: MIN_TICKET_PX in register.tsx. */
 const MIN_TICKET_PX = 300
 /** The board's columns as the pane places them: side by side while they fit, the rest on the next row. */
-const SIDE_BY = columnsThatFit(WIDTH, 3, GAP, MIN_TICKET_PX)
+const SIDE_BY = columnsThatFit(WIDTH, 3, TICKET_GAP, MIN_TICKET_PX)
 
 /** The three columns of tickets with a header each; the width follows the card width. */
 function board(): string {
-  const colW = (WIDTH - (SIDE_BY - 1) * GAP) / SIDE_BY
+  const colW = (WIDTH - (SIDE_BY - 1) * TICKET_GAP) / SIDE_BY
   const header = boardHead(view.files)
   const columns = [
     { title: 'In progress', tickets: progressTickets },
@@ -63,17 +65,17 @@ function board(): string {
     if (c > 0 && c % SIDE_BY === 0) {
       rowTop = rowBottom + GAP
     }
-    const x = (c % SIDE_BY) * (colW + GAP)
+    const x = (c % SIDE_BY) * (colW + TICKET_GAP)
     const titleY = rowTop + 18
     let y = rowTop + 28
     const cards = col.tickets.map(([it, id, category]) => {
       const card = ticketSvg(it, view, colW, { id, category, isSent: false })
       const s = place(card, x, y)
-      y += card.height + GAP
+      y += card.height + TICKET_GAP
       return s
     })
-    height = Math.max(height, y - GAP)
-    rowBottom = Math.max(rowBottom, y - GAP)
+    height = Math.max(height, y - TICKET_GAP)
+    rowBottom = Math.max(rowBottom, y - TICKET_GAP)
     return `<text x="${x + 4}" y="${titleY}" font-family='${FONT}' font-size="14" font-weight="600" fill="rgba(255,255,255,.88)">${col.title}</text>\n${cards.join('\n')}`
   })
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}">\n<rect width="${WIDTH}" height="${height}" rx="12" fill="#07080F"/>\n${place(header, 0, 0)}\n${parts.join('\n')}\n</svg>`
@@ -198,7 +200,7 @@ function pane(): string {
   parts.push(buttonRow(PANE_PAD + 84, y, ['Config', 'Docs', 'Parser', 'Release'], true).svg)
   y += 30 + GAP
   add(boardHead(view.files))
-  const colW = (WIDTH - (SIDE_BY - 1) * GAP) / SIDE_BY
+  const colW = (WIDTH - (SIDE_BY - 1) * TICKET_GAP) / SIDE_BY
   const columns = [
     // The pane's own buttons for an unsent ticket in each column (register.tsx), from the action definitions.
     { title: 'In progress', tickets: progressTickets, glyphs: [UNSTART_ACTION, DONE_ACTION, STATUS_ACTION].map(action => action.glyph) },

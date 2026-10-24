@@ -74,7 +74,7 @@ import type { Reservation } from './ticket-ids'
 import { findTickets, narrowTickets } from './ticket-lookup'
 import { moveQuestion, peerSendPrompt, sendScope, ticketSummary } from './ticket-prompts'
 import { clearSpaces, columnSlots, expireSpaces, newLayout, pressKeepsSpaces } from './ticket-spaces'
-import { boardHead, boardWidth, cardWidth, fileCards, listRowPx, longItems, spaceSvg, ticketSvg } from './todo-cards'
+import { boardHead, boardWidth, cardWidth, fileCards, listRowPx, padCard, longItems, spaceSvg, ticketSvg } from './todo-cards'
 import { bare, CHECKBOX, exampleMask, ID_SRC, ITEM_ID, leadingId, lineOwnIds, parseTodo, plainText } from './todo-markdown'
 import { readReason, reasonOf, TodoReadError } from './todo-read'
 import type { TodoRead } from './todo-read'
@@ -84,7 +84,7 @@ import { isSkipped, nextStreak } from './unread-files'
 import type { UnreadStreak } from './unread-files'
 import { foldersWithUnread } from './unread-folders'
 import { callDetail, callSummary, describeCall } from './tool-calls'
-import { boardTargets, buildView, columnPx, columnShare, columnsThatFit, ledger, rowsOf, searchTodo, ticketColumns, todoLedger } from './view-model'
+import { boardTargets, buildView, columnPx, columnsThatFit, ledger, rowsOf, searchTodo, ticketColumns, todoLedger } from './view-model'
 import type { OrchestratorState, TicketOrder } from './view-model'
 import { failAfter, inTime, NoAnswer, RUN_LIMIT_MS, STORE_LIMIT_MS, TIMED_OUT } from './time-limit'
 import { tryWriteLock, withWriteLock } from './write-lock'
@@ -123,11 +123,10 @@ const MIN_TICKET_PX = 300
 /** CSS pixels per pane cell on the desktop: a slight overestimate, since a card wider than the pane scales down to fit. */
 const CELL_PX = 8.5
 /**
- * How much narrower a ticket is drawn than its column when columns stand side by side, in px, so the gap between
- * columns matches the gap the desktop draws between stacked tickets. Measured, not documented: on 2026-10-23 the
- * column gap (`gap={1}` across) was about 10 px and the stacked gap, which the mod cannot set, about 15 px.
+ * The gap between board columns and between tickets stacked in a column, in px. Each gap is a transparent
+ * margin inside the ticket's own image, so the desktop's cell size and its own card spacing do not set it.
  */
-const COLUMN_WIDEN_PX = 5
+const TICKET_GAP_PX = 10
 
 /** The tool names stay in this file: the validator reads the tool filter of a hook only from a constant here. */
 const PROGRESS_TOOL = 'mcp__claudeopticon__report_progress'
@@ -5795,7 +5794,7 @@ export const register: Register = (on, options) => {
             // The board view spans the whole pane, so its tickets grow with it; each ticket is as
             // wide as its column, so the buttons, anchored to the column's right edge, sit on the card.
             const paneW = isTicketView ? boardWidth() : cardWidth()
-            const columnCount = columnsThatFit(paneW, sections[0]?.columns.length ?? 1, CELL_PX, MIN_TICKET_PX)
+            const columnCount = columnsThatFit(paneW, sections[0]?.columns.length ?? 1, TICKET_GAP_PX, MIN_TICKET_PX)
             const isStacked = columnCount === 1
             // What one ticket draws, worked out once per render: the slots need its height before it is placed.
             const prepared = new Map<ItemView, { sentKey: string; isSent: boolean; actions: TicketAction[]; drawn: ReturnType<typeof ticketSvg> }>()
@@ -5830,8 +5829,10 @@ export const register: Register = (on, options) => {
               return one
             }
             // `slotId` is the ticket's slot ID, which is stable while the ticket stays: its key may not carry the slot's index, or every card below a change would remount.
-            const ticket = (item: ItemView, slotId: string, ticketW: number) => {
-              const { sentKey, actions, drawn } = prepare(item, ticketW)
+            // `left` and `top`: the margin that sets the gap to the column on the left and the ticket above.
+            const ticket = (item: ItemView, slotId: string, ticketW: number, left: number, top: number) => {
+              const { sentKey, actions, drawn: plain } = prepare(item, ticketW)
+              const drawn = padCard(plain, left, top)
               const press = (action: TicketAction) => {
                 if (action.mark !== undefined) {
                   void markTicket($, item, action.mark, action.toast).catch(toastFailure($, `move ${ticketSummary(item.text, 60)}`))
@@ -5865,7 +5866,7 @@ export const register: Register = (on, options) => {
                     <Box
                       key={keyText(`${prefix}-${file.id}-tip-${action.name}-${item.file ?? file.name}-${item.key}`)}
                       position="absolute"
-                      left={2}
+                      left={2 + Math.ceil(left / CELL_PX)}
                       right={ACTION_RIGHT + actions.length * ACTION_CELLS}
                       bottom={ACTION_BOTTOM}
                       display="none"
@@ -5902,13 +5903,18 @@ export const register: Register = (on, options) => {
                       )}
                       {/* Explicit rows of columnCount columns: a column that does not fit starts a row below, never past the right edge. */}
                       {rowsOf(section.columns, columnCount).map((row, r) => (
-                      <Box key={keyText(`${prefix}-${file.id}-row-${section.name}-${r}`)} flexDirection={isStacked ? 'column' : 'row'} gap={1} alignItems="flex-start">
-                        {row.map(column => {
-                          const ticketW = isStacked ? paneW : columnPx(paneW, row.length, CELL_PX) - (row.length < 2 ? 0 : COLUMN_WIDEN_PX)
+                      // Side by side, each column is as wide as its tickets, and a margin in each ticket after the first column sets the gap.
+                      // An empty column takes its tickets' share of the width, so it does not shrink to its heading. The pane takes
+                      // only a whole percentage; rounded down, the row never passes the right edge.
+                      <Box key={keyText(`${prefix}-${file.id}-row-${section.name}-${r}`)} flexDirection={isStacked ? 'column' : 'row'} gap={isStacked ? 1 : 0} alignItems="flex-start">
+                        {row.map((column, c) => {
+                          const ticketW = isStacked ? paneW : columnPx(paneW, row.length, TICKET_GAP_PX)
+                          const left = isStacked || c === 0 ? 0 : TICKET_GAP_PX
 
                           return (
-                          <Box key={keyText(`${prefix}-${file.id}-col-${section.name}-${column.name}`)} flexDirection="column" gap={1} width={`${Math.round(columnShare(row.length) * 100)}%`} {...(isStacked ? {} : { flexGrow: 1 })}>
-                            <Box flexDirection="row" gap={1}>
+                          <Box key={keyText(`${prefix}-${file.id}-col-${section.name}-${column.name}`)} flexDirection="column" gap={1} {...(isStacked ? { width: '100%' } : column.items.length === 0 ? { width: `${Math.floor(((ticketW + left) / paneW) * 100)}%` } : {})}>
+                            {/* The heading starts over its tickets, past the margin that sets the column gap. */}
+                            <Box flexDirection="row" gap={1} {...(left > 0 ? { marginLeft: Math.round(left / CELL_PX) } : {})}>
                               <Text dimColor bold>{column.name}</Text>
                               <Text dimColor>{String(column.items.length)}</Text>
                             </Box>
@@ -5932,9 +5938,12 @@ export const register: Register = (on, options) => {
                               // One that went up from here leaves no space, so the cards below stay put.
                               const columnsAbove = [...rowsOf(section.columns, columnCount).slice(0, r).flat(), ...(isStacked ? row.slice(0, row.indexOf(column)) : [])]
                               const above = new Set(columnsAbove.flatMap(one => one.items.slice(0, isExpanded ? one.items.length : ITEMS_SHOWN).map(item => `${item.file ?? file.name}:${item.key}`)))
-                              return columnSlots(layout, `${prefix}-${file.id}-col-${section.name}-${column.name}`, `${isExpanded}:${ticketW}:${isStacked}`, shown.map((item, i) => ({ id: ids[i]!, h: prepare(item, ticketW).drawn.height })), nowSync(), above).map(slot =>
-                                slot.isSpace === true ? card(`${prefix}-${file.id}-${slot.id}`, spaceSvg(ticketW, slot.h)) : ticket(byId.get(slot.id)!, slot.id, ticketW),
-                              )
+                              // A margin above each ticket after the first sets the gap between stacked tickets; a space keeps it too.
+                              return columnSlots(layout, `${prefix}-${file.id}-col-${section.name}-${column.name}`, `${isExpanded}:${ticketW}:${isStacked}`, shown.map((item, i) => ({ id: ids[i]!, h: prepare(item, ticketW).drawn.height })), nowSync(), above).map((slot, i) => {
+                                const top = i > 0 ? TICKET_GAP_PX : 0
+
+                                return slot.isSpace === true ? card(`${prefix}-${file.id}-${slot.id}`, spaceSvg(ticketW + left, slot.h + top)) : ticket(byId.get(slot.id)!, slot.id, ticketW, left, top)
+                              })
                             })()}
                             </Box>
                           </Box>

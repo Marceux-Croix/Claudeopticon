@@ -6220,7 +6220,7 @@ export const register: Register = (on, options) => {
                       // Back moves one column, in progress to queued; a ticket held only by a live agent has no box to move back.
                       : [...(item.heldFrom === undefined ? [UNSTART_ACTION] : []), DONE_ACTION, ...(item.peer !== undefined ? send : []), STATUS_ACTION]
               // The tag's room: the card width less the buttons' cells (an overestimate, so the tag stays clear of them) and the card's padding.
-              const peerTag = item.peer === undefined ? undefined : { tip: peerTip(item.peer), isDim: item.peer.silentSince !== undefined, room: ticketW - (ACTION_RIGHT + actions.length * ACTION_CELLS) * CELL_PX - 14 - 8 }
+              const peerTag = item.peer === undefined ? undefined : { tip: peerTip(item.peer), isDim: item.peer.silentSince !== undefined }
               if (isTicketLong(item, id, ticketW)) {
                 longTickets.add(item)
               }

@@ -38,7 +38,8 @@ export function isTicketLong(item: ItemView, id: string | undefined, width: numb
 
 /** The peer tag's yellow outline, darker on the light card so it stays clear. */
 const PEER_TAG = 'Peer owned'
-const PEER_TAG_PX = 80
+/** The row the peer tag takes above the button row: drawn on every peer-held ticket, at any card width. */
+const PEER_ROW_PX = 26
 const PEER_TAG_CSS = `\n.peer{stroke:#f2c94c}@media (prefers-color-scheme:light){.peer{stroke:#b8860b}}`
 
 /**
@@ -47,11 +48,12 @@ const PEER_TAG_CSS = `\n.peer{stroke:#f2c94c}@media (prefers-color-scheme:light)
  * 4 lines (all of it with `isTextOpen`); and the agents on it as colored chips. In progress draws a violet accent bar (progress,
  * COL-1); a ticket an agent works on draws its border and bar in the agent's color instead. When
  * `actions` (a count), a bottom row of its own is kept free for the pane's buttons and their tips.
- * `peerTag` draws a "Peer owned" pill at the left of that row, for a ticket another session
- * holds, when `room` px (the space left of the buttons) fits it; its hover tip is `tip` (peerTip), and the card
- * is then interactive, so the tip shows. `isDim` draws the pill and its text at half opacity: the peer is silent ().
+ * `peerTag` draws a "Peer owned" pill on a row of its own above the button row, for a ticket another
+ * session holds, naming the owner in its text (`tip`, peerTip) and cut to the card's width. The card stays a
+ * plain image: an interactive card is drawn in another frame, sized apart from the other cards.
+ * `isDim` draws the pill and its text at half opacity: the peer is silent.
  */
-export function ticketSvg(item: ItemView, view: View, width: number, info: { id?: string; category?: string; isSent: boolean; isTextOpen?: boolean; actions?: number; peerTag?: { tip: string; isDim?: boolean; room: number } }): Card {
+export function ticketSvg(item: ItemView, view: View, width: number, info: { id?: string; category?: string; isSent: boolean; isTextOpen?: boolean; actions?: number; peerTag?: { tip: string; isDim?: boolean } }): Card {
   const w = Math.max(200, Math.round(width))
   const pad = TICKET_PAD
   const blinks = new Blinks()
@@ -123,17 +125,19 @@ export function ticketSvg(item: ItemView, view: View, width: number, info: { id?
     }
     y += 26
   }
+  // The peer tag: a yellow outlined pill on its own row, above the button row, that names the owner.
+  const isPeerTagged = info.peerTag !== undefined
+  if (info.peerTag !== undefined) {
+    const label = fit(`${PEER_TAG}: ${info.peerTag.tip}`, w - pad * 2 - 16, 11, 500)
+    const pill = Math.min(w - pad * 2, Math.ceil([...label].length * 11 * 0.55) + 16)
+    parts.push(`<g${info.peerTag.isDim === true ? ' opacity=".5"' : ''}><rect x="${pad + 0.5}" y="${y + 1.5}" width="${pill}" height="19" rx="9.5" fill="none" class="peer" stroke-width="1.5"/>
+<text x="${pad + 8.5}" y="${y + 15}" fill="${SUB}" font-size="11" font-weight="500">${esc(label)}</text></g>`)
+    y += PEER_ROW_PX
+  }
   if ((info.actions ?? 0) > 0) {
     y += SEND_ROW_PX
   }
   const h = y + 8
-  // The peer tag: a yellow outlined pill in the bottom row, at the left, level with the buttons (raised one row off the edge).
-  // It says only "Peer owned"; its `<title>` names the owner in the browser's own tooltip, shown in the interactive frame.
-  const isPeerTagged = info.peerTag !== undefined && (info.actions ?? 0) > 0 && info.peerTag.room >= PEER_TAG_PX
-  if (isPeerTagged && info.peerTag !== undefined) {
-    parts.push(`<g${info.peerTag.isDim === true ? ' opacity=".5"' : ''}><title>${esc(info.peerTag.tip)}</title><rect x="${pad + 0.5}" y="${h - 36.5}" width="${PEER_TAG_PX}" height="19" rx="9.5" fill="none" pointer-events="all" class="peer" stroke-width="1.5"/>
-<text x="${pad + PEER_TAG_PX / 2}" y="${h - 23}" text-anchor="middle" fill="${SUB}" font-size="11" font-weight="500">${PEER_TAG}</text></g>`)
-  }
   const frame = `<rect x="0.75" y="0.75" width="${w - 1.5}" height="${h - 1.5}" rx="12" fill="${CARD}" stroke="${owner !== undefined ? agentColor(owner) : RULE}" stroke-width="${owner !== undefined ? 1.5 : 1}"/>`
   const bar = accent === undefined ? '' : `<rect x="0" y="12" width="3" height="${h - 24}" rx="1.5" fill="${accent}"/>`
   const body = item.status === 'completed' ? `<g opacity=".6">${parts.join('\n')}</g>` : parts.join('\n')
@@ -147,7 +151,7 @@ ${blinks.css()}
 ${frame}${bar}
 ${body}</svg>`
 
-  return { source, width: w, height: h, alt: `${status.label}: ${cutText(item.text, 200)}`, ...(isPeerTagged ? { isInteractive: true as const } : {}) }
+  return { source, width: w, height: h, alt: `${status.label}: ${cutText(item.text, 200)}` }
 }
 
 /** The button row's height: a native button, raised one row off the card's bottom edge. */

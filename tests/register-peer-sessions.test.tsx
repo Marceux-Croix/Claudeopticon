@@ -152,7 +152,7 @@ test(' a ticket a peer holds shows in In progress with the owner tag and Send, o
   expect(held).toContain('In progress: #T1')
   expect(held).toContain('Fix the board owns this')
   expect(held).not.toContain('opacity=\\".5\\"')
-  expect(held).toContain('>Peer owned</text>')
+  expect(held).toContain('>Peer owned: ')
   const buttons = await keys(ui)
   // Send stays on a peer-claimed ticket: the tag means check in with the owner.
   expect(buttons).toContain('ticket-OPEN.md-#t1')
@@ -228,7 +228,7 @@ test('a ticket a peer plans stays in Queued with the Peer owned tag and "plans t
   const planned = (await cards(ui)).find(svg => svg.includes('#T1 Ship'))!
   expect(planned).toContain('Queued: #T1')
   expect(planned).toContain('Fix the board plans to work this')
-  expect(planned).toContain('>Peer owned</text>')
+  expect(planned).toContain('>Peer owned: ')
   expect(await keys(ui)).toContain('ticket-OPEN.md-#t1')
   // A planned ticket whose box goes [>] to [~] stays claimed.
   setTodo('- [~] #T1 Ship the parser\n- [ ] #T2 Review the copy')
@@ -481,4 +481,28 @@ test('a session that already sent its name is not asked', async ($, on) => {
   await $.tool.call({ tool: PROGRESS, done: 0, total: 1, items: ['#T1'], session: 'My session' } as never)
   await run(clock, 12)
   expect(await notesOf($)).not.toContain("Send this session's name")
+})
+
+/**
+ * Property: a ticket a peer's agent works on draws the tag naming the owner on a narrow board whose cards carry
+ * four buttons, where the tag used to be dropped for want of room beside the buttons; the card stays a plain image.
+ */
+test('a ticket a peer agent holds is tagged on a narrow three-column board, and its card is not interactive', async ($, on) => {
+  const { clock, store } = setup($, on)
+  setTodo('- [~] #T1 Ship the parser\n- [>] #T2 Review the copy\n- [ ] #T3 Write the notes')
+  await $.command.run({ command: 'claudeopticon', args: '' } as never).catch(() => undefined)
+  // 95 cells: three columns about 310 px wide, where four buttons left no room for the old tag.
+  const ui = await $.ui.mount({ plugin: 'claudeopticon', surface: 'desktop', ...PANE, props: { ...PANE.props, bodyColumns: 95 } } as never)
+  await run(clock, 6)
+  const mine = store.get('presence:sess-1') as Mine
+  const refresh = () => (store.get('presence:sess-1') as Mine).seenAt
+  store.set('sessions-recent', [['peer-a', 1]])
+  store.set('presence:peer-a', peerRecord(mine, { tickets: [], agentTickets: [ticketOf(mine, '#t1')], seenAt: refresh() }))
+  await run(clock, 6)
+  store.set('presence:peer-a', peerRecord(mine, { tickets: [], agentTickets: [ticketOf(mine, '#t1')], seenAt: refresh() }))
+  await run(clock, 6)
+  const svgs = (await ui.findAll({ type: 'Svg' })) as { props?: { source?: string; isInteractive?: boolean } }[]
+  const held = svgs.find(svg => (svg.props?.source ?? '').includes('#T1 Ship'))
+  expect(held?.props?.source).toContain('Peer owned: Fix the board owns this')
+  expect(held?.props?.isInteractive).toBeUndefined()
 })

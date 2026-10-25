@@ -39,7 +39,7 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <circle cx="28" cy="84" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
 <text x="28" y="87.8" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A3</text>
 <rect x="50" y="82" width="387.00000000000006" height="4" rx="2" fill="rgba(255,255,255,.22)"/>
-<path d="M 442.00000000000006 84 l 2.4 2.4 l 4.6 -5" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 442.00000000000006 84 l 2.4 2.4 l 4.6 -5" fill="none" stroke="#FFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="704" y="88" text-anchor="end" fill="rgba(255,255,255,.62)" font-size="12">9m 00s</text></g></svg>
 <svg x="0" y="148" xmlns="http://www.w3.org/2000/svg" width="720" height="105" viewBox="0 0 720 105" role="img" aria-label="O, Orchestrator: Running, Harden the parser against bad input">
 <defs><linearGradient id="progress" x1="0" x2="1"><stop offset="0.7" stop-color="#8B5CF6"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs>
@@ -85,8 +85,11 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <circle cx="28" cy="31" r="16.5" fill="none" stroke="#3987e5" stroke-width="1.5"/><circle cx="28" cy="31" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
 <text x="28" y="34.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A1</text><circle cx="38.8" cy="41.8" r="4.5" fill="#3987e5" stroke="#07080F" stroke-width="2" class="c3k0"/>
 <text x="52" y="36" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Write the v2 config migration</text>
-<rect x="647" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
-<text x="675.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>
+<rect x="609" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
+<text x="637.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>
+<rect x="674" y="21" width="30" height="22" rx="4" fill="#DC2626"/>
+<circle cx="689" cy="32" r="6" fill="none" stroke="#FFF" stroke-width="1.5"/>
+<line x1="686" y1="32" x2="692" y2="32" stroke="#FFF" stroke-width="1.5" stroke-linecap="round"/>
 <circle cx="56" cy="52" r="4" fill="#3987e5" class="c3k0"/>
 <text x="66" y="56" fill="rgba(255,255,255,.62)" font-size="12">Working on <tspan fill="#3987e5" font-weight="500">Write the migration for the v2 config format</tspan></text>
 <text x="52" y="76" fill="rgba(255,255,255,.88)" font-size="12" font-weight="500">Step 3 of 7: Write the migration</text>
@@ -117,8 +120,11 @@ text{font-family:"Instrument Sans","Helvetica Neue",Arial,sans-serif;font-varian
 <circle cx="28" cy="31" r="16.5" fill="none" stroke="#a05001" stroke-width="1.5"/><circle cx="28" cy="31" r="14" fill="#1E2233" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
 <text x="28" y="34.9" text-anchor="middle" fill="rgba(255,255,255,.88)" font-size="11" font-weight="500">A2</text><circle cx="38.8" cy="41.8" r="4.5" fill="#a05001" stroke="#07080F" stroke-width="2" class="c4k0"/>
 <text x="52" y="36" fill="rgba(255,255,255,.88)" font-size="14" font-weight="500">Draft the plugin API docs</text>
-<rect x="647" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
-<text x="675.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>
+<rect x="609" y="21" width="57" height="22" rx="4" fill="#7C3AED"/>
+<text x="637.5" y="36" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="500">Running</text>
+<rect x="674" y="21" width="30" height="22" rx="4" fill="#DC2626"/>
+<circle cx="689" cy="32" r="6" fill="none" stroke="#FFF" stroke-width="1.5"/>
+<line x1="686" y1="32" x2="692" y2="32" stroke="#FFF" stroke-width="1.5" stroke-linecap="round"/>
 <circle cx="56" cy="52" r="4" fill="#a05001" class="c4k0"/>
 <text x="66" y="56" fill="rgba(255,255,255,.62)" font-size="12">Working on <tspan fill="#a05001" font-weight="500">Document the plugin API</tspan></text>
 <text x="52" y="76" fill="rgba(255,255,255,.88)" font-size="12" font-weight="500">Step 2 of 4: Outline the hooks</text>

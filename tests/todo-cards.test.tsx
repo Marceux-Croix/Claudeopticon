@@ -219,39 +219,44 @@ test('a ticket whose category is not a string draws with no category chip, and n
   expect(ticketSvg(item, view, 300, { isSent: false, category: '' }).source).toContain('rx="9.5"')
 })
 
-test(' a peer tag is a yellow "Peer owned" pill in the bottom row, its hover tip names the owner, the card is interactive, and it is drawn only with a button row and room', () => {
+/**
+ * Property: a ticket a peer holds always draws a yellow "Peer owned" pill that names the owner, on a row of its own
+ * above the button row, at any card width and any number of buttons; the card stays a plain image, the same size as the
+ * others, so it is never drawn in another frame.
+ */
+test(' a peer tag is a yellow pill that names the owner, on its own row, at any width and button count; the card stays an image', () => {
   const view = buildView([], [], 0)
   const item: ItemView = { text: '#T1 Ship the parser', status: 'in_progress', owners: [], key: '#t1', peer: { name: 'Fix the board' } }
   const none = ticketSvg(item, view, 400, { isSent: false, actions: 2 })
   expect(none.source).not.toContain('Peer owned')
   expect(none.source).not.toContain('.peer{')
-  expect(none.isInteractive).toBeUndefined()
-  const tagged = ticketSvg(item, view, 400, { isSent: false, actions: 2, peerTag: { tip: 'Fix the board <&> owns this', room: 150 } })
-  expect(tagged.source).toContain('>Peer owned</text>')
-  expect(tagged.source).toContain('<title>Fix the board &lt;&amp;&gt; owns this</title>')
+  const tagged = ticketSvg(item, view, 400, { isSent: false, actions: 2, peerTag: { tip: 'Fix the board <&> owns this' } })
+  expect(tagged.source).toContain('>Peer owned: Fix the board &lt;&amp;&gt; owns this</text>')
   expect(tagged.source).toContain('class="peer"')
   expect(tagged.source).toContain('.peer{stroke:#f2c94c}')
-  expect(tagged.isInteractive).toBe(true)
-  // The pill keeps its fixed width, from the card's padding, and the card its height.
-  const widths = [...tagged.source.matchAll(/<rect x="14\.5" y="[\d.]+" width="(\d+)" height="19"/g)].map(match => Number(match[1]))
-  expect(widths).toEqual([80])
-  expect(tagged.height).toBe(none.height)
-  // Too little room, or no button row: no tag, and the card stays an image.
-  const narrow = ticketSvg(item, view, 400, { isSent: false, actions: 2, peerTag: { tip: 'x', room: 60 } })
-  expect(narrow.source).not.toContain('Peer owned')
-  expect(narrow.isInteractive).toBeUndefined()
-  expect(ticketSvg(item, view, 400, { isSent: false, peerTag: { tip: 'x', room: 300 } }).source).not.toContain('Peer owned')
+  expect(tagged.isInteractive).toBeUndefined()
+  expect(tagged.source).not.toContain('<title>')
+  // Its own row: the card is one row taller, and as wide as the untagged one.
+  expect(tagged.height).toBe(none.height + 26)
+  expect(tagged.width).toBe(none.width)
+  // Five buttons on a narrow card, or no button row at all: still tagged, the owner's name cut to the width.
+  const narrow = ticketSvg(item, view, 200, { isSent: false, actions: 5, peerTag: { tip: 'A session with a very long name owns this' } })
+  expect(narrow.source).toContain('Peer owned: ')
+  expect(narrow.source).toContain('…</text>')
+  const pill = Number(/<rect x="[\d.]+" y="[\d.]+" width="(\d+)" height="19" rx="9.5" fill="none" class="peer"/.exec(narrow.source)?.[1])
+  expect(pill).toBeLessThanOrEqual(200 - 2 * 14)
+  expect(ticketSvg(item, view, 400, { isSent: false, peerTag: { tip: 'x owns this' } }).source).toContain('Peer owned: x owns this')
   // A live peer's pill is at full opacity.
   expect(tagged.source).not.toContain('opacity=".5"')
 })
 
-test('a silent peer tag is dimmed to half opacity and its tip carries the inactive time; a planned tip is drawn as given', () => {
+test('a silent peer tag is dimmed to half opacity and names the inactive time; a planned tip is drawn as given', () => {
   const view = buildView([], [], 0)
   const item: ItemView = { text: '#T1 Ship the parser', status: 'queued', owners: [], key: '#t1', peer: { name: 'Fix', isPlanned: true } }
-  const dim = ticketSvg(item, view, 400, { isSent: false, actions: 2, peerTag: { tip: 'Fix plans to work this (inactive since 07:05)', isDim: true, room: 150 } })
-  expect(dim.source).toContain('<g opacity=".5"><title>Fix plans to work this (inactive since 07:05)</title>')
-  expect(dim.source).toContain('>Peer owned</text>')
-  expect(dim.isInteractive).toBe(true)
+  const dim = ticketSvg(item, view, 400, { isSent: false, actions: 2, peerTag: { tip: 'Fix plans to work this (inactive since 07:05)', isDim: true } })
+  expect(dim.source).toContain('<g opacity=".5"><rect')
+  expect(dim.source).toContain('>Peer owned: Fix plans to work this (inactive since 07:05)</text>')
+  expect(dim.isInteractive).toBeUndefined()
 })
 
 /** Property: when a row leaves the list view, the space it keeps is as high as the rows and the group heading it took with it, so the rows below do not move. */

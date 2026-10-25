@@ -54,7 +54,12 @@ export function buildView(list: readonly TodoFile[], rows: readonly AgentRow[], 
   setColorSlots(colorSlots(rows.map(row => ({ startedAt: row.startedAt, endedAt: row.endedAt, idleSince: row.idleSince, isEnded: isEnded(row.status) })), AGENT_COLORS.length))
   const itemOwners = new Map<string, number[]>()
   const fileOwners = new Map<string, number[]>()
+  // Only a live agent owns a ticket: one that ended or went idle holds nothing, as the presence record a peer
+  // reads says (holdings), so both boards show the same owners and the same columns.
   rows.forEach((row, i) => {
+    if (isEnded(row.status) || row.idleSince !== undefined) {
+      return
+    }
     for (const link of links.get(row.id) ?? []) {
       const key = `${link.file}:${link.index}`
       itemOwners.set(key, [...(itemOwners.get(key) ?? []), i])

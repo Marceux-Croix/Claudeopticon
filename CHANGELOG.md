@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1
+
+### Fixes
+
+- Only a live agent owns a ticket on the board. An agent that ended or went idle no longer draws an owner chip or moves an open ticket to In progress, so the boards of two sessions on one repo show the same owners and the same columns.
+- The "Peer owned" pill is drawn on every ticket a peer holds, also through its agents and on a narrow card with four or five buttons. It takes a row of its own above the buttons and names the owner in its text ("Peer owned: <name> owns this"). The card is a plain image, as wide as the other cards; before, a card with the pill was drawn in an interactive frame and came out narrower.
+
 ## 1.0.0
 
 ### Changes

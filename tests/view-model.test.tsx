@@ -8,9 +8,9 @@ import { fileCards } from '../hooks/todo-cards'
 import { parseTodo } from '../hooks/todo-markdown'
 import { buildView, columnPx, columnsThatFit, IDLE_CLEAR_MS, itemChipId, ledger, orchestratorTitle, rowsOf, searchTodo, ticketColumns, todoLedger } from '../hooks/view-model'
 import { readBook } from '../hooks/categories'
-import { PEER_DIM_MS } from '../hooks/peer-sessions'
+import { holdings, PEER_DIM_MS, ticketId } from '../hooks/peer-sessions'
 import type { PeerClaim } from '../hooks/peer-sessions'
-import { storedKey } from '../hooks/item-keys'
+import { keptKey, storedKey } from '../hooks/item-keys'
 import type { AgentRow, TodoFile } from '../types'
 
 const row = (over: Partial<AgentRow>): AgentRow => ({
@@ -399,4 +399,79 @@ test('an agent idle for IDLE_CLEAR_MS is filed with the finished ones; one idle 
   expect(groups.active.map(a => a.id)).toEqual(['live'])
   expect(groups.finished.map(a => a.id)).toEqual(['done', 'edge'])
   expect(groups.shown.map(a => a.id)).toEqual(['live', 'fresh'])
+})
+
+/**
+ * Property: only a live agent owns a ticket. An agent that ended or went idle draws no owner chip and does not
+ * move an open box to In progress, so this board agrees with what its presence record tells a peer (holdings).
+ */
+test('an ended or idle agent owns no ticket and moves no box; a live one owns it and agrees with holdings', () => {
+  const file: TodoFile = { name: 'OPEN.md', folder: '/repo/.claude_todo', mtimeMs: 1, items: parseTodo('- [ ] #T1 Ship the parser') }
+  const ended = row({ brief: '#t1', status: 'completed', endedAt: 500 })
+  const idle = row({ brief: '#t1', idleSince: 600 })
+  const live = row({ brief: '#t1' })
+  for (const [name, agent, isOwner] of [['ended', ended, false], ['idle', idle, false], ['live', live, true]] as const) {
+    const item = buildView([file], [agent], 1000).files[0]!.items[0]!
+    expect(item.owners.length > 0, name).toBe(isOwner)
+    expect(holdings([file], [agent], new Set()).agentTickets.length > 0, name).toBe(isOwner)
+  }
+})
+
+/**
+ * Property: the tickets a board draws as owned (an owner chip on an open, queued or in-progress ticket) are
+ * exactly the tickets its session publishes to its peers (holdings: held by the orchestrator or by a live agent). Over
+ * 400 random states of boxes, agents (running, idle, ended, failed, killed, linked by ID in the description or by brief)
+ * and orchestrator claims, so a change to one rule and not the other fails here.
+ */
+test('a board owns exactly the tickets its session publishes, over 400 random states', () => {
+  // mulberry32: a seeded generator whose low bits are random too (an LCG's repeat in a short cycle and hid the rule).
+  let seed = 20261025
+  const rand = (n: number) => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return (((t ^ (t >>> 14)) >>> 0) % n)
+  }
+  const boxes = [' ', '>', '~', 'x']
+  const statuses = ['running', 'running', 'completed', 'failed', 'killed'] as const
+  let ownedStates = 0
+  let agentOnly = 0
+  let idleLinked = 0
+  for (let state = 0; state < 400; state += 1) {
+    const ids = Array.from({ length: 2 + rand(6) }, (_, i) => `T${i + 1}`)
+    const text = ids.map(id => `- [${boxes[rand(boxes.length)]}] #${id} Task ${id}`).join('\n')
+    const file: TodoFile = { name: 'OPEN.md', folder: '/repo/.claude_todo', mtimeMs: 1, items: parseTodo(text) }
+    const rows: AgentRow[] = Array.from({ length: rand(5) }, (_, i) => {
+      const linked = ids.filter(() => rand(3) === 0)
+      const status = statuses[rand(statuses.length)]!
+      const isEndedRow = status !== 'running'
+      return row({
+        id: `a${i}`,
+        status,
+        startedAt: 0,
+        ...(isEndedRow ? { endedAt: 500 } : {}),
+        ...(!isEndedRow && rand(3) === 0 ? { idleSince: 400 } : {}),
+        // A row's brief is its description, normalized, as refreshAgents stores it: the links read the brief.
+        description: `Fix ${linked.map(id => `#${id}`).join(' and ')}`,
+        brief: `fix ${linked.map(id => `#${id.toLowerCase()}`).join(' and ')}`,
+      })
+    })
+    const orchKeys = new Set(file.items.filter(() => rand(4) === 0).map(item => keptKey(file, item)))
+    const view = buildView([file], rows, 1000, { keys: orchKeys, isRunning: true, toolCalls: 0 })
+    const owned = view.files
+      .flatMap(one => one.items)
+      .filter(item => item.status !== 'completed' && item.owners.length > 0)
+      .map(item => ticketId(file, file.items.find(one => storedKey(one.id ?? one.text) === item.key || one.text === item.text)!))
+      .sort()
+    const held = holdings([file], rows, orchKeys)
+    const published = [...new Set([...held.tickets, ...held.agentTickets])].sort()
+    expect(owned, `state ${state}: ${text.replace(/\n/g, ' | ')}`).toEqual(published)
+    ownedStates += owned.length > 0 ? 1 : 0
+    agentOnly += held.agentTickets.some(one => !held.tickets.includes(one)) ? 1 : 0
+    idleLinked += rows.some(one => one.idleSince !== undefined && one.brief.includes('#')) ? 1 : 0
+  }
+  // Not vacuous: many states own a ticket through an agent alone, and many hold an idle agent that names one.
+  expect(ownedStates).toBeGreaterThan(100)
+  expect(idleLinked).toBeGreaterThan(50)
+  expect(agentOnly).toBeGreaterThan(50)
 })

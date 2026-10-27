@@ -135,7 +135,7 @@ Other controls:
 - The **group buttons** show or hide each group. Haiku makes the groups: it reads your open tickets, names up to five groups, and puts each ticket in one. A ticket keeps its group, and new tickets are sorted as they appear. A ticket that fits no group, when there is no room for a new one, is tagged **Uncategorized**, as is a ticket not sorted yet. Category names are cut to 40 characters, and Uncategorized is never offered as a name. A queued ticket is offered to the agent match like an open one.
 - **Recategorize** asks Haiku to sort all open tickets into groups again, from scratch. The new groups replace the old ones only when the change is real: the number of groups changes, or at least a quarter of the open tickets would land in a different group. A rename alone does not count. Otherwise the current groups stay, and "The current categories are correct" shows next to the button for 4 seconds.
 - **Show completed (N)** opens the archive file, `.claude_todo/archive/TODO.md`, in your system's default app for Markdown files. N is the number of closed tickets in the archive. The mod makes the file if it does not exist yet.
-- The **search box** finds open, queued and in-progress tickets with every word you type, and says how many match. It does not search the archive: **Show completed** opens that. **Clear search** empties the box.
+- The **search box** finds open, queued and in-progress tickets with every word you type, and says how many match. It does not search the archive: **Show completed** opens that. **Clear search** empties the box. The search box and the buttons beside it share one row. In a very narrow pane the buttons move to the next line, so they never cover the box.
 
 ## The todo format
 
@@ -209,6 +209,7 @@ Other values are constants in the module that uses them. To change one, edit tha
 | `CLOCK_MS` | 5000 | `register.tsx` | Most often, in milliseconds, that the pane redraws for a token report |
 | `IDLE_DRAW_MS` | 30000 | `register.tsx` | Milliseconds between graph redraws when nothing changes |
 | `NOTE_MS` | 4000 | `register.tsx` | Milliseconds the Recategorize message stays up |
+| `SEARCH_MIN_CELLS` | 24 | `register.tsx` | Narrowest the todo search box gets before the buttons beside it wrap to the next line |
 | `MIN_TICKET_PX` | 300 | `register.tsx` | Narrowest ticket before the board columns stack |
 | `TICKET_GAP_PX` | 10 | `register.tsx` | Pixels between board columns and between stacked tickets, drawn as a transparent margin inside each ticket |
 | `MAX_FOLDERS` | 20 | `repo-folders.ts` | Most `.claude_todo/` folders the pane finds in a repo |

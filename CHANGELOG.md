@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2
+
+### Fixes
+
+- The todo toolbar no longer overlaps in a very narrow pane. The row wraps, and the search box keeps a minimum width (`SEARCH_MIN_CELLS`, 24 cells), so the buttons move to the next line and no longer lie over the search box and its Search key. A pane of normal width keeps one row, with the buttons next to the search box.
+
 ## 1.0.1
 
 ### Fixes

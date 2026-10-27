@@ -120,6 +120,8 @@ const STOP_HIT = '\u00a0'.repeat(2)
 const STOP_PAD_CELLS = 1
 /** The cells one corner button and its gap take, to set the tip left of them all. */
 const ACTION_CELLS = 5
+/** Cells the todo search box keeps before the buttons beside it wrap to the next line: room for the box and its Search key. */
+const SEARCH_MIN_CELLS = 24
 /**
  * CSS pixels per pane cell on the desktop: an estimate, not a measure (the pane reports cells, not pixels). It must be an
  * overestimate. A card drawn wider than the pane scales down to the pane's exact width, and the buttons placed over a card
@@ -6076,8 +6078,11 @@ export const register: Register = (on, options) => {
             todoActions($),
             archiveLink === undefined ? undefined : { label: `Show completed (${view.archived})`, onPress: () => void openArchive($).catch(toastFailure($, 'open the archive')) },
           )}
-          <Box key="todo-controls" flexDirection="row" gap={1} alignItems="center">
+          {/* The row wraps, and the search box keeps a minimum width: a row that could not wrap squeezed the search box to nothing in a very narrow pane,
+              and the buttons lay over it. A wide pane keeps one row. */}
+          <Box key="todo-controls" flexDirection="row" flexWrap="wrap" gap={1} alignItems="center">
             {Input !== undefined && (
+              <Box key="todo-search-box" minWidth={SEARCH_MIN_CELLS}>
               <Input
                 key="todo-search"
                 placeholder="Search open, queued and in-progress items"
@@ -6095,6 +6100,7 @@ export const register: Register = (on, options) => {
                   redraw($)
                 }}
               />
+              </Box>
             )}
             <Button
               key="todo-tickets"

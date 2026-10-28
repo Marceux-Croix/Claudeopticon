@@ -19,7 +19,7 @@ export function ticketPrompt(path: string, text: string): string {
     '',
     visibleText(text),
     '',
-    'Build or process it now. Mark it [~] while you work on it and [x] when it is done. If you dispatch an agent for it, name the item in the Agent call and have the agent claim it with report_progress.',
+    'The user sent it as the next work, not to interrupt. If you are in the middle of other work, finish the step you are on; do not drop it. Mark the item [~] now, since it is next, and [x] when it is done. Dispatch an agent for it unless it takes only a few tool calls: name the item ID in the Agent call and have the agent claim it with report_progress. If it does not depend on your current work, dispatch that agent now, so it runs alongside.',
   ].join('\n')
 }
 

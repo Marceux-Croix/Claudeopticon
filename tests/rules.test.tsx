@@ -70,7 +70,12 @@ test('the rules tell Claude what queued means, when to queue a ticket, and that 
   expect(RULES).toContain('`- [>]` queued')
   expect(RULES).toContain('Queued column')
   expect(RULES).toContain('set it to `[>]`, not `[ ]`')
-  expect(RULES).toContain('When you add a ticket you plan to work on now, next, or after the next checkpoint, gate, closeout or merge, write it `[>]`')
+  expect(RULES).toContain('In progress (`- [~]`) is work running now and work that starts next')
+  expect(RULES).toContain('Queued (`- [>]`) is close but not imminent: work you plan to take within about the next 3 to 5 tickets, or second priority')
+  expect(RULES).toContain('Open (`- [ ]`) is the backlog, with no time to start')
+  expect(RULES).toContain('When you decide a ticket comes next, mark it `[~]`')
+  expect(RULES).toContain('write it `[~]` if you start it now or next, `[>]` if you plan it soon after, and `[ ]` only for backlog with no plan')
+  expect(RULES).not.toContain('slated next')
   expect(RULES).not.toContain('`[>]` as in progress')
 })
 

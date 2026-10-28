@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.3
+
+### Changes
+
+- The board columns say how soon work starts. **In progress** holds work running now and work that starts next. **Queued** holds work that is close but not imminent: planned within about the next 3 to 5 tickets, or second priority. **Open** is the backlog, with no time to start. The rules tell Claude to mark a ticket in progress when it decides the ticket comes next, and queued when it plans it within the next few tickets, after the next checkpoint, gate, closeout or merge, or after an event. Before, queued meant "the work slated next".
+- **Send** (`⋙`) hands Claude the item as the next work, not as an interruption. Claude finishes the step it is on instead of dropping it, marks the item in progress, and hands it to a helper agent unless it takes only a few tool calls. An item that does not depend on the current work gets its agent at once, to run alongside. Before, the prompt said to build the item now, and an agent was optional, so the main conversation often did the work itself.
+- The notes to Claude follow the new meanings: a ticket Claude stops is queued because it is set aside, not because it is next, and a reply that puts a ticket off asks Claude to mark it in progress if it comes next, or queued if it is planned within the next few tickets.
+
 ## 1.0.2
 
 ### Fixes

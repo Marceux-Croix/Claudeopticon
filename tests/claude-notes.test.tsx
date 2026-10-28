@@ -28,7 +28,7 @@ test('movesNote ends with the for-information line after the moves', async () =>
   expect(rows[4]).toBe(DATA_MARK)
 })
 
-test('stoppedNote says the mod queued the tickets and how to drop one; deferredNote asks Claude to queue the work slated next', () => {
+test('stoppedNote says the mod queued the tickets and how to drop one; deferredNote asks Claude to mark a ticket put off by how soon it starts', () => {
   const stopped = stoppedNote(['- "a" in "x.md": in progress -> queued'])!.split('\n')
   expect(stopped[0]).toContain('`- [>]`')
   expect(stopped[2]).toContain('`- [ ]` again')

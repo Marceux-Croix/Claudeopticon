@@ -73,9 +73,9 @@ export function movesNote(moves: readonly string[]): string | undefined {
 /** The note after the mod moved tickets that Claude took out of progress to queued. */
 export function stoppedNote(lines: readonly string[]): string | undefined {
   return note(
-    'You set these todo items from in progress back to open. The Claudeopticon pane (the claudeopticon mod) wrote them as queued (`- [>]`) instead, because unfinished work is usually next work:',
+    'You set these todo items from in progress back to open. The Claudeopticon pane (the claudeopticon mod) wrote them as queued (`- [>]`) instead, because unfinished work set aside is usually work you will come back to soon:',
     lines,
-    'If you dropped one and will not do it next, set its box to `- [ ]` again: the mod only queues a ticket that leaves in progress.',
+    'If you dropped one and have no plan for it, set its box to `- [ ]` again: the mod only queues a ticket that leaves in progress.',
     DATA_MARK,
   )
 }
@@ -83,9 +83,9 @@ export function stoppedNote(lines: readonly string[]): string | undefined {
 /** The note after Claude's own text put open tickets off until later. */
 export function deferredNote(lines: readonly string[]): string | undefined {
   return note(
-    'Your last reply put these open todo items off until later. If one is the work slated next, mark it queued (`- [>]`) so the Claudeopticon pane shows it in its Queued column:',
+    'Your last reply put these open todo items off until later. If one comes next, mark it in progress (`- [~]`). If you plan it within the next few tickets, mark it queued (`- [>]`) so the Claudeopticon pane shows it in its Queued column:',
     lines,
-    'If none is next, ignore this note.',
+    'If none is planned soon, ignore this note.',
     DATA_MARK,
   )
 }

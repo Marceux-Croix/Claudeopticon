@@ -105,3 +105,14 @@ test('peerSendPrompt: a named owner is asked with SendMessage; an unnamed one th
   expect(unnamed).toContain('Start once the "Peer owned" tag on the ticket clears')
   expect(unnamed).toContain('start only when the user tells you to take it anyway')
 })
+
+/** Property: Send hands Claude the next work without breaking into the current work, and delegates by default. */
+test('the send prompt asks for the item next, not as an interruption, and for an agent unless the item is small', () => {
+  const sent = ticketPrompt('.claude_todo/A.md', 'Do it')
+  expect(sent).toContain('next work, not to interrupt')
+  expect(sent).toContain('finish the step you are on; do not drop it')
+  expect(sent).toContain('Mark the item [~] now, since it is next')
+  expect(sent).toContain('Dispatch an agent for it unless it takes only a few tool calls')
+  expect(sent).toContain('If it does not depend on your current work, dispatch that agent now')
+  expect(sent).not.toContain('Build or process it now')
+})

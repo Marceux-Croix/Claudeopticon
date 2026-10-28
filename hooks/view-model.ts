@@ -321,7 +321,7 @@ export function itemIdValue(item: ItemView): number | undefined {
 }
 
 /**
- * A file's tickets as board columns: In progress, Queued (`- [>]`, the work slated next) and Open;
+ * A file's tickets as board columns: In progress, Queued (`- [>]`, close but not imminent) and Open;
  * done tickets have no column (Show completed opens them). An open or queued ticket that a live
  * agent works on goes in In progress, and shows as in progress, though its box is still `- [ ]` or
  * `- [>]`. Within a column, the tickets an agent works on come first, then by category in the

@@ -4852,7 +4852,7 @@ async function queueStopped($: EngineInterface, path: string, keys: readonly str
     return [] as TodoItem[]
   })
   if (failed.reason !== undefined) {
-    const lines = items.map(item => `${quoteTicket(item.text, 160)} in ${quoteName(path)} stayed open: the Claudeopticon pane could not set it to queued (${failed.reason}). If it is next work, set its box to \`- [>]\` yourself.`)
+    const lines = items.map(item => `${quoteTicket(item.text, 160)} in ${quoteName(path)} stayed open: the Claudeopticon pane could not set it to queued (${failed.reason}). If you still plan it soon, set its box to \`- [>]\` yourself.`)
     pendingClaimed = [...pendingClaimed, ...lines]
   }
   if (written.length > 0) {
@@ -5529,7 +5529,7 @@ export const register: Register = (on, options) => {
       .register({
         name: 'move_ticket',
         description:
-          "Ask the user to approve moving a .claude_todo item to another column of the Claudeopticon pane board: open, queued (slated next), in_progress or done. The user sees a dialog; the box is written only if they approve. Use it for any item the user moved by hand, instead of editing its box.",
+          "Ask the user to approve moving a .claude_todo item to another column of the Claudeopticon pane board: open, queued (close but not imminent), in_progress (running or next) or done. The user sees a dialog; the box is written only if they approve. Use it for any item the user moved by hand, instead of editing its box.",
         inputSchema: {
           type: 'object',
           properties: {
@@ -5691,7 +5691,7 @@ export const register: Register = (on, options) => {
       if (before !== undefined) {
         const after = ticketStatuses(path)
         claimTickets($, [...after].filter(([key, status]) => status === 'in_progress' && before.get(key) !== 'in_progress').map(([key]) => key))
-        // Work Claude stopped but did not finish is next work: the box goes to queued, not open.
+        // Work Claude stopped but did not finish is work it will come back to: the box goes to queued, not open.
         // The tickets this edit queued itself are planned; the mod's own queueing below adds the ones it queues.
         planTickets($, plannedIdsOf(path, newlyQueued(before, after)))
         const stopped = stoppedKeys(before, after)

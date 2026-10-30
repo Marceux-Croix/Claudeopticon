@@ -7,6 +7,7 @@ import { ACCENT, Blinks, FAINT, INNER, LABEL, PAD, RULE, stage, STAGE_DANGER, SU
 import { esc, fit } from './card-text'
 import type { AgentView, Card, View } from './card-types'
 import { ORCHESTRATOR_PAGE } from './orchestrator-history'
+import { WINDOW_MS } from './series'
 
 const MAX_LINKS_SHOWN = 3
 
@@ -75,12 +76,13 @@ export function timelineHeight(n: number): number {
 }
 
 /**
- * The agents' timeline, from the first agent's start to now: one strip per agent. The right end
- * reads "Now" and a running strip pulses at its head.
+ * The agents' timeline over the last 30 minutes, the token chart's window: one strip per agent.
+ * The span is always the full window, so a new agent draws as a short strip at the right end, not
+ * across the whole width; an agent that started before the window starts at the left edge.
+ * The right end reads "Now" and a running strip pulses at its head.
  */
 export function timelineSvg(view: View, all: readonly AgentView[]): Card {
-  // No agent shown: the span is empty (Math.min() of nothing is Infinity and would draw NaN).
-  const t0 = all.length === 0 ? view.now : Math.min(...all.map(a => a.startedAt))
+  const t0 = view.now - WINDOW_MS
   const t1 = view.now
   const agents = [...all]
   const n = agents.length
@@ -88,7 +90,7 @@ export function timelineSvg(view: View, all: readonly AgentView[]): Card {
   const blinks = new Blinks()
   const plotX = PAD + 34
   const plotW = INNER - 34 - 52
-  const span = Math.max(1000, t1 - t0)
+  const span = WINDOW_MS
   const x = (t: number) => plotX + ((Math.min(Math.max(t, t0), t1) - t0) / span) * plotW
   const top = TIMELINE_TOP
   const rowH = TIMELINE_ROW_H

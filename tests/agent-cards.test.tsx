@@ -101,3 +101,17 @@ test('a live agent card draws a red Stop key at the badge row and height; an end
   const ended = buildView([], [row({ id: 'a', status: 'completed', startedAt: 0, endedAt: 5_000 })], 10_000)
   expect(agentSvg(ended.agents[0]!, ended).source).not.toContain('#DC2626')
 })
+
+test('the timeline always spans the last 30 minutes, however recently its agents started', () => {
+  const now = 3 * 3_600_000
+  const fresh = buildView([], [row({ id: 'a', startedAt: now - 25_000 })], now)
+  const source = timelineSvg(fresh, fresh.agents).source
+  expect(source).toContain('>30m 00s ago<')
+  expect(source).toContain('>15m 00s ago<')
+  expect(source).toContain('>Now<')
+  const width = Number(/<rect x="[\d.]+" y="[\d.-]+" width="([\d.]+)"/.exec(source)![1])
+  expect(width).toBeLessThan(20)
+  const old = buildView([], [row({ id: 'b', startedAt: now - 2 * 3_600_000 })], now)
+  expect(timelineSvg(old, old.agents).source).toContain('>30m 00s ago<')
+  expect(timelineSvg(buildView([], [], now), []).source).toContain('>30m 00s ago<')
+})

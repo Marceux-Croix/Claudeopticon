@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.4
+
+### Fixes
+
+- The agents timeline always spans the last 30 minutes. Before, it started at the first shown agent's start, so a new agent after a quiet half hour filled the whole strip and the axis counted up from seconds.
+
 ## 1.0.3
 
 ### Changes

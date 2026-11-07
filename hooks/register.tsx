@@ -1149,6 +1149,7 @@ function noteMisspelled($: EngineInterface, path: string): void {
 async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Promise<TodoFolder[]> {
   await loadGlobals($)
   const nearest = await findTodoDir($).catch(() => undefined)
+  searchedIn = await realOf($, '.')
   const nearestReal = nearest === undefined ? undefined : await realOf($, nearest)
   if (nearestReal !== undefined && isMisspelledTodo(nearestReal)) {
     // A disk that ignores case answers `.claude_todo` for `.Claude_todo`: the folder stays untrusted, so say why once.
@@ -1292,7 +1293,7 @@ async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Pro
   }
 }
 
-/** The folders found when the mod started; undefined until then. Git runs once per load; a reload does it again. */
+/** The folders found when the mod started; undefined until then. Git runs once per load, and again after a reload, a Consolidate press, or a move of the session to another folder. */
 let todoFolders: TodoFolder[] | undefined
 let folderSearch: Promise<TodoFolder[]> | undefined
 /** The nearest folder the last scan saw, to look it up among the known ones only when it changes. */
@@ -1319,6 +1320,41 @@ async function rediscoverFolders($: EngineInterface): Promise<void> {
     }
   })
   await boundedJob($, search.catch(() => undefined))
+}
+
+/** The real path of `.` when the last folder search started: a scan or prompt that finds another one searches again. */
+let searchedIn: string | undefined
+
+/**
+ * Follows the session to another folder. The desktop app can start a session in one folder
+ * (a spare inside one repo) and move it to another repo: the folders, roots and ID state of the first
+ * repo then do not apply. When the real path of `.` is not the one the last search started in, the
+ * search runs again from nothing (no earlier folders kept) and the ID state of the old repo is dropped,
+ * so its block, reservations and IDs never count in the new one. True when the folder moved.
+ */
+async function followSessionFolder($: EngineInterface): Promise<boolean> {
+  if (todoFolders === undefined || searchedIn === undefined) {
+    return false
+  }
+  const here = await realOf($, '.')
+  if (here === undefined || samePath(here, searchedIn)) {
+    return false
+  }
+  todoFolders = undefined
+  folderSearch = undefined
+  nearestSeen = undefined
+  // A rediscover still in flight for the old folder must not put its answer over the new one.
+  folderSearchRound += 1
+  cutFolders = []
+  cutIds = []
+  cutIdsByFile = new Map()
+  cutUnknown = new Set()
+  idBlock = undefined
+  givenIds.clear()
+  reservedIds.clear()
+  await ensureFolders($)
+
+  return true
 }
 
 function ensureFolders($: EngineInterface): Promise<TodoFolder[]> {
@@ -3622,6 +3658,7 @@ function noteFilled(folder: string, path: string, text: string): void {
 }
 
 async function scanOnce($: EngineInterface, isFull: boolean): Promise<boolean> {
+  await followSessionFolder($)
   todoFolders = await noteNearest($, await ensureFolders($))
   const folders = todoFolders ?? []
   // The book lives in the primary folder only. With no primary folder the items are not sorted.
@@ -5748,6 +5785,10 @@ export const register: Register = (on, options) => {
       }
       // The next free IDs, recomputed each prompt; not for a notification the mod's host sends by itself.
       let idLine: string | undefined
+      // A session moved to another folder reads the new repo's folders before it names IDs.
+      if (await followSessionFolder($).catch(() => false)) {
+        await scan($, true).catch(() => undefined)
+      }
       if (options.rules !== false && e.origin?.kind !== 'task-notification' && (todoFolders ?? []).length > 0) {
         idLine = await offerIds($)
       }

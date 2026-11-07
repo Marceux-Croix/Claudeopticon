@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5
+
+### Fixes
+
+- A session that moves to another folder after it starts (the desktop app starts a session in a spare folder, then moves it to the project) finds the todo folders again for the new folder. The board shows only the new repo's folders, the next free ticket IDs count only their IDs, and the ID block, reservations and repo roots of the old repo are dropped. Before, the board kept the folders of the first repo and added the new nearest one.
+
 ## 1.0.4
 
 ### Fixes

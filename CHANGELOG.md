@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6
+
+### Fixes
+
+- The agent counts keep going up past 200 agents. The pane keeps the newest 200 agent rows; before, the top card and the Agents heading counted only those rows, so a long session stopped at "198 of 200 agents finished". The agents cut from the kept rows now count as finished.
+
 ## 1.0.5
 
 ### Fixes

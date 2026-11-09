@@ -38,13 +38,19 @@ function axisLabel(value: number): string {
 
 /** The agents that ended. An idle agent is neither live nor finished, as the Agents heading counts it. */
 export function finishedCount(view: View): number {
-  // The board's count: an agent idle past IDLE_CLEAR_MS counts as finished.
-  return ledger(view, false).finished.length
+  // The board's count: an agent idle past IDLE_CLEAR_MS counts as finished, and so does
+  // each agent cut from the kept rows.
+  return ledger(view, false).finished.length + (view.dropped ?? 0)
+}
+
+/** Every agent of the session: the kept rows and the ones cut from them. */
+export function agentCount(view: View): number {
+  return view.agents.length + (view.dropped ?? 0)
 }
 
 /** One line for the terminal and the card's alt text: agents, then tokens. */
 export function heroText(view: View): string {
-  const n = view.agents.length
+  const n = agentCount(view)
   const agents = n === 0 ? 'Agents: none yet.' : `Agents: ${view.live} live, ${finishedCount(view)} of ${n} finished.`
   const usage = view.usage
   const burn = usage === undefined ? 'Tokens: none counted yet.' : `Tokens: ${tokens(Math.max(0, usage.tokens - (usage.atCompact ?? 0)))} since compact, ${tokens(usage.tokens)} total session tokens.`
@@ -183,7 +189,7 @@ export function heroSvg(view: View): Card {
   const now = Math.floor(view.now / QUANT_MS) * QUANT_MS
   const from = now - WINDOW_MS
   const axes = view.axes ?? stepAxes(undefined, series, view.now)
-  const n = view.agents.length
+  const n = agentCount(view)
   const usage = view.usage
   // The right margin holds the right axis labels (labelPx wide) from x1 + RIGHT_DX, then the
   // axis title, its glyphs 9 px right of its center, and 8 px to the edge. The title's center sits
@@ -446,7 +452,7 @@ let lastHero: { key: string; card: Card } | undefined
  * and the version), so a draw with any of them changed draws anew.
  */
 export function heroCard(view: View): Card {
-  const key = JSON.stringify([W, view.now, view.series, view.axes, view.usage, view.live, view.version, view.agents.length, finishedCount(view)])
+  const key = JSON.stringify([W, view.now, view.series, view.axes, view.usage, view.live, view.version, agentCount(view), finishedCount(view)])
   if (lastHero?.key !== key) {
     lastHero = { key, card: heroSvg(view) }
   }

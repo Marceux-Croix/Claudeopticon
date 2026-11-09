@@ -86,6 +86,11 @@ export type View = {
   /** Done tickets in the archive files: the number on the Show completed link. */
   archived: number
   live: number
+  /**
+   * The agents of this session cut from `agents` when it passed KEPT_AGENTS rows: the
+   * oldest, counted as finished, so the agent counts keep going up past the kept rows.
+   */
+  dropped?: number
   now: number
   /** The mod's version from its manifest, drawn small in the hero card's lower right corner; absent until read. */
   version?: string

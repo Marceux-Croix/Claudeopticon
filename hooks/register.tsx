@@ -5984,7 +5984,7 @@ export const register: Register = (on, options) => {
     axes = stepAxes(axes, series, time)
     const built = buildView(todoFiles, rows, time, orchestratorState(), peerHeld)
     pinColorSlots(rows)
-    const view = { ...built, ...(usage === undefined ? {} : { usage }), series, axes }
+    const view = { ...built, ...(usage === undefined ? {} : { usage }), ...(agentBase > 0 ? { dropped: agentBase } : {}), series, axes }
 
     const Svg = e.surface !== 'terminal' && 'Svg' in table ? table.Svg : undefined
     if (Svg !== undefined) {
@@ -6085,7 +6085,7 @@ export const register: Register = (on, options) => {
           {section(
             'agents',
             'Agents',
-            view.agents.length === 0 ? (view.orchestrator === undefined ? 'None in this session yet' : 'No helper agents yet') : `${active.length} live, ${idle.length > 0 ? `${idle.length} idle, ` : ''}${finished.length} finished`,
+            view.agents.length === 0 ? (view.orchestrator === undefined ? 'None in this session yet' : 'No helper agents yet') : `${active.length} live, ${idle.length > 0 ? `${idle.length} idle, ` : ''}${finished.length + (view.dropped ?? 0)} finished`,
             finished.length === 0 ? undefined : isFinishedShown ? 'Hide finished agents' : `Show finished agents (${finished.length})`,
             () => {
               isFinishedShown = !isFinishedShown
@@ -6476,7 +6476,7 @@ export const register: Register = (on, options) => {
             {entry.detail !== undefined && <Text dimColor>{`  ${clip(entry.detail, Math.max(10, columns - 20 - entry.line.length))}`}</Text>}
           </Text>
         ))}
-        {heading('Agents', view.agents.length === 0 ? '' : `${view.live} running, ${ledger(view, false).idle.length > 0 ? `${ledger(view, false).idle.length} idle, ` : ''}${ledger(view, false).finished.length} done`)}
+        {heading('Agents', view.agents.length === 0 ? '' : `${view.live} running, ${ledger(view, false).idle.length > 0 ? `${ledger(view, false).idle.length} idle, ` : ''}${ledger(view, false).finished.length + (view.dropped ?? 0)} done`)}
         {ledger(view, isFinishedShown).finished.length > 0 && (
           <Button
             key="agents-toggle"

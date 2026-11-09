@@ -5,7 +5,7 @@ import { endLabelWidth, LEADER_PX, labelBox, leaderLine, segmentMeets } from '..
 import { tokens } from '../hooks/card-format'
 import { setWidth } from '../hooks/card-stage'
 import type { View } from '../hooks/card-types'
-import { clipLabelBox, clipMark, finishedCount, HERO_H, heroCard, heroSvg, heroText, labelPx, totalsLine } from '../hooks/hero-card'
+import { agentCount, clipLabelBox, clipMark, finishedCount, HERO_H, heroCard, heroSvg, heroText, labelPx, totalsLine } from '../hooks/hero-card'
 import { seededStates } from '../scripts/hero-fuzz-seeded'
 import { heroView as sampleHero } from '../scripts/sample'
 import { addCompact, addPoint, emptySeries, QUANT_MS, stepAxes, WINDOW_MS } from '../hooks/series'
@@ -737,4 +737,17 @@ test('heroCard draws once for equal inputs and anew when the time, the width, th
   expect(heroCard(base)).not.toBe(fourth)
   expect(heroCard(base).width).toBe(640)
   setWidth(384)
+})
+
+test('the agent counts keep going up past the 200 kept rows: the cut agents count as finished', () => {
+  const rows = [row({ id: 'a', status: 'completed', startedAt: 0, endedAt: 50 }), row({ id: 'b', startedAt: 10 })]
+  const kept = buildView([], rows, 9000)
+  expect(agentCount(kept)).toBe(2)
+  expect(finishedCount(kept)).toBe(1)
+  const past = { ...kept, dropped: 199 }
+  expect(agentCount(past)).toBe(201)
+  expect(finishedCount(past)).toBe(200)
+  expect(heroText(past)).toContain('200 of 201 finished')
+  expect(heroSvg(past).source).toContain('200 of 201')
+  expect(heroSvg(past).source).not.toContain('1 of 2')
 })

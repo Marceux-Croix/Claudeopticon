@@ -35,12 +35,13 @@ function resolveIn(base: string, path: string): string {
 type Repo = { root: string; listed: string[] }
 
 /**
- * A fake disk and git whose session folder (`where.cwd`) the test can change. The test engine hands a
+ * A fake disk and git whose session folder (`where.cwd`) the test can change, with the session's project
+ * root (`where.root`), which follows `where.cwd` unless a test sets it apart (a shell `cd`,). The test engine hands a
  * relative path over made absolute against its own folder; the fake reads such a path back as relative
  * and resolves it against the session folder of the moment. Git answers for the repo that holds the
  * session folder, and as outside a repo when none does.
  */
-function movingDisk(on: On, files: Record<string, string>, repos: Repo[], where: { cwd: string }) {
+function movingDisk(on: On, files: Record<string, string>, repos: Repo[], where: { cwd: string; root?: string }) {
   const own = new Set([...Object.keys(files), ...repos.map(repo => repo.root), where.cwd, '/home/a', '/loose'].map(path => segs(path)[0] ?? ''))
   let harness: string | undefined
   const map = (path: string) => {
@@ -66,7 +67,9 @@ function movingDisk(on: On, files: Record<string, string>, repos: Repo[], where:
   const exists = (path: string) => path in files || Object.keys(files).some(key => key.startsWith(`${path}/`)) || repos.some(repo => path === `${repo.root}/.git`) || path === where.cwd
   const named = (dir: string) => [...new Set(Object.keys(files).filter(key => key.startsWith(`${dir}/`) && !key.slice(dir.length + 1).includes('/')).map(key => key.slice(dir.length + 1)))]
   on('process.run', (_$, e) => {
-    const { argv } = e as unknown as { argv: string[] }
+    const { argv, cwd } = e as unknown as { argv: string[]; cwd?: string }
+    // Git runs where the call names, else in the session folder of the moment.
+    const dir = cwd ?? where.cwd
     const out = (stdout: string, exitCode = 0) => ({ value: { exitCode, stdout, stderr: '' } }) as never
     if (argv[0] === 'printenv') {
       return argv[1] === 'HOME' ? out('/home/a\n') : out('', 1)
@@ -75,12 +78,12 @@ function movingDisk(on: On, files: Record<string, string>, repos: Repo[], where:
       return out('Darwin\n')
     }
     if (argv[0] === 'git') {
-      const repo = repoOf(where.cwd)
+      const repo = repoOf(dir)
       if (repo === undefined) {
         return out('', 128)
       }
       if (argv[1] === 'rev-parse') {
-        const prefix = where.cwd === repo.root ? '' : `${where.cwd.slice(repo.root.length + 1)}/`
+        const prefix = dir === repo.root ? '' : `${dir.slice(repo.root.length + 1)}/`
         const depth = segs(prefix).length
 
         return out(depth === 0 ? `${repo.root}\n.git\n.git\n\n` : `${repo.root}\n${repo.root}/.git\n${'../'.repeat(depth)}.git\n${prefix}\n`)
@@ -121,6 +124,7 @@ function movingDisk(on: On, files: Record<string, string>, repos: Repo[], where:
 
     return { value: undefined } as never
   })
+  on('session.root', () => ({ value: where.root ?? where.cwd }) as never)
   on('ui.toast', () => ({ value: undefined }) as never)
   on('agent.list', () => ({ value: [] }))
   mock.store(on)
@@ -187,5 +191,31 @@ test('a session that leaves a repo drops its folders and counts only the folder 
   const board = JSON.stringify(await ui.findAll({}))
   expect(board).toContain('loose ticket')
   expect(board).not.toContain('mod ticket')
+})
+
+test('a shell cd to a folder outside the repo leaves the board and the IDs on the session\'s repo', async ($, on) => {
+  const clock = mock.clock(on)
+  const where: { cwd: string; root?: string } = { cwd: '/w/app' }
+  const files = startFiles()
+  movingDisk(on, files, [HOME_REPO, APP_REPO], where)
+  const prompt = promptOf(on)
+  const ui = await open($)
+  await clock.advance(15000)
+  expect(JSON.stringify(await ui.findAll({}))).toContain('app ticket')
+
+  // Claude runs `cd /loose` in the shell: `.` moves, the project root stays.
+  where.root = '/w/app'
+  where.cwd = '/loose'
+  await $.prompt.submit({ text: 'after a cd' } as never)
+  expect(prompt.ctx()).toContain('Next free ticket IDs: #T0004')
+  await clock.advance(15000)
+  const board = JSON.stringify(await ui.findAll({}))
+  expect(board).toContain('app ticket')
+  expect(board).not.toContain('loose ticket')
+  expect(board).not.toContain('No checkbox items')
+
+  // A Consolidate-style search again while the shell is still away finds the repo's folder, not the shell's.
+  await $.prompt.submit({ text: 'still away' } as never)
+  expect(prompt.ctx()).toContain('Next free ticket IDs: #T0004')
 })
 }

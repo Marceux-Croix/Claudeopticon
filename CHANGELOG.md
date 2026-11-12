@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.7
+
+### Fixes
+
+- The board no longer loses the todo when Claude runs `cd` into a folder outside the project. 1.0.5 followed the shell's current folder, so a `cd` to such a folder (for example a downloads folder) emptied the board, showed "No checkbox items" and moved the next free ticket IDs there, until the shell came back or the pane restarted. The board now follows the session's project root, which a shell `cd` does not change, and the folder search starts there when the shell is outside it.
+
 ## 1.0.6
 
 ### Fixes

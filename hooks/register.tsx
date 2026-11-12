@@ -804,16 +804,23 @@ function saveAgents($: EngineInterface): void {
  * Finds the project's own todo folder: `.claude_todo/` at the root of the repo the session works
  * in, or of its main checkout from a git worktree (whose `.git` file names it; `.claude_todo/` may
  * be gitignored, so a worktree may have none). Outside a repo, only the session folder's own. Never
- * the `.claude_todo/` in the home `.claude` folder, which belongs to no project.
+ * the `.claude_todo/` in the home `.claude` folder, which belongs to no project. The walk starts at
+ * the session's project root, not at `.`, which a shell `cd` moves; a relative answer is
+ * relative to that root (`atHome`).
  */
 export async function findTodoDir($: EngineInterface): Promise<string | undefined> {
+  const at = atHome(await sessionHome($))
+
   return findTodoDirWith({
-    exists: path => fsBounded($, () => $.fs.exists(path)),
-    kind: path => fsBounded($, () => $.fs.stat(path)).then(stat => stat.kind).catch(() => undefined),
-    realPath: path => realOf($, path),
-    read: path => $.fs.read(path).then(text => (typeof text === 'string' ? text : '')).catch(() => ''),
+    exists: path => fsBounded($, () => $.fs.exists(at(path))),
+    kind: path => fsBounded($, () => $.fs.stat(at(path))).then(stat => stat.kind).catch(() => undefined),
+    realPath: path => realOf($, at(path)),
+    read: path => $.fs.read(at(path)).then(text => (typeof text === 'string' ? text : '')).catch(() => ''),
   })
 }
+
+/** A path relative to the session's project root `home` made absolute against it; as it is when there is no home. */
+const atHome = (home: string | undefined) => (path: string): string => (home === undefined ? path : resolveAgainst(home, path))
 /** True once the environment gave a usable home; false means every write is off (fail closed). Windows paths need no home: the text rule covers them. */
 let globalsKnown = false
 let globalsToasted = false
@@ -1011,6 +1018,39 @@ function realOf($: EngineInterface, path: string): Promise<string | undefined> {
   return fsBounded($, () => $.fs.stat(path, { resolve: true })).then(stat => (typeof stat.realPath === 'string' ? normPath(stat.realPath) : stat.realPath)).catch(() => undefined)
 }
 
+/**
+ * The real path of the session's project root: where it started, or where a host's directory
+ * change or `/cd` took it. A shell `cd` moves `.` but not this. Undefined on an engine with no
+ * `session.root`, or when the disk cannot resolve it.
+ */
+async function projectRoot($: EngineInterface): Promise<string | undefined> {
+  const root = await Promise.resolve()
+    .then(() => $.session.root())
+    .catch(() => undefined)
+
+  return typeof root === 'string' && root !== '' ? realOf($, root) : undefined
+}
+
+/** What a move of the session is told by: its project root, else `.` as before. A shell `cd` never changes it (). */
+async function sessionPlace($: EngineInterface): Promise<string | undefined> {
+  return (await projectRoot($)) ?? realOf($, '.')
+}
+
+/**
+ * The project root when a shell `cd` took `.` out of it: the folder search then starts there.
+ * Undefined while `.` is the root or inside it (a `cd` into a folder of the project finds the same
+ * repo), or when the root is unknown: the search then starts at `.`, as before.
+ */
+async function sessionHome($: EngineInterface): Promise<string | undefined> {
+  const root = await projectRoot($)
+  if (root === undefined) {
+    return undefined
+  }
+  const here = await realOf($, '.')
+
+  return here !== undefined && (samePath(here, root) || isInsideRoots(here, [root])) ? undefined : root
+}
+
 /** The todo folders found but cut from the pane by MAX_FOLDERS; their ticket IDs still count. */
 let cutFolders: string[] = []
 let cutToasted = false
@@ -1149,14 +1189,17 @@ function noteMisspelled($: EngineInterface, path: string): void {
 async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Promise<TodoFolder[]> {
   await loadGlobals($)
   const nearest = await findTodoDir($).catch(() => undefined)
-  searchedIn = await realOf($, '.')
-  const nearestReal = nearest === undefined ? undefined : await realOf($, nearest)
+  const home = await sessionHome($)
+  // The session folder: `.`, or the project root when a shell `cd` took `.` out of it.
+  const place = home ?? (await realOf($, '.'))
+  searchedIn = await sessionPlace($)
+  const nearestReal = nearest === undefined ? undefined : await realOf($, atHome(home)(nearest))
   if (nearestReal !== undefined && isMisspelledTodo(nearestReal)) {
     // A disk that ignores case answers `.claude_todo` for `.Claude_todo`: the folder stays untrusted, so say why once.
     noteMisspelled($, nearestReal)
   }
   const alone = async (): Promise<TodoFolder[]> => {
-    sessionDir = await realOf($, '.')
+    sessionDir = place
     looseRoot = sessionDir
     gitCommon = undefined
     // A search that finds no repo this time leaves no root of an earlier one trusted (a rediscover after a failed rev-parse).
@@ -1172,7 +1215,9 @@ async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Pro
   }
   try {
     // Bounded: a rev-parse that hangs is a failure, as one that fails is; one toast names it.
-    const ran = await runInTime($, REV_PARSE)
+    // Git runs in the project root, not in `.`, which a shell `cd` moves.
+    const inHome = home === undefined ? undefined : { cwd: home }
+    const ran = await runInTime($, REV_PARSE, inHome)
     if (ran === TIMED_OUT) {
       noteTimedOut($, REV_PARSE)
     }
@@ -1187,7 +1232,7 @@ async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Pro
     if (roots !== undefined && (roots.isLinked === true || roots.main !== undefined)) {
       // The main checkout is the first entry of the worktree list, whatever the shape of the git dir; the common dir is the fallback only when the list fails.
       const listArgv = ['git', 'worktree', 'list', '--porcelain']
-      const ranList = await runInTime($, listArgv)
+      const ranList = await runInTime($, listArgv, inHome)
       if (ranList === TIMED_OUT) {
         noteTimedOut($, listArgv)
       }
@@ -1200,7 +1245,7 @@ async function discoverFolders($: EngineInterface, previous?: TodoFolder[]): Pro
     // Git must name the folder the session is in: GIT_DIR and GIT_WORK_TREE in the environment
     // (vcsh) or a core.worktree set elsewhere give well-formed output for another folder, whose todo and
     // `.git` this session must never write. Such a session takes the outside-a-repo path.
-    if (!isSameFolder(sessionFolder(top.stdout), await realOf($, '.'))) {
+    if (!isSameFolder(sessionFolder(top.stdout), place)) {
       return await alone()
     }
     repoRoot = roots.root
@@ -1322,21 +1367,22 @@ async function rediscoverFolders($: EngineInterface): Promise<void> {
   await boundedJob($, search.catch(() => undefined))
 }
 
-/** The real path of `.` when the last folder search started: a scan or prompt that finds another one searches again. */
+/** The real path of the session's project root when the last folder search started: a scan or prompt that finds another one searches again. A shell `cd` does not count (). */
 let searchedIn: string | undefined
 
 /**
  * Follows the session to another folder. The desktop app can start a session in one folder
  * (a spare inside one repo) and move it to another repo: the folders, roots and ID state of the first
- * repo then do not apply. When the real path of `.` is not the one the last search started in, the
- * search runs again from nothing (no earlier folders kept) and the ID state of the old repo is dropped,
- * so its block, reservations and IDs never count in the new one. True when the folder moved.
+ * repo then do not apply. When the session's project root (`sessionPlace`) is not the one the last
+ * search started in, the search runs again from nothing (no earlier folders kept) and the ID state of
+ * the old repo is dropped, so its block, reservations and IDs never count in the new one. A shell `cd`
+ * moves `.` but not the root, so it moves nothing here. True when the folder moved.
  */
 async function followSessionFolder($: EngineInterface): Promise<boolean> {
   if (todoFolders === undefined || searchedIn === undefined) {
     return false
   }
-  const here = await realOf($, '.')
+  const here = await sessionPlace($)
   if (here === undefined || samePath(here, searchedIn)) {
     return false
   }
@@ -3540,7 +3586,7 @@ async function noteNearest($: EngineInterface, folders: TodoFolder[]): Promise<T
     return folders
   }
   nearestSeen = near
-  const real = await realOf($, near)
+  const real = await realOf($, atHome(await sessionHome($))(near))
   // By its absolute path, as discovery gives it, so the trust check passes it: numbered and archived like the rest.
   const path = absNearest(near, real) ?? near
   const hasPrimary = folders.some(one => !one.isOther)

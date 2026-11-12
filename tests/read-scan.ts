@@ -19,7 +19,7 @@ export type AllowedRead = AllowedCall
 export const LAYER = { file: 'register.tsx', fn: 'readTodo' }
 
 export const ALLOWED: readonly AllowedRead[] = [
-  { file: 'register.tsx', fn: 'findTodoDir', line: "read: path => $.fs.read(path).then(text => (typeof text === 'string' ? text : '')).catch(() => ''),", reason: "reads a worktree's `.git` file for its gitdir line, no todo file; no text means no line, and the text rule falls back" },
+  { file: 'register.tsx', fn: 'findTodoDir', line: "read: path => $.fs.read(at(path)).then(text => (typeof text === 'string' ? text : '')).catch(() => ''),", reason: "reads a worktree's `.git` file for its gitdir line (against the project root after a shell `cd` out of it, #T00B6), no todo file; no text means no line, and the text rule falls back" },
   { file: 'register.tsx', fn: 'gitFs', line: 'read: path => $.fs.read(path).catch(() => undefined),', reason: "the engine port of the `.git` walk (`gitWhereUp`): reads a `.git` file for its gitdir line, no todo file; no text means the claim folders are unknown, and no ID is given" },
   { file: 'git-file.ts', fn: 'gitWhereUp', line: "const text = kind === 'file' ? await fs.read(path) : undefined", reason: "reads a `.git` file for its gitdir line through its port, no todo file; no text means the claim folders are unknown, and no ID is given" },
   { file: 'git-file.ts', fn: 'gitWhereUp', line: 'const linked = hasCommondir ? await fs.read(commondir) : undefined', reason: "reads a git dir's `commondir` file through its port, no todo file; a read that fails means the claim folders are unknown, and no ID is given" },

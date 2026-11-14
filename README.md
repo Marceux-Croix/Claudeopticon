@@ -158,7 +158,7 @@ The mod reads checkbox lines in the Markdown files at the top level of `.claude_
 
 ## Rules for Claude
 
-At the start of each conversation, the mod gives Claude short instructions, about 5,000 characters (roughly 1,250 tokens). The text is `RULES` in `hooks/rules.ts`. The `rules` option turns it off. Claude is told to:
+At the start of each conversation, the mod gives Claude short instructions, about 5,800 characters (roughly 1,450 tokens). The text is `RULES` in `hooks/rules.ts`. The `rules` option turns it off. Claude is told to:
 
 - keep the items in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's), make the folder when the repo has none, and keep each item in the folder it is in;
 - never make or use the global todo folder, `~/.claude/.claude_todo/` (or `.claude_todo/` in `$CLAUDE_CONFIG_DIR`), because the board never reads it; when the repo root is that folder's parent, use the `.claude_todo/` of the project it works in;
@@ -172,6 +172,7 @@ At the start of each conversation, the mod gives Claude short instructions, abou
 - release a ticket it queued for another session, or only to order or triage the work, with `report_progress` `release`;
 - ask a session that claims a ticket (the board shows a "Peer owned" tag) with SendMessage before it takes the ticket, ask every other session through ListAgents when the owner has no name, and release a ticket it claims when another session asks for it and it agrees;
 - find or add an item before it starts any work, and do no work that has no item;
+- ticket an issue it finds during the work at once as `- [~]`, fix it in the same turn, and check it off; the issue stays open only with `(blocked: <what>)` or `(arch: <why>)` in its line, and Claude tells you in one line. `[ ]` and `[>]` are for work you asked it to plan;
 - stop work on an item you moved to open or done;
 - never change the box of an item you moved. If it thinks your move was wrong, it calls the `move_ticket` tool. You get a dialog, and the box changes only if you say yes. If the item is in more than one file, the tool refuses and lists them, and Claude calls it again with `folder` set to the item's folder path. A ticket that shows in In progress only because Claude claimed it, while its box is still open or queued, goes back to its column when Claude calls `move_ticket` to open or queued; the box does not change, so no dialog shows.
 

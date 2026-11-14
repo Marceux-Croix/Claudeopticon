@@ -35,7 +35,7 @@ test('stoppedNote says the mod queued the tickets and how to drop one; deferredN
   expect(stopped.at(-1)).toBe(DATA_MARK)
   const deferred = deferredNote(['- "b" in "x.md"'])!.split('\n')
   expect(deferred[0]).toContain('Queued column')
-  expect(deferred[2]).toContain('ignore this note')
+  expect(deferred[2]).toContain('(blocked: <what>)')
   expect(deferred.at(-1)).toBe(DATA_MARK)
 })
 

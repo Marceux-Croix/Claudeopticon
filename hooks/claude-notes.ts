@@ -85,7 +85,7 @@ export function deferredNote(lines: readonly string[]): string | undefined {
   return note(
     'Your last reply put these open todo items off until later. If one comes next, mark it in progress (`- [~]`). If you plan it within the next few tickets, mark it queued (`- [>]`) so the Claudeopticon pane shows it in its Queued column:',
     lines,
-    'If none is planned soon, ignore this note.',
+    'An issue found during the work is fixed now: mark it `- [~]` and fix it, or add `(blocked: <what>)` or `(arch: <why>)` to its line.',
     DATA_MARK,
   )
 }

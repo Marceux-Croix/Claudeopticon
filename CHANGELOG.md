@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.8
+
+### Changes
+
+- The rules text says an issue found during the work is ticketed at once as `- [~]` and fixed in the same turn. It stays open only with `(blocked: <what>)` or `(arch: <why>)` in its line. `[ ]` and `[>]` are for work the user asked to plan. The note about open items put off until later no longer says to ignore it.
+
 ## 1.0.7
 
 ### Fixes

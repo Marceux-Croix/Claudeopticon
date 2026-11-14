@@ -4,10 +4,10 @@ import { RULES, RULES_BLOCK, withRules } from '../hooks/rules'
 import { nextTicketIds } from '../hooks/ticket-ids'
 import { CHECKBOX, parseTodo } from '../hooks/todo-markdown'
 
-/** The README says the rules are about 5,000 characters (roughly 1,250 tokens): a rules text that grows or shrinks past 10% makes that figure stale. */
+/** The README says the rules are about 5,800 characters (roughly 1,450 tokens): a rules text that grows or shrinks past 10% makes that figure stale. */
 test('the rules are about as long as the README says', () => {
-  expect(RULES.length).toBeGreaterThan(5000 * 0.9)
-  expect(RULES.length).toBeLessThan(5000 * 1.1)
+  expect(RULES.length).toBeGreaterThan(5800 * 0.9)
+  expect(RULES.length).toBeLessThan(5800 * 1.1)
 })
 
 test('the rules tell Claude to report a title when it works on tickets itself', () => {
@@ -104,4 +104,10 @@ test('the rules tell Claude to release a ticket it queued for others, and to ask
   expect(RULES).toContain('ask that session with SendMessage before you take it')
   expect(RULES).toContain('call ListAgents and ask each other session')
   expect(RULES).toContain('When another session asks you for a ticket you claim and you agree, release it')
+})
+
+test('the rules ticket a found issue in progress and allow only blocked or arch to leave it open', () => {
+  expect(RULES).toContain('An issue you find while you work is a ticket at once')
+  expect(RULES).toContain('(blocked: <what>)')
+  expect(RULES).toContain('(arch: <why>)')
 })

@@ -4,7 +4,7 @@
 
 ### Changes
 
-- The found-issues rule is part of the mod (option `foundIssues`, on by default). When a turn ends with an answer and a ticket made in that turn is still open (not checked off, and no `(blocked: ...)`, `(arch: ...)` or `(noted: ...)` in its line), the mod sends Claude one prompt that names it, at most twice per prompt of yours. It skips an in-progress ticket with an agent note, every ticket of a prompt that asks to add, plan or order tickets, and a ticket the mod only numbered. The snapshot is a fresh scan after your prompt, so a ticket on disk before it never counts (#T00BV, #T00CA to #T00CF).
+- The found-issues rule is part of the mod (option `foundIssues`, on by default). When a turn ends with an answer and a ticket made in that turn is still open (not checked off, and no `(blocked: ...)`, `(arch: ...)` or `(noted: ...)` in its line), the mod sends Claude one prompt that names it, at most twice per prompt of yours. It skips an in-progress ticket with an agent note, every ticket of a prompt that asks to add, plan or order tickets, and a ticket the mod only numbered. The snapshot is a fresh scan after your prompt, so a ticket on disk before it never counts.
 - `/claudeopticon-status` reports the loaded version, the project and repo roots, each todo folder and file with its item counts and kind, the option values, the time of the last scan and any unread files: the check after a reload.
 - The rules text is about 4,900 characters (about 1,225 tokens), down from 5,810, with every rule kept.
 - `hooks/register.tsx` is split from 6,628 lines into about 60 modules, one responsibility each; it now only wires the hooks. No behavior change.

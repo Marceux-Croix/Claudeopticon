@@ -8,7 +8,7 @@
  */
 
 import type { TodoFile, TodoItem } from '../types'
-import { filePath, keptKey } from './item-keys'
+import { filePath, itemKey, storedKey } from './item-keys'
 
 export const MAX_BLOCKS = 2
 export const MAX_NAMED = 8
@@ -35,17 +35,24 @@ const BOX = { pending: ' ', queued: '>', in_progress: '~', completed: 'x' } as c
 const live = (files: readonly TodoFile[]): TodoFile[] => files.filter(file => file.isArchived !== true && !file.name.startsWith('archive/'))
 
 /**
+ * An item's key for this rule: its absolute folder, then its stored key. The board's own key carries the
+ * folder only outside the nearest folder, and the nearest folder can change between the prompt and the turn
+ * end (a shell `cd`), which changed every key and named old items as new.
+ */
+const foundKey = (file: TodoFile, item: { text: string; id?: string }): string => `${file.folder}::${storedKey(itemKey(item))}`
+
+/**
  * The key of an item by its text alone, its leading `#T` ID cut: an item the mod numbers during the turn
  * (no ID at the prompt, an ID at the turn end) is the same item, not a new one.
  */
-const textKey = (file: TodoFile, item: TodoItem): string => keptKey(file, { text: item.text.replace(/^#T[0-9A-Z]+\s+/, '') })
+const textKey = (file: TodoFile, item: TodoItem): string => foundKey(file, { text: item.text.replace(/^#T[0-9A-Z]+\s+/, '') })
 
 /** The item keys at a user prompt, with whether the prompt plans tickets, and no nudge yet. */
 export function snapshot(files: readonly TodoFile[], promptText: string): Snapshot {
   const keys = new Set<string>()
   for (const file of live(files)) {
     for (const item of file.items) {
-      keys.add(keptKey(file, item))
+      keys.add(foundKey(file, item))
       keys.add(textKey(file, item))
     }
   }
@@ -62,7 +69,7 @@ export function offenders(before: Snapshot, files: readonly TodoFile[]): Offende
   const found = new Map<string, Offender>()
   for (const file of live(files)) {
     for (const item of file.items) {
-      const key = keptKey(file, item)
+      const key = foundKey(file, item)
       if (before.keys.has(key) || before.keys.has(textKey(file, item)) || found.has(key) || item.status === 'completed' || EXEMPT.test(item.text)) {
         continue
       }

@@ -297,3 +297,20 @@ test('an item numbered during the turn is not a new item', () => {
   expect(offenders(snap, [file(OLD + '- [ ] #T0003 plain item without id\n- [ ] #T0004 new\n')]).map(one => one.label)).toEqual(['#T0004'])
 })
 
+
+// Property: an item keeps its key when the nearest folder changes between the prompt and the turn end
+// (a shell cd), so an old item is never named as new; a new item is still found, and folders stay apart.
+test('a change of the nearest folder between the prompt and the turn end names no old item', () => {
+  const near = file(OLD + '- [ ] #T0052 old backlog\n')
+  const snap = snapshot([near], 'status of the ticket')
+  const moved = { ...near, isOther: true as const }
+  expect(offenders(snap, [moved])).toEqual([])
+  const back = { ...file(OLD + '- [ ] #T0052 old backlog\n', 'TODO.md', 'mods/x/.claude_todo') }
+  const snapOther = snapshot([back], 'status of the ticket')
+  const { isOther: _, ...nearNow } = back
+  expect(offenders(snapOther, [nearNow as TodoFile])).toEqual([])
+  // A new item after the move is still found.
+  expect(offenders(snap, [{ ...moved, items: parseTodo(OLD + '- [ ] #T0052 old backlog\n- [ ] #T0099 new\n') }]).map(one => one.label)).toEqual(['#T0099'])
+  // The same ID in another folder is another item.
+  expect(offenders(snap, [moved, file('- [ ] #T0052 same id elsewhere\n', 'TODO.md', 'mods/y/.claude_todo')]).map(one => one.label)).toEqual(['#T0052'])
+})

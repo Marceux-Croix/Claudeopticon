@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+### Fixes
+
+- The found-issues rule named old open tickets as made in the turn after a shell `cd` between the prompt and the turn end. The board's item key carries the folder only outside the nearest folder, and the nearest folder follows the shell folder, so the `cd` changed every key. The rule now keys each item by its absolute folder.
+
 ## 1.1.0
 
 ### Changes

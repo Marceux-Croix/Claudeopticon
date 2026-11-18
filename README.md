@@ -43,11 +43,11 @@ Run this line in Claude Code:
 /plugin install claudeopticon --marketplace Marceux-Croix/Claudeopticon
 ```
 
-The pane opens at the start of each session. To open it again, run `/claudeopticon`. In a session that is already running, run `/reload-plugins` first.
+The pane opens at the start of each session. To open it again, run `/claudeopticon`. In a session that is already running, run `/reload-plugins` first. To check after a reload that the mod runs, run `/claudeopticon-status`: it prints the version, the roots, each todo folder and file scanned with its counts, the options and the scan time.
 
 ## Quick start
 
-1. Make a folder `.claude_todo/` at the root of your repo, and a file in it, for example `.claude_todo/TODO.md`. A `.html` file works the same as a `.md` file: the mod reads the same checkbox lines in it, and a repo may use either or both:
+1. Make a folder `.claude_todo/` at the root of your repo, and a file in it, for example `.claude_todo/TODO.md`. A `.html` file works the same as a `.md` file: the mod reads the same checkbox lines in it, and HTML checkbox items too (see [The todo format](#the-todo-format)). A repo may use either or both:
 
    ```markdown
    - [ ] #T0001 Write the migration for the v2 config format
@@ -154,15 +154,25 @@ The mod reads checkbox lines in the Markdown files at the top level of `.claude_
 - **Closed items go to the archive:** when an item is checked off (`- [x]`), the mod moves it, about 5 seconds later, to the file of the same name in `.claude_todo/archive/` (`TODO.md` to `archive/TODO.md`). It makes the archive file if it is missing, and puts the item under the same heading it had. So the live file holds only open and in-progress items, and the archive is the record of finished work. Nothing is deleted. A closed item with subtasks moves only when all of its subtasks are done, and they move with it. A wrapped line directly under a closed item, with no indent, is part of its text and moves with it; prose after a blank line stays. Headings and notes stay in the live file. An ATX heading (`#` to `######`) may have 0 to 3 spaces of indent. Setext headings (a line underlined with `===` or `---`) are not read: a ticket under one files under the heading above it. Lines nest at most 64 containers deep. When the archive step fails (a symlinked archive, an archive that is not writable, a write that is not on disk, an error), the pane shows one toast per file and the ticket stays in the live file.
 - The pane shows the tickets of every `.claude_todo/` folder in the repo together, as if they were one todo. It finds the folders with git (tracked, untracked and ignored ones; at most 20; a folder under an ignored directory is not found, but an ignored `.claude_todo` is) and adds the main checkout's folders from a git worktree. When the session moves to another folder after it starts (the desktop app can start a session in a spare folder, then move it to your project), the pane finds the folders again for the new folder: the old repo's folders leave the board and its ticket IDs stop counting. A `cd` that Claude runs in the shell is no move: the board stays on the session's project. It never reads the global `~/.claude/.claude_todo`.
 - Files of the same name in different folders are two files, each with its own header row. Each change goes back to the file the ticket came from. Two folders may use the same `#T` ID: they stay two tickets.
+- **HTML todo files:** a `.html` file reads all of the above, and also HTML checkbox items, so the file reads well in a browser. One item is one line: `<li>`, an `<input type="checkbox">` tag, the text, `</li>`. A line that holds two `<li>` items, or a second `<input` tag, is no item: the board does not show it, and the archive never moves it. Put each item on its own line. A line with a second `<li>` or `<input` in its text is no item, and it holds a closed ticket above it in the file. The box is in the tag: `checked` is done, `data-state="queued"` is queued, `data-state="in-progress"` is in progress, none is open. Tag and attribute names may have any case, values either quote, attributes any order, and the tag may end in `/>`. A tag of another form (an unquoted value, `checked="no"`, an unknown `data-state`) makes the line no item, so the mod never writes it. A box change rewrites only the input tag, to one form: `<input type="checkbox">`, `<input type="checkbox" data-state="queued">`, `<input type="checkbox" data-state="in-progress">` or `<input type="checkbox" checked>`. Other attributes of that tag (`id`, `class`) stay, after the box attributes, with their names spelled as written, and a `/>` end stays. The board shows the text with `&amp; &lt; &gt; &quot; &#39;` decoded. An item's subtasks are the lines after it that are indented more than the item, and a line that is only `<ul>`, `<ol>`, `</ul>` or `</ol>` when the next non-blank line is indented more than the item (the usual nesting: `<ul>` at the `<li>`'s indent, the child `<li>` deeper), with the `</ul>` or `</ol>` that closes it. Text under an item with no more indent is not part of it: an HTML item ends at its `</li>`. A line that holds `<input`, or a `type="checkbox"` of a tag split over lines, and is no done item counts as an open subtask, so its parent stays. `<h1>` to `<h6>` lines are headings for the archive. An HTML item in an HTML comment or a `<pre>`, `<script>`, `<style>` or `<textarea>` element is no item, and neither is a Markdown checkbox line there; a `<!--` or `<pre` in a quoted attribute value opens nothing. Consolidate and Delete duplicate tickets never rename an ID in a comment or in such an element. A `.md` file never reads an HTML item. Consolidate does not copy a `.html` file with HTML items into a central `TODO.md`: it leaves the file and names it.
+
+   ```html
+   <h2>Core</h2>
+   <ul>
+     <li><input type="checkbox" data-state="in-progress"> #T0005 Item in progress</li>
+     <li><input type="checkbox"> #T0004 Open item</li>
+   </ul>
+   ```
+
 - `categories.json` lives in the folder nearest to the session folder. With no such folder, items are not sorted into categories.
 
 ## Rules for Claude
 
-At the start of each conversation, the mod gives Claude short instructions, about 5,800 characters (roughly 1,450 tokens). The text is `RULES` in `hooks/rules.ts`. The `rules` option turns it off. Claude is told to:
+At the start of each conversation, the mod gives Claude short instructions, about 4,900 characters (roughly 1,225 tokens). The text is `RULES` in `hooks/rules.ts`. The `rules` option turns it off. Claude is told to:
 
 - keep the items in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's), make the folder when the repo has none, and keep each item in the folder it is in;
 - never make or use the global todo folder, `~/.claude/.claude_todo/` (or `.claude_todo/` in `$CLAUDE_CONFIG_DIR`), because the board never reads it; when the repo root is that folder's parent, use the `.claude_todo/` of the project it works in;
-- write each item as one checkbox line in a top-level `.md` or `.html` file (`- [ ]`, `- [>]`, `- [~]`, `- [x]`) and update its box the moment the status changes;
+- write each item as one checkbox line in a top-level `.md` or `.html` file (`- [ ]`, `- [>]`, `- [~]`, `- [x]`; in a `.html` file also an `<li><input type="checkbox"> text</li>` line) and update its box the moment the status changes;
 - mark a ticket in progress (`- [~]`) when it starts it or decides it comes next, and queued (`- [>]`) when it plans it within the next few tickets, after the next checkpoint, gate, closeout or merge, or after an event; write a new ticket the same way, and as open (`- [ ]`) only for backlog with no plan; set a ticket it has not finished but still plans to do to queued;
 - give each new item one of the free IDs the mod names (`#T` and 4 digits and capital letters, or 5 characters when the 4-character IDs run out; an item with no ID gets one from the mod), and put the item's ID in the description of each agent it starts for that item, marking the item `[~]`;
 - close an item (`- [x]`) in the same turn its work is done, before its final reply, never leave finished work open or in progress, and close an agent's item when the agent's work is done;
@@ -195,24 +205,25 @@ An agent links to a ticket when its description or prompt names the ticket's `#T
 | Option | Default | What it does |
 | --- | --- | --- |
 | `rules` | On | Gives Claude the instructions for keeping the todo. Turn it off if you wrote your own in `CLAUDE.md`. |
+| `foundIssues` | On | When a turn ends with a ticket it made still open (not checked off, and no `(blocked: ...)`, `(arch: ...)` or `(noted: ...)` in its line), the mod sends Claude a prompt that names it, at most twice per prompt of yours. It skips an in-progress ticket with an agent note (`agent <id>, due <HH:MM> UTC`), every ticket of a prompt that asks to add, plan or order tickets, and a ticket the mod only numbered. Turn it off if a hook of your own does this. |
 
 Set options in the `/config` menu, under the plugin. The desktop app does not show that menu: run `/config` in an interactive `claude` terminal. Leave `rules` on unless your `CLAUDE.md` holds the same rules, because the mod's rules are what keep Claude's todo in the format the pane reads.
 
 ### Values set in the code
 
-Other values are constants in the module that uses them. To change one, edit that file and run `/reload-plugins`. The values in seconds count clock ticks of one second (`TICK_MS`, 1000, in `hooks/register.tsx`).
+Other values are constants in the module that uses them. To change one, edit that file and run `/reload-plugins`. The values in seconds count clock ticks of one second (`TICK_MS`, 1000, in `hooks/pane-constants.ts`).
 
 | Constant | Default | Module in `hooks/` | What it sets |
 | --- | --- | --- | --- |
-| `SCAN_EVERY` | 3 | `register.tsx` | Seconds between todo scans |
-| `RESYNC_EVERY` | 60 | `register.tsx` | Seconds between full rereads of the todo |
-| `ITEMS_SHOWN` | 12 | `register.tsx` | Tickets in a list before "Show all N items" |
-| `CLOCK_MS` | 5000 | `register.tsx` | Most often, in milliseconds, that the pane redraws for a token report |
-| `IDLE_DRAW_MS` | 30000 | `register.tsx` | Milliseconds between graph redraws when nothing changes |
-| `NOTE_MS` | 4000 | `register.tsx` | Milliseconds the Recategorize message stays up |
-| `SEARCH_MIN_CELLS` | 24 | `register.tsx` | Narrowest the todo search box gets before the buttons beside it wrap to the next line |
-| `MIN_TICKET_PX` | 300 | `register.tsx` | Narrowest ticket before the board columns stack |
-| `TICKET_GAP_PX` | 10 | `register.tsx` | Pixels between board columns and between stacked tickets, drawn as a transparent margin inside each ticket |
+| `SCAN_EVERY` | 3 | `pane-constants.ts` | Seconds between todo scans |
+| `RESYNC_EVERY` | 60 | `pane-constants.ts` | Seconds between full rereads of the todo |
+| `ITEMS_SHOWN` | 12 | `pane-constants.ts` | Tickets in a list before "Show all N items" |
+| `CLOCK_MS` | 5000 | `pane-constants.ts` | Most often, in milliseconds, that the pane redraws for a token report |
+| `IDLE_DRAW_MS` | 30000 | `pane-constants.ts` | Milliseconds between graph redraws when nothing changes |
+| `NOTE_MS` | 4000 | `pane-constants.ts` | Milliseconds the Recategorize message stays up |
+| `SEARCH_MIN_CELLS` | 24 | `pane-constants.ts` | Narrowest the todo search box gets before the buttons beside it wrap to the next line |
+| `MIN_TICKET_PX` | 300 | `view-model.ts` | Narrowest ticket before the board columns stack |
+| `TICKET_GAP_PX` | 10 | `view-model.ts` | Pixels between board columns and between stacked tickets, drawn as a transparent margin inside each ticket |
 | `MAX_FOLDERS` | 20 | `repo-folders.ts` | Most `.claude_todo/` folders the pane finds in a repo |
 | `MAX_CATEGORIES` | 5 | `categories.ts` | Most category groups |
 | `SORT_MODEL` | `haiku` | `categories.ts` | The model that sorts tickets, matches agents to tickets, and recategorizes |
@@ -254,7 +265,7 @@ The mod uses Haiku for two small jobs:
 - **Sorting tickets into groups:** once per new ticket, up to 60 per request. Sorting a large todo the first time costs a few thousand tokens. **Recategorize** sorts all open tickets again, the same way, once per press.
 - **Matching a new agent to its tickets:** one request per agent.
 
-Everything else is free or nearly free: the Orchestrator card makes no requests, the instructions to Claude are about 1,250 tokens per conversation, a progress report is about 40 tokens, and card token counts come from usage Claude Code already reports.
+Everything else is free or nearly free: the Orchestrator card makes no requests, the instructions to Claude are about 1,225 tokens per conversation, a progress report is about 40 tokens, and card token counts come from usage Claude Code already reports.
 
 All requests go through your own Claude Code session. The mod sends nothing anywhere else.
 

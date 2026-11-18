@@ -198,7 +198,7 @@ function pane(): string {
   add(boardHead(view.files))
   const colW = (WIDTH - (SIDE_BY - 1) * TICKET_GAP) / SIDE_BY
   const columns = [
-    // The pane's own buttons for an unsent ticket in each column (register.tsx), from the action definitions.
+    // The pane's own buttons for an unsent ticket in each column (board-files.tsx), from the action definitions.
     { title: 'In progress', tickets: progressTickets, glyphs: [UNSTART_ACTION, DONE_ACTION, STATUS_ACTION].map(action => action.glyph) },
     { title: 'Queued', tickets: queuedTickets, glyphs: [REOPEN_ACTION, START_ACTION, DONE_ACTION, SEND_ACTION, STATUS_ACTION].map(action => action.glyph) },
     { title: 'Open', tickets: openTickets, glyphs: [QUEUE_ACTION, START_ACTION, DONE_ACTION, SEND_ACTION, STATUS_ACTION].map(action => action.glyph) },

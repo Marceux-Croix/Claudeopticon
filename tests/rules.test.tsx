@@ -4,10 +4,10 @@ import { RULES, RULES_BLOCK, withRules } from '../hooks/rules'
 import { nextTicketIds } from '../hooks/ticket-ids'
 import { CHECKBOX, parseTodo } from '../hooks/todo-markdown'
 
-/** The README says the rules are about 5,800 characters (roughly 1,450 tokens): a rules text that grows or shrinks past 10% makes that figure stale. */
+/** The README says the rules are about 4,900 characters (roughly 1,225 tokens): a rules text that grows or shrinks past 10% makes that figure stale. */
 test('the rules are about as long as the README says', () => {
-  expect(RULES.length).toBeGreaterThan(5800 * 0.9)
-  expect(RULES.length).toBeLessThan(5800 * 1.1)
+  expect(RULES.length).toBeGreaterThan(4900 * 0.9)
+  expect(RULES.length).toBeLessThan(4900 * 1.1)
 })
 
 test('the rules tell Claude to report a title when it works on tickets itself', () => {
@@ -69,12 +69,12 @@ test('the rules allow the 5-character IDs the mod offers past T9ZZZ', () => {
 test('the rules tell Claude what queued means, when to queue a ticket, and that the mod queues a stopped one', () => {
   expect(RULES).toContain('`- [>]` queued')
   expect(RULES).toContain('Queued column')
-  expect(RULES).toContain('set it to `[>]`, not `[ ]`')
+  expect(RULES).toContain('to `[>]`, not `[ ]`')
   expect(RULES).toContain('In progress (`- [~]`) is work running now and work that starts next')
   expect(RULES).toContain('Queued (`- [>]`) is close but not imminent: work you plan to take within about the next 3 to 5 tickets, or second priority')
   expect(RULES).toContain('Open (`- [ ]`) is the backlog, with no time to start')
   expect(RULES).toContain('When you decide a ticket comes next, mark it `[~]`')
-  expect(RULES).toContain('write it `[~]` if you start it now or next, `[>]` if you plan it soon after, and `[ ]` only for backlog with no plan')
+  expect(RULES).toContain('is `[~]` if you start it now or next, `[>]` if you plan it soon after, and `[ ]` only for backlog with no plan')
   expect(RULES).not.toContain('slated next')
   expect(RULES).not.toContain('`[>]` as in progress')
 })
@@ -89,7 +89,7 @@ test('the rules never send Claude to the global todo folder', () => {
   expect(rule).toContain('use the nearest project folder instead')
   // The rule comes right after the root rule it makes an exception to, and the root rule is unchanged.
   const at = lines.indexOf(rule!)
-  expect(lines[at - 1]).toBe("- Todo items go in `.claude_todo/` at the root of the repo's main checkout (a git worktree uses the main checkout's). Create the folder when the repo has none. Each repo keeps its own items, and only its own. Other `.claude_todo/` folders in the repo also show on the board: keep each item in the folder it is in.")
+  expect(lines[at - 1]).toContain("- Items go in `.claude_todo/` at the root of the repo's main checkout")
 })
 
 test('the rules tell Claude to send its session name once, as session, without the ref', () => {

@@ -211,13 +211,20 @@ test('addToArchive adds a block that equals an older archived one under another 
   expect(addToArchive('## A\n\n- [x] #T0006 loose\n', loose, [['- [x] #T0006 loose']])).toBe('## A\n\n- [x] #T0006 loose\n')
 })
 
-/** The least time of three runs of `job`, in ms. */
-function leastMs(job: () => void): number {
-  let least = Infinity
-  for (let i = 0; i < 5; i += 1) {
-    const from = performance.now()
-    job()
-    least = Math.min(least, performance.now() - from)
+/**
+ * The least wall time of `runs` runs of each job, in ms, the two jobs run in turn. Process CPU time is not
+ * available in the test sandbox. The least of many runs drops the runs that a busy machine slowed, and the
+ * turns spread a load spike over both jobs (the least of 5 runs of each, one after the other, measured
+ * a ratio of 19.6 under a load average of 7 to 21).
+ */
+function leastMs(small: () => void, large: () => void, runs: number): [number, number] {
+  const least: [number, number] = [Infinity, Infinity]
+  for (let i = 0; i < runs; i += 1) {
+    for (const [at, job] of [small, large].entries()) {
+      const from = performance.now()
+      job()
+      least[at] = Math.min(least[at]!, performance.now() - from)
+    }
   }
 
   return least
@@ -228,19 +235,197 @@ const doneText = (n: number) => Array.from({ length: n }, (_, i) => `## S${i % 5
 const archiveText = (lines: number) => Array.from({ length: lines }, (_, i) => (i % 4 === 0 ? `## Old${i}` : `- [x] #T9${String(i).padStart(4, '0')} old ${i}`)).join('\n')
 
 /** Property: the archive text work grows linearly in blocks and in archive lines; 8 times the blocks and archive lines cost at most 16x (linear is 8x, quadratic 64x). */
-test('the archive text work is linear in the number of blocks and archive lines', () => {
-  const run = (n: number) => {
+test('the archive text work is linear in the number of blocks and archive lines', { timeoutMs: 120_000 }, () => {
+  /** The inputs of the archive step for n closed blocks, built before any timing. */
+  const inputs = (n: number) => {
     const text = doneText(n)
     const blocks = closedBlocks(text)
     const archive = archiveText(n * 4)
     const wrote = blocks.map(block => block.lines)
     const next = addToArchive(archive, blocks, wrote)
+    // The work is right before it is timed.
+    expect(blocks.length).toBe(n)
     expect(blocksStandAsItems(next, blocks)).toBe(true)
     expect(removeBlocks(text, blocks)).not.toContain('[x]')
-    expect(blocks.length).toBe(n)
+
+    return { text, blocks, archive, wrote, next }
   }
-  run(30)
-  const small = leastMs(() => run(100))
-  const large = leastMs(() => run(800))
-  expect(large / Math.max(small, 1)).toBeLessThan(16)
+  const SMALL = 200
+  const LARGE = 1600
+  const [a, b] = [inputs(SMALL), inputs(LARGE)]
+  // Each function is timed alone, so a quadratic term in one is not hidden by the others. Each job runs
+  // `reps` times per sample, so a sample of the small input takes a few ms, well above the timer's grain.
+  const jobs: [string, number, (x: typeof a) => unknown][] = [
+    ['closedBlocks', 3, x => closedBlocks(x.text)],
+    ['removeBlocks', 40, x => removeBlocks(x.text, x.blocks)],
+    ['addToArchive', 1, x => addToArchive(x.archive, x.blocks, x.wrote)],
+    ['blocksStandAsItems', 1, x => blocksStandAsItems(x.next, x.blocks)],
+  ]
+  const repeated = (reps: number, job: () => unknown) => () => {
+    for (let k = 0; k < reps; k += 1) {
+      job()
+    }
+  }
+  for (const [name, reps, job] of jobs) {
+    // 8 times the input: linear is about 8, quadratic about 64. Load from other processes only makes a ratio
+    // larger, never smaller, so the best of up to 3 measurements is the cost.
+    let ratio = Infinity
+    for (let attempt = 0; attempt < 3 && ratio >= 20; attempt += 1) {
+      const [small, large] = leastMs(repeated(reps, () => job(a)), repeated(reps, () => job(b)), 5)
+      ratio = Math.min(ratio, large / Math.max(small, 0.5))
+    }
+    expect([name, ratio < 20]).toEqual([name, true])
+  }
+})
+
+// ----------------------------------------------------------------
+// Property: a done top-level HTML item leaves a .html file with its subtasks, lands under the same <hN> heading in the
+// archive as the same lines, and an open subtask holds it back; a .md file never archives an HTML line.
+
+const tag = (state: string) => `<input type="checkbox"${state}>`
+const HTML_PLAN = [
+  '<h1>Plan</h1>',
+  '<h2>Core</h2>',
+  '<ul>',
+  `  <li>${tag(' checked')} #T0001 done parser</li>`,
+  '    <ul>',
+  `      <li>${tag(' checked')} #T0002 done child</li>`,
+  '    </ul>',
+  `  <li>${tag(' checked')} #T0003 done with open child</li>`,
+  `    <li>${tag(' data-state="queued"')} #T0004 open child</li>`,
+  `  <li>${tag('')} #T0005 open</li>`,
+  `    <li>${tag(' checked')} #T0006 done under open</li>`,
+  '</ul>',
+].join('\n')
+
+test('closedBlocks takes a done HTML item with the lines indented past it, under its <hN> heading', () => {
+  const blocks = closedBlocks(HTML_PLAN, 'html')
+  expect(blocks.map(block => [block.heading, block.from, block.to, block.lines.length])).toEqual([['<h2>Core</h2>', 3, 7, 4]])
+  expect(blocks[0]!.lines[0]).toBe(`  <li>${tag(' checked')} #T0001 done parser</li>`)
+  expect(closedBlocks(HTML_PLAN, 'md')).toEqual([])
+  // A done HTML item inside a comment is an example: it never leaves.
+  expect(closedBlocks(`<!--\n<li>${tag(' checked')} a</li>\n-->`, 'html')).toEqual([])
+  // A tag that fails the grammar but holds a checkbox counts as open: it holds the block back.
+  expect(closedBlocks(`<li>${tag(' checked')} a</li>\n  <li><input type="checkbox" checked="no"> b</li>`, 'html')).toEqual([])
+})
+
+test('an archived HTML item lands under the same <hN> heading as the same lines, and stands as items there', () => {
+  const blocks = closedBlocks(HTML_PLAN, 'html')
+  const archive = addToArchive('<h2>Core</h2>\n\n<li><input type="checkbox" checked> #T0009 old</li>\n\n<h2>Docs</h2>\n', blocks, [], '\n', 'html')
+  expect(archive).toBe(['<h2>Core</h2>', '', '<li><input type="checkbox" checked> #T0009 old</li>', ...blocks[0]!.lines, '', '<h2>Docs</h2>', ''].join('\n'))
+  expect(blocksStandAsItems(archive, blocks, 'html')).toBe(true)
+  // A new archive gets the heading, then the block.
+  expect(addToArchive('', blocks, [], '\n', 'html')).toBe(['<h2>Core</h2>', '', ...blocks[0]!.lines, ''].join('\n'))
+  // An archive that ends in an open comment would hide the block: it does not stand as items.
+  const hidden = addToArchive('<!--', blocks, [], '\n', 'html')
+  expect(blocksStandAsItems(hidden, blocks, 'html')).toBe(false)
+  // The cut source keeps every other line.
+  expect(removeBlocks(HTML_PLAN, blocks).split('\n')).toEqual(HTML_PLAN.split('\n').filter((_, at) => at < 3 || at >= 7))
+})
+
+test('blocksLeft reads HTML items by key in a .html file', () => {
+  const blocks = closedBlocks(HTML_PLAN, 'html')
+  expect(blocksLeft(HTML_PLAN, removeBlocks(HTML_PLAN, blocks), blocks, 'html')).toEqual(blocks)
+  expect(blocksLeft(HTML_PLAN, HTML_PLAN, blocks, 'html')).toEqual([])
+})
+
+// ---------------------------------------------------------------- 
+// Property: in a .html file a done top-level HTML item leaves only with lines that are its own (indented past it, or
+// list tags of its nesting), and every line that may be a box it cannot read holds it back.
+
+test('a line with two list items is no ticket, and a done first box never archives the open second one', () => {
+  const src = ['<ul>', `<li>${tag(' checked')} #T0001 a</li><li>${tag('')} #T0002 still open</li>`, '</ul>', ''].join('\n')
+  expect(closedBlocks(src, 'html')).toEqual([])
+  // Under a done item, such a line counts open: it holds the item back.
+  const under = ['<ul>', `<li>${tag(' checked')} #T0003 parent</li>`, `  <li>${tag(' checked')} #T0004 a</li><li>${tag('')} #T0005 open</li>`, '</ul>'].join('\n')
+  expect(closedBlocks(under, 'html')).toEqual([])
+})
+
+test('an open subtask whose input tag is split over lines holds back its done parent', () => {
+  const split = ['<ul>', `<li>${tag(' checked')} #T0001 parent</li>`, '    <li><input', '        type="checkbox"> #T0002 open sub</li>', '</ul>'].join('\n')
+  expect(closedBlocks(split, 'html')).toEqual([])
+  const single = ['<ul>', `<li>${tag(' checked')} #T0001 parent</li>`, '    <li><INPUT', "        TYPE='checkbox' checked> #T0002 done sub, but not readable</li>", '</ul>'].join('\n')
+  expect(closedBlocks(single, 'html')).toEqual([])
+})
+
+test('a prose line right under a done HTML item stays in the file', () => {
+  const src = ['<h2>Work</h2>', '<ul>', `<li>${tag(' checked')} #T0001 Ship it</li>`, 'Remember to email Bob before Friday.', '</ul>', ''].join('\n')
+  const blocks = closedBlocks(src, 'html')
+  expect(blocks).toEqual([{ heading: '<h2>Work</h2>', lines: [`<li>${tag(' checked')} #T0001 Ship it</li>`], from: 2, to: 3 }])
+  expect(removeBlocks(src, blocks)).toContain('Remember to email Bob before Friday.')
+})
+
+test('a child in a <ul> at the parent indent holds back a done parent, and moves with it when done', () => {
+  const nest = (child: string) => ['<ul>', `  <li>${tag(' checked')} #T0001 Parent</li>`, '  <ul class="sub">', `    <li>${tag(child)} #T0002 child</li>`, '  </ul>', `  <li>${tag('')} #T0003 next</li>`, '</ul>'].join('\n')
+  expect(closedBlocks(nest(''), 'html')).toEqual([])
+  const done = closedBlocks(nest(' checked'), 'html')
+  expect(done.map(block => [block.from, block.to])).toEqual([[1, 5]])
+  expect(removeBlocks(nest(' checked'), done).split('\n')).toEqual(['<ul>', `  <li>${tag('')} #T0003 next</li>`, '</ul>'])
+  // An <ol> after a blank line, in upper case, counts the same; a list tag followed by a sibling is no part of the block.
+  const ol = ['<li><input type="checkbox" checked> #T0004 p</li>', '', '<OL>', `  <li>${tag('')} #T0005 c</li>`, '</OL>'].join('\n')
+  expect(closedBlocks(ol, 'html')).toEqual([])
+  const sibling = ['<ul>', `<li>${tag(' checked')} #T0006 a</li>`, '</ul>', '<ul>', `<li>${tag('')} #T0007 b</li>`, '</ul>'].join('\n')
+  expect(closedBlocks(sibling, 'html').map(block => [block.from, block.to])).toEqual([[1, 2]])
+})
+
+// ----------------------------------------------------------------
+// Property: addToArchive grows linearly in headings: the archive's example mask is read a fixed number of times per
+// call, not once per heading group. 8 times the headings and archive lines cost at most 20x (linear 8x, quadratic 64x).
+
+/** A todo text of `n` done tickets, each under its own heading, and an archive that has every second heading. */
+const manyHeadings = (n: number, kind: 'md' | 'html') => {
+  const head = (i: number) => (kind === 'md' ? `## H${i}` : `<h2>H${i}</h2>`)
+  const item = (id: string, text: string) => (kind === 'md' ? `- [x] #${id} ${text}` : `<li><input type="checkbox" checked> #${id} ${text}</li>`)
+  const text = Array.from({ length: n }, (_, i) => `${head(i)}\n${item(`T${String(i).padStart(5, '0')}`, `done ${i}`)}`).join('\n')
+  const archive = Array.from({ length: n / 2 }, (_, i) => `${head(i * 2)}\n\n${item(`T9${String(i).padStart(4, '0')}`, `old ${i}`)}\n`).join('\n')
+
+  return { text, archive }
+}
+
+test('addToArchive is linear in the number of headings, new and found, with and without a retry record', { timeoutMs: 120_000 }, () => {
+  for (const kind of ['md', 'html'] as const) {
+    const inputs = (n: number) => {
+      const { text, archive } = manyHeadings(n, kind)
+      const blocks = closedBlocks(text, kind)
+      const wrote = blocks.slice(0, 3).map(block => block.lines)
+      const next = addToArchive(archive, blocks, wrote, '\n', kind)
+      // The work is right before it is timed: every block lands as items, and each heading stands once.
+      expect(blocks.length).toBe(n)
+      expect(blocksStandAsItems(next, blocks, kind)).toBe(true)
+      expect(next.split('\n').filter(line => line === (kind === 'md' ? '## H7' : '<h2>H7</h2>')).length).toBe(1)
+
+      return { archive, blocks, wrote }
+    }
+    const [a, b] = [inputs(250), inputs(2000)]
+    // Each function is timed alone; load only makes a ratio larger, so the best of up to 3 is the cost.
+    const jobs: [string, (x: typeof a) => unknown][] = [
+      ['addToArchive', x => addToArchive(x.archive, x.blocks, [], '\n', kind)],
+      ['addToArchive retry', x => addToArchive(x.archive, x.blocks, x.wrote, '\n', kind)],
+    ]
+    for (const [name, job] of jobs) {
+      let ratio = Infinity
+      for (let attempt = 0; attempt < 3 && ratio >= 20; attempt += 1) {
+        const [small, large] = leastMs(() => job(a), () => job(b), 3)
+        ratio = Math.min(ratio, large / Math.max(small, 0.5))
+      }
+      expect([kind, name, ratio < 20]).toEqual([kind, name, true])
+    }
+  }
+})
+
+test('addToArchive puts each heading group where the per-group code put it', () => {
+  const one = (heading: string | undefined, line: string) => ({ ...(heading === undefined ? {} : { heading }), lines: [line], from: 0, to: 1 })
+  const md = ['## A', '', '- [x] #T1 old a', '', '## B', '- [x] #T2 old b'].join('\n')
+  const blocks = [one(undefined, '- [x] #T5 loose'), one('## B', '- [x] #T3 b'), one('## C', '- [x] #T4 c'), one('## A', '- [x] #T6 a')]
+  // The loose block goes at the end, in the last section; B's block after it, before the new heading C.
+  expect(addToArchive(md, blocks)).toBe('## A\n\n- [x] #T1 old a\n- [x] #T6 a\n\n## B\n- [x] #T2 old b\n- [x] #T5 loose\n- [x] #T3 b\n\n## C\n\n- [x] #T4 c\n')
+  // A section that ends in an open `<div>` HTML block gets a blank line first, so the block is no part of it.
+  expect(addToArchive('## A\n<div>\nx\n\n## B\n', [one('## A', '- [x] #T7 a')])).toBe('## A\n<div>\nx\n\n- [x] #T7 a\n\n## B\n')
+  expect(addToArchive('## A\n<div>\nx\n## B\n', [one('## A', '- [x] #T7 a')])).toBe('## A\n<div>\nx\n## B\n\n- [x] #T7 a\n')
+  expect(addToArchive('## A\n<div>', [one('## A', '- [x] #T7 a')])).toBe('## A\n<div>\n\n- [x] #T7 a\n')
+  expect(addToArchive('<div>', [one(undefined, '- [x] #T9 a')])).toBe('<div>\n\n- [x] #T9 a\n')
+  // An empty section gets a blank line after its heading, and one before the next heading.
+  expect(addToArchive('## A\n## B\n', [one('## A', '- [x] #T8 a')])).toBe('## A\n\n- [x] #T8 a\n\n## B\n')
+  // A found last section takes its block before a heading an earlier group added at the end.
+  expect(addToArchive('## B\nx', [one('## C', '- [x] #T4 c'), one('## B', '- [x] #T3 b')])).toBe('## B\nx\n- [x] #T3 b\n\n## C\n\n- [x] #T4 c\n')
 })

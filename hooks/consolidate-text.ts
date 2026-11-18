@@ -1,12 +1,13 @@
 /** The text work of Consolidate todos: copied lines, sections, renumbered IDs and renamed references. */
 
+import { editOutside, htmlRegionSpans, type RegionSpan } from './html-regions'
 import { listedName } from './path-forms'
 import { nextTicketIds } from './ticket-ids'
-import { bare, CHECKBOX, exampleMask, ID_SRC, lineOwnIds, parseTodo } from './todo-markdown'
+import { bare, ID_SRC, isItemLine, itemParts, lineMask, lineOwnIds, parseTodo, type TodoKind } from './todo-markdown'
 
-/** Every checkbox line of a todo file's text, as written. */
-export function itemLines(markdown: string): string[] {
-  return markdown.split('\n').filter(line => CHECKBOX.test(line))
+/** Every checkbox line of a todo file's text, as written (a CRLF line too, its carriage return kept). `kind`: a `.html` file's HTML items count. */
+export function itemLines(markdown: string, kind: TodoKind = 'md'): string[] {
+  return markdown.split('\n').filter(line => isItemLine(bare(line), kind))
 }
 
 /** The lines with the blank ones cut from the start and the end; every other line stays as it is, blank lines and trailing spaces inside included. */
@@ -101,8 +102,8 @@ export function sectionText(place: string, lines: readonly string[], eol: string
  * and none of the target changes. A count alone passes a lost item and an added one together. The
  * text holds an item's IDs, so the compare does not depend on which line of the file owns an ID.
  */
-export function keepsEveryItem(now: string, next: string, sections: readonly { lines: readonly string[] }[]): boolean {
-  const keys = (text: string) => parseTodo(text).map(item => `${item.status}\0${item.text}`)
+export function keepsEveryItem(now: string, next: string, sections: readonly { lines: readonly string[] }[], kind: TodoKind = 'md'): boolean {
+  const keys = (text: string) => parseTodo(text, kind).map(item => `${item.status}\0${item.text}`)
   const want = [...keys(now), ...sections.flatMap(one => keys(one.lines.join('\n')))]
   const got = keys(next)
 
@@ -121,23 +122,48 @@ export function applyRenames(line: string, renames: Readonly<Record<string, stri
 /**
  * Like `applyRenames`, but a ticket line keeps its own leading ID: only its references change. A
  * trailing carriage return stays and never stops the match: `.` does not match `\r`.
+ * `spans` are the parts of the line in an HTML comment or raw element (`htmlRegionSpans`, a `.html`
+ * file): they are examples and stay as written.
  */
-export function applyRefRenames(line: string, renames: Readonly<Record<string, string>>): string {
+export function applyRefRenames(line: string, renames: Readonly<Record<string, string>>, kind: TodoKind = 'md', spans: readonly RegionSpan[] = []): string {
   const cr = line.endsWith('\r') ? '\r' : ''
   const body = bare(line)
+  const rename = (part: string) => applyRenames(part, renames)
+  const html = kind === 'html' ? itemParts(body, kind) : undefined
+  if (html?.isHtml === true) {
+    // An HTML item: only its text is renamed, past its own leading ID; the tag and `</li>` stay.
+    const lead = new RegExp(`^#${ID_SRC}\\b`).exec(html.text)?.[0] ?? ''
+
+    return `${editOutside(body, spans, rename, html.head.length + lead.length, html.head.length + html.text.length)}${cr}`
+  }
   const m = new RegExp(`^(\\s*[-*+] \\[[ xX~>]\\]\\s+#${ID_SRC})(.*)$`).exec(body)
 
-  return `${m === null ? applyRenames(body, renames) : `${m[1]}${applyRenames(m[2]!, renames)}`}${cr}`
+  return `${editOutside(body, spans, rename, m === null ? 0 : m[1]!.length)}${cr}`
 }
 
-/** The lines with the renames applied (`applyRenames`), except lines in a code fence or an HTML comment: those are examples. */
-export function renameLines(lines: readonly string[], renames: Readonly<Record<string, string>>): string[] {
+/**
+ * The lines with the renames applied (`applyRenames`), except lines in a code fence or an HTML comment: those are
+ * examples. In a `.html` file the parts of a line in a comment or raw element stay too.
+ */
+export function renameLines(lines: readonly string[], renames: Readonly<Record<string, string>>, kind: TodoKind = 'md'): string[] {
   if (Object.keys(renames).length === 0) {
     return [...lines]
   }
-  const isExample = exampleMask(lines.map(bare))
+  const isExample = lineMask(lines.map(bare), kind)
+  const spans = kind === 'html' ? htmlRegionSpans(lines.map(bare)) : []
 
-  return lines.map((line, at) => (isExample[at] === true ? line : applyRenames(line, renames)))
+  return lines.map((line, at) => (isExample[at] === true ? line : renameLine(line, renames, kind, spans[at] ?? [])))
+}
+
+/** The line with the renames applied (`applyRenames`) outside `spans`; an HTML item's only in its text, never in its tag. */
+function renameLine(line: string, renames: Readonly<Record<string, string>>, kind: TodoKind, spans: readonly RegionSpan[]): string {
+  const rename = (part: string) => applyRenames(part, renames)
+  const html = kind === 'html' ? itemParts(bare(line), kind) : undefined
+  if (html?.isHtml !== true) {
+    return editOutside(line, spans, rename)
+  }
+
+  return editOutside(line, spans, rename, html.head.length, html.head.length + html.text.length)
 }
 
 /** How many `## From <heading>` sections a target file's text holds. */
@@ -157,11 +183,11 @@ export function sectionCount(text: string, heading: string): number {
  * every ID above. A source that runs dry throws, so a new `T` ID is never picked outside the claim.
  * Without it the next `T` ID above all of the IDs is taken, as a count of the renames needs.
  */
-export function renumberLines(lines: readonly string[], used: Set<string>, reserved: ReadonlySet<string> = new Set(), takeT?: () => string | undefined): { lines: string[]; renames: Record<string, string>; pairs: { from: string; to: string }[] } {
+export function renumberLines(lines: readonly string[], used: Set<string>, reserved: ReadonlySet<string> = new Set(), takeT?: () => string | undefined, kind: TodoKind = 'md'): { lines: string[]; renames: Record<string, string>; pairs: { from: string; to: string }[] } {
   const renames: Record<string, string> = {}
   const pairs: { from: string; to: string }[] = []
   // A new number also skips this source's own IDs, so one clash never pushes a later line out.
-  const ids = lineOwnIds(lines.map(bare))
+  const ids = lineOwnIds(lines.map(bare), new Set(), kind)
   const own = ids.flatMap(id => (id === undefined ? [] : [id.toLowerCase()]))
   // Other letters than `T` keep the older rule: the next number after the highest one of those letters.
   const nextFree = (letters: string) => {
@@ -209,7 +235,7 @@ export function renumberLines(lines: readonly string[], used: Set<string>, reser
     pairs.push({ from: id, to: fresh })
   }
 
-  return { lines: renameLines(lines, renames), renames, pairs }
+  return { lines: renameLines(lines, renames, kind), renames, pairs }
 }
 
 /** The text of a target file with new sections added: kept as it was, then each `## From <place>` block. */

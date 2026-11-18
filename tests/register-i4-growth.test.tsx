@@ -168,7 +168,8 @@ test('a size cut down by cut-off replies grows back step by step: under 60 perce
   rig(on, files)
   const prompts = fakeModel(on, prompt => (numbers(prompt).length > 8 ? assignAll('Code')(prompt).slice(0, 30) : assignAll('Code')(prompt)))
   await openPane($)
-  for (let i = 0; i < 8640; i += 1) {
+  // Speed: stops once all 300 items are sorted, when no call is made any more; the 24 h cap stays.
+  for (let i = 0; i < 8640 && Object.keys(bookItems(files)).length < 300; i += 1) {
     await clock.advance(10_000)
   }
   const wasted = prompts.filter(prompt => numbers(prompt).length > 8).length

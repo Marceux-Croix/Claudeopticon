@@ -2,9 +2,9 @@
 
 import type { ItemStatus } from './card-types'
 import { itemKey, storedKey } from './item-keys'
-import { bare, exampleMask, HEADING_LINE, itemsAt } from './todo-markdown'
+import { bare, headingLevel, itemsAt, lineMask, openedLine, withBox, type TodoKind } from './todo-markdown'
 
-const BOXES: Record<ItemStatus, string> = { pending: ' ', queued: '>', in_progress: '~', completed: 'x' }
+const BOXES: Record<ItemStatus, ' ' | 'x' | '~' | '>'> = { pending: ' ', queued: '>', in_progress: '~', completed: 'x' }
 export const STATUS_WORDS: Record<ItemStatus, string> = { pending: 'open', queued: 'queued', in_progress: 'in progress', completed: 'done' }
 
 /**
@@ -24,8 +24,9 @@ export type DrawnPlace = { place: string; sum?: string }
  * text the board read from one where a line moved. A box set by a press on one of two identical
  * lines does not change it, so the other line stays pressable before the next scan.
  */
-export function textSum(markdown: string): string {
-  const text = markdown.replace(/^(\s*[-*+] )\[[ xX~>]\]/gm, '$1[ ]')
+export function textSum(markdown: string, kind: TodoKind = 'md'): string {
+  // A `.html` file reads each line's box as open, its HTML items' too; a `.md` file keeps the one pass it always had.
+  const text = kind === 'html' ? markdown.split('\n').map(line => openedLine(line, kind)).join('\n') : markdown.replace(/^(\s*[-*+] )\[[ xX~>]\]/gm, '$1[ ]')
   let hash = 0x811c9dc5
   for (let i = 0; i < text.length; i += 1) {
     hash ^= text.charCodeAt(i)
@@ -48,18 +49,17 @@ export function textSum(markdown: string): string {
  * press. A key that is unique in the file skips the place check (`isSame`), so an
  * edit elsewhere, a parent heading added too, never refuses it.
  */
-export function linePlaces(markdown: string): Map<string, string> {
+export function linePlaces(markdown: string, kind: TodoKind = 'md'): Map<string, string> {
   const lines = markdown.split('\n').map(bare)
-  const isExample = exampleMask(lines)
+  const isExample = lineMask(lines, kind)
   const sectionAt: string[] = []
   // The open headings by level (index 0 is level 1), and how often each full path has opened so far.
   const path: string[] = []
   const opened = new Map<string, number>()
   let section = ''
   lines.forEach((line, at) => {
-    const m = isExample[at] === true ? null : HEADING_LINE.exec(line)
-    if (m !== null) {
-      const level = m[1]!.length
+    const level = isExample[at] === true ? undefined : headingLevel(line, kind)
+    if (level !== undefined) {
       path.length = Math.min(path.length, level - 1)
       while (path.length < level - 1) {
         path.push('')
@@ -72,7 +72,7 @@ export function linePlaces(markdown: string): Map<string, string> {
     }
     sectionAt.push(section)
   })
-  const found = itemsAt(lines)
+  const found = itemsAt(lines, kind)
   // Counted by key alone, not by box too: a press that sets the box of one of two identical lines then never
   // refuses a press on the other before the next scan.
   const sameKey = new Map<string, number>()
@@ -90,7 +90,7 @@ export function linePlaces(markdown: string): Map<string, string> {
     const twins = sameKey.get(storedKey(key))!
     // A line with identical twins also carries the lines drawn around it: two blocks swapped, or one deleted
     // and a copy added, keep the count and the rank, but not the neighbors, so a stale press is refused.
-    places.set(key, `${sectionAt[one.at]!}\0${rank}\0${twins}${twins > 1 ? `\0${neighbors(lines, one.at)}` : ''}`)
+    places.set(key, `${sectionAt[one.at]!}\0${rank}\0${twins}${twins > 1 ? `\0${neighbors(lines, one.at, kind)}` : ''}`)
   }
 
   return places
@@ -101,8 +101,8 @@ export function linePlaces(markdown: string): Map<string, string> {
  * box read as open: a press that sets the box of one of two identical lines changes no neighbor of the
  * other, so it never refuses a press on the other before the next scan (as the count by key alone).
  */
-function neighbors(lines: readonly string[], at: number): string {
-  const drawn = (index: number) => lines[index]!.replace(/^(\s*[-*+] )\[[ xX~>]\]/, '$1[ ]').trimEnd()
+function neighbors(lines: readonly string[], at: number, kind: TodoKind): string {
+  const drawn = (index: number) => openedLine(lines[index]!, kind).trimEnd()
   let before = at - 1
   while (before >= 0 && lines[before]!.trim() === '') {
     before -= 1
@@ -121,11 +121,11 @@ function neighbors(lines: readonly string[], at: number): string {
  * (`textSum`). In sections marked by prose lines (`Frontend:`) one identical line can go and another
  * come elsewhere with the count and the rank unchanged; only the text tells.
  */
-export function drawnPlaces(markdown: string): Map<string, DrawnPlace> {
-  const places = linePlaces(markdown)
-  const sum = textSum(markdown)
+export function drawnPlaces(markdown: string, kind: TodoKind = 'md'): Map<string, DrawnPlace> {
+  const places = linePlaces(markdown, kind)
+  const sum = textSum(markdown, kind)
   const out = new Map<string, DrawnPlace>()
-  const noId = new Set(itemsAt(markdown.split('\n')).filter(one => one.item.id === undefined).map(one => itemKey(one.item)))
+  const noId = new Set(itemsAt(markdown.split('\n'), kind).filter(one => one.item.id === undefined).map(one => itemKey(one.item)))
   for (const [key, place] of places) {
     out.set(key, noId.has(key) && countOf(place) > 1 ? { place, sum } : { place })
   }
@@ -141,17 +141,17 @@ const countOf = (place: string | undefined): number => Number(place?.split('\0')
  * board knew it. A key that is unique in the file, then and now, needs no place: an edit
  * elsewhere (a parent heading added) never refuses it. A drawn `sum` must match the text now.
  */
-function isSame(markdown: string, key: string, hit: { item: { text: string; status: ItemStatus } }, drawn: DrawnItem): boolean {
+function isSame(markdown: string, key: string, hit: { item: { text: string; status: ItemStatus } }, drawn: DrawnItem, kind: TodoKind): boolean {
   if (hit.item.text !== drawn.text || hit.item.status !== drawn.status) {
     return false
   }
-  if (drawn.sum !== undefined && textSum(markdown) !== drawn.sum) {
+  if (drawn.sum !== undefined && textSum(markdown, kind) !== drawn.sum) {
     return false
   }
   if (drawn.place === undefined) {
     return true
   }
-  const now = linePlaces(markdown).get(key)
+  const now = linePlaces(markdown, kind).get(key)
 
   return now === drawn.place || (countOf(now) === 1 && countOf(drawn.place) === 1)
 }
@@ -163,28 +163,29 @@ function isSame(markdown: string, key: string, hit: { item: { text: string; stat
  * from a board that is out of date could name the neighbor line, also one in another section: this
  * check refuses it.
  */
-export function isDrawnLine(markdown: string, key: string, drawn: DrawnItem): boolean {
-  const hit = itemsAt(markdown.split('\n')).find(one => itemKey(one.item) === key)
+export function isDrawnLine(markdown: string, key: string, drawn: DrawnItem, kind: TodoKind = 'md'): boolean {
+  const hit = itemsAt(markdown.split('\n'), kind).find(one => itemKey(one.item) === key)
 
-  return hit !== undefined && isSame(markdown, key, hit, drawn)
+  return hit !== undefined && isSame(markdown, key, hit, drawn, kind)
 }
 
 /**
  * The todo file with one item's box set to `status`: the first checkbox line, outside code fences, whose item has `key`.
  * Undefined when no line has it, its box already says so, or (with `drawn`) it is not the line the board drew.
  */
-export function setBox(markdown: string, key: string, status: ItemStatus, drawn?: DrawnItem): string | undefined {
+export function setBox(markdown: string, key: string, status: ItemStatus, drawn?: DrawnItem, kind: TodoKind = 'md'): string | undefined {
   const lines = markdown.split('\n')
   // Read as the parser reads the whole file: a fenced line is no item, and a line that only names another ticket has no ID of its own.
-  const hit = itemsAt(lines).find(one => itemKey(one.item) === key)
+  const hit = itemsAt(lines, kind).find(one => itemKey(one.item) === key)
   const line = hit === undefined ? undefined : lines[hit.at]
   if (hit === undefined || line === undefined || hit.item.status === status) {
     return undefined
   }
-  if (drawn !== undefined && !isSame(markdown, key, hit, drawn)) {
+  if (drawn !== undefined && !isSame(markdown, key, hit, drawn, kind)) {
     return undefined
   }
-  lines[hit.at] = line.replace(/\[[ xX~>]\]/, `[${BOXES[status]}]`)
+  // A Markdown line changes its box; an HTML item only its input tag, to the canonical one (`withBox`).
+  lines[hit.at] = withBox(line, kind, BOXES[status])
 
   return lines.join('\n')
 }

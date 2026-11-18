@@ -157,3 +157,15 @@ test('no record: a copied source holding its own `## From` heading is found as c
   // The limit: the user heading is the last line of the source.
   expect(retryStep(undefined, 'notes', ['- [ ] #T1 a', '## From x'], '## From notes\n\n- [ ] #T1 a\n## From x\n')).toBe('empty')
 })
+
+// ----------------------------------------------------------------
+
+test('retryStep reads a landed HTML copy with a box set and an ID put in front as the copy, in a .html target', () => {
+  const lines = ['<li><input type="checkbox"> a</li>', '<li><input type="checkbox"> b</li>']
+  const target = '## From x/TODO.html\n\n<li><input type="checkbox" checked> #T0005 a</li>\n<li><input type="checkbox"> b</li>\n'
+  expect(retryStep(undefined, 'x/TODO.html', lines, target, 'html')).toBe('empty')
+  // Read as a .md target the HTML lines are prose, so the edited line is no copy.
+  expect(retryStep(undefined, 'x/TODO.html', lines, target, 'md')).toBe('copy')
+  // The archive took the first ticket out: the copy shortened by a whole block is no new source.
+  expect(retryStep(undefined, 'x/TODO.html', lines, '## From x/TODO.html\n\n<li><input type="checkbox"> b</li>\n', 'html')).toBe('changed')
+})

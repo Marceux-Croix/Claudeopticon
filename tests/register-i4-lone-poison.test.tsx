@@ -179,8 +179,16 @@ for (const [label, kind, isGivenUp] of [['empty reply', 'empty', true], ['unpars
     })
     const prompts = rawModel(on, () => kind)
     await openPane($)
-    for (let i = 0; i < 8640; i += 1) {
+    // Speed: the mod's 1 s ticker costs one run per simulated second, so the 24 h walk (86 400 runs)
+    // is cut to the horizon that proves the property. The longest wait between sorts is SORT_EVERY_MS * 2^6 =
+    // 1920 s. Given-up states: the item is out of the queue after its 2nd call, and a 3rd call would come
+    // within one longest wait, so 4 h (7.5 longest waits) shows none. Failed-call state: runs until more than
+    // 20 calls were made (the assertion below), then one more hour (1.9 longest waits) with no toast.
+    const stop = isGivenUp ? 1500 : 8640
+    let extra = 0
+    for (let i = 0; i < stop && extra < 360; i += 1) {
       await clock.advance(10_000)
+      extra += !isGivenUp && prompts.length > 20 ? 1 : 0
     }
     if (isGivenUp) {
       expect(prompts.length).toBe(2)

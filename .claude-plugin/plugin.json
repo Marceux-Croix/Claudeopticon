@@ -1,6 +1,6 @@
 {
   "name": "claudeopticon",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "A ticket system for Claude Code: your todo as a live ticket board you can hand to Claude, with each step Claude takes and each helper agent linked to the tickets it works on.",
   "author": {
     "name": "Marceux-Croix",
@@ -21,6 +21,12 @@
       "type": "boolean",
       "title": "Todo rules",
       "description": "Give Claude the mod's todo and ticket rules as context, and with each prompt the next free ticket IDs and the tickets still in progress. Turning it off stops all three. Turn off if your CLAUDE.md has its own.",
+      "default": true
+    },
+    "foundIssues": {
+      "type": "boolean",
+      "title": "Found-issues rule",
+      "description": "When a turn ends with a ticket it made still open (no checked box, no (blocked: ...), (arch: ...) or (noted: ...)), send Claude a prompt to fix it. Turn off if a hook of your own does this.",
       "default": true
     }
   }

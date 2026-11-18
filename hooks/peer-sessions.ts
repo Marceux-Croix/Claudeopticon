@@ -1,7 +1,7 @@
 /**
  * Peer sessions: which tickets other Claude Code sessions on the same repo hold. Each session keeps a
  * presence record in the shared store (`presence:<session id>`); every session reads its peers' records
- * and marks their tickets "Peer owned", with "<name> owns this" in the hover tip on its board. Pure logic only: the store calls live in register.tsx.
+ * and marks their tickets "Peer owned", with "<name> owns this" in the hover tip on its board. Pure logic only: the store calls live in peer-sync.ts.
  */
 
 import type { AgentRow, TodoFile } from '../types'

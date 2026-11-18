@@ -324,16 +324,19 @@ const unclosedRuns = (k: number): string => {
   return parts.join('')
 }
 
-/** The median time of `runs` calls of `f`, ms. */
-function medianMs(f: () => void, runs: number): number {
-  const times: number[] = []
+/** The least time, ms, of each of two jobs over `runs` interleaved calls. */
+function leastMs(small: () => void, large: () => void, runs: number): [number, number] {
+  // The two sizes run in turn, so a load spike from another process hits both; the least time of each is its cost.
+  const least: [number, number] = [Infinity, Infinity]
   for (let i = 0; i < runs; i += 1) {
-    const t0 = performance.now()
-    f()
-    times.push(performance.now() - t0)
+    for (const [at, job] of [small, large].entries()) {
+      const from = performance.now()
+      job()
+      least[at] = Math.min(least[at]!, performance.now() - from)
+    }
   }
 
-  return times.sort((a, b) => a - b)[Math.floor(runs / 2)]!
+  return least
 }
 
 /**
@@ -357,10 +360,10 @@ test('codeSpansOut is linear on unclosed backtick runs: a 1 MB adversarial line,
   // At the limit: the whole 1 MB line, with no span closed, is unchanged; one backtick at its very end closes the first run, so all from it is blanked.
   expect(codeSpansOut(big)).toBe(big)
   expect(codeSpansOut(big + TICK)).toBe(`- [ ] x ${' '.repeat(big.length - 7)}`)
-  // The ratio: warm up, then the median of 5 runs each.
-  medianMs(() => codeSpansOut(quarter), 3)
-  const quarterMs = Math.max(medianMs(() => codeSpansOut(quarter), 5), 0.5)
-  const bigMs = medianMs(() => codeSpansOut(big), 5)
+  // The ratio: warm up, then the least of 7 interleaved runs each (a median failed under machine load).
+  codeSpansOut(quarter)
+  const [quarterRaw, bigMs] = leastMs(() => codeSpansOut(quarter), () => codeSpansOut(big), 7)
+  const quarterMs = Math.max(quarterRaw, 0.5)
   expect(bigMs / quarterMs).toBeLessThan(6)
   // A wide wall-clock bound beside the ratio: the old scan took seconds here.
   expect(bigMs).toBeLessThan(1500)
@@ -384,4 +387,52 @@ test('a checkbox line holding U+2028 or U+2029 is an item, the character read as
   expect(CHECKBOX.exec('- [ ] a\r')).toBeNull()
   expect(parseTodo(`- [ ] a\r\n- [ ] b${ls}c\r`).map(item => item.text)).toEqual(['a', 'b c'])
   expect(parseTodo(`\`\`\`\n- [ ] in${ls}code\n\`\`\`\n- [ ] #T0004 real`).map(item => item.id)).toEqual(['T0004'])
+})
+
+// ----------------------------------------------------------------
+// Property: a .html file reads HTML checkbox items with their box, decoded text and ID, as a Markdown item; a .md file does not.
+
+const HTML_TODO = [
+  '<h2>Core</h2>',
+  '<ul>',
+  '  <li><input type="checkbox"> #T0001 Open &amp; fine</li>',
+  '  <li><input type="checkbox" data-state="queued"> #T0002 Queued</li>',
+  '  <li><input type="checkbox" data-state="in-progress"> In progress, see #T0001</li>',
+  '  <li><input type="checkbox" checked> #T0003 Done &lt;b&gt; &quot;q&quot; &#39;s&#39;</li>',
+  '  <!-- <li><input type="checkbox"> hidden</li>',
+  '  <li><input type="checkbox"> still hidden</li> -->',
+  '</ul>',
+  // A blank line ends the CommonMark HTML block, so the Markdown line after it is an item, as in 1.0.9.
+  '',
+  '- [ ] #T0004 markdown',
+].join('\n')
+
+test('parseTodo reads HTML items in a .html file: every box state, decoded text, IDs and references', () => {
+  expect(parseTodo(HTML_TODO, 'html')).toEqual([
+    { text: '#T0001 Open & fine', status: 'pending', id: 'T0001' },
+    { text: '#T0002 Queued', status: 'queued', id: 'T0002' },
+    // A line that only names another ticket's leading ID has no ID of its own.
+    { text: 'In progress, see #T0001', status: 'in_progress' },
+    { text: '#T0003 Done <b> "q" \'s\'', status: 'completed', id: 'T0003' },
+    { text: '#T0004 markdown', status: 'pending', id: 'T0004' },
+  ])
+})
+
+test('a .md file reads no HTML item: only its Markdown checkbox lines, as before', () => {
+  expect(parseTodo(HTML_TODO, 'md')).toEqual(parseTodo(HTML_TODO))
+  expect(parseTodo(HTML_TODO, 'md').map(item => item.text)).toEqual(['#T0004 markdown'])
+  // An HTML item line that CommonMark reads as paragraph text (indented under a prose line) is still no item in a .md file.
+  const paragraph = 'Notes:\n    <li><input type="checkbox"> #T0005 in a paragraph</li>'
+  expect(parseTodo(paragraph, 'md')).toEqual([])
+  expect(parseTodo(paragraph, 'html').map(item => item.id)).toEqual(['T0005'])
+  expect(lineOwnIds(HTML_TODO.split('\n'), new Set(), 'html')).toEqual([undefined, undefined, 'T0001', 'T0002', undefined, 'T0003', undefined, undefined, undefined, undefined, 'T0004'])
+})
+
+test('a Markdown line right under an HTML line stays in its CommonMark HTML block in a .html file, as in 1.0.9', () => {
+  expect(parseTodo('<li><input type="checkbox"> a</li>\n- [ ] b', 'html').map(item => item.text)).toEqual(['a'])
+})
+
+test('two HTML lines that lead with one ID: the second has none; a text with only an entity ID word has none', () => {
+  const lines = ['<li><input type="checkbox"> #T0001 a</li>', '<li><input type="checkbox"> #T0001 b</li>', '<li><input type="checkbox"> it&#39;s &#x27; done</li>']
+  expect(lineOwnIds(lines, new Set(), 'html')).toEqual(['T0001', undefined, undefined])
 })

@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { applyRefRenames } from '../hooks/consolidate-text'
-import { removeDuplicateTickets } from '../hooks/duplicate-tickets'
+import { foldParts, removeDuplicateTickets, renameRefs } from '../hooks/duplicate-tickets'
 
 test('a subtask or a ticket with lines under it is never a duplicate, and a leading ID is never renamed', () => {
   const tree = removeDuplicateTickets(['- [ ] #T1 Parser', '  - [ ] #T2 Write tests', '- [ ] #T3 Lexer', '  - [ ] #T4 Write tests', 'See #T4'].join('\n'))
@@ -96,4 +96,51 @@ test('equal ticket text under two `## From` sections is two tickets, never folde
   expect(within.removed).toEqual([{ id: 'T3', kept: 'T2' }])
   // The excluded population: no sections at all still folds.
   expect(removeDuplicateTickets('- [ ] #T1 Fix\n- [ ] #T2 Fix\n').removed).toEqual([{ id: 'T2', kept: 'T1' }])
+})
+
+// ----------------------------------------------------------------
+// Property: Delete duplicate tickets folds identical HTML items (tag, text and tail letter for letter, past the ID) in
+// a .html file, and only top-level ones without subtasks; a .md file never folds an HTML line.
+
+test('removeDuplicateTickets folds an indented HTML twin and points references at the kept one', () => {
+  const text = ['<ul>', '  <li><input type="checkbox"> #T0001 Fix</li>', '  <li><input type="checkbox"> #T0002 Fix</li>', '  <li><input type="checkbox" checked> #T0003 Fix</li>', '  <li><input type="checkbox"> #T0004 see #T0002</li>', '</ul>'].join('\n')
+  const out = removeDuplicateTickets(text, 'html')
+  expect(out.removed).toEqual([{ id: 'T0002', kept: 'T0001' }])
+  expect(out.text).toBe(['<ul>', '  <li><input type="checkbox"> #T0001 Fix</li>', '  <li><input type="checkbox" checked> #T0003 Fix</li>', '  <li><input type="checkbox"> #T0004 see #T0001</li>', '</ul>'].join('\n'))
+  expect(removeDuplicateTickets(text, 'md').removed).toEqual([])
+})
+
+test('an HTML ticket with a subtask, or a subtask, is never folded; a numbered copy is', () => {
+  const parent = ['<li><input type="checkbox"> #T0001 Fix</li>', '  <li><input type="checkbox"> #T0005 sub</li>', '<li><input type="checkbox"> #T0002 Fix</li>', '  <li><input type="checkbox"> #T0006 sub</li>'].join('\n')
+  expect(removeDuplicateTickets(parent, 'html').removed).toEqual([])
+  const numbered = ['<li><input type="checkbox"> #T0005 Fix the parser</li>', '<li><input type="checkbox"> #T0007 #T0005 Fix the parser</li>'].join('\n')
+  expect(removeDuplicateTickets(numbered, 'html').removed).toEqual([{ id: 'T0007', kept: 'T0005' }])
+  expect(foldParts('<li><input type="checkbox"> #T0005 Fix</li>  ', 'html')).toEqual({ key: '<li><input type="checkbox"> # Fix</li>', id: 'T0005' })
+})
+
+// ----------------------------------------------------------------
+// Property: renameRefs in a .html file leaves an ID in a comment closed on its line, as a .md file does; a ticket
+// keeps its own leading ID.
+
+test('renameRefs leaves an ID in a comment of a .html line, and renames the one outside it', () => {
+  const text = ['- [ ] #T0001 a', '<!-- e.g. - [ ] #T0001 example -->', ''].join('\n')
+  for (const kind of ['md', 'html'] as const) {
+    expect([kind, renameRefs(text, { t0001: 'T0009' }, kind)]).toEqual([kind, text])
+  }
+  // The Markdown line follows a blank line: right under the `<li>` line it would be in that line's HTML block.
+  const html = ['<li><input type="checkbox"> #T0002 see #T0001 <!-- #T0001 --></li>', '', '- [ ] #T0003 after #T0001 <pre>#T0001</pre>'].join('\n')
+  expect(renameRefs(html, { t0001: 'T0009' }, 'html')).toBe(['<li><input type="checkbox"> #T0002 see #T0009 <!-- #T0001 --></li>', '', '- [ ] #T0003 after #T0009 <pre>#T0001</pre>'].join('\n'))
+  expect(applyRefRenames('<li><input type="checkbox"> #T0001 a #T0001</li>\r', { t0001: 'T0009' }, 'html', [])).toBe('<li><input type="checkbox"> #T0001 a #T0009</li>\r')
+})
+
+// ----------------------------------------------------------------
+// Property: an HTML ticket whose block holds a child in a `<ul>` at its own indent is never folded as a duplicate.
+
+test('removeDuplicateTickets keeps an HTML twin whose nested list holds a child', () => {
+  const box = '<input type="checkbox">'
+  const text = ['<ul>', `  <li>${box} #T0005 Fix</li>`, `  <li>${box} #T0006 Fix</li>`, '  <ul>', `    <li>${box} #T0007 child</li>`, '  </ul>', '</ul>'].join('\n')
+  expect(removeDuplicateTickets(text, 'html').removed).toEqual([])
+  // With no nested list, the twin goes.
+  const flat = ['<ul>', `  <li>${box} #T0005 Fix</li>`, `  <li>${box} #T0006 Fix</li>`, '</ul>'].join('\n')
+  expect(removeDuplicateTickets(flat, 'html').removed).toEqual([{ id: 'T0006', kept: 'T0005' }])
 })

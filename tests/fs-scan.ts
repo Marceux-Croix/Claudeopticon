@@ -15,7 +15,8 @@ export type AllowedCall = { file: string; fn: string; line: string; reason: stri
 /** One setting of the scan: the method, the one function every call goes through, the allowed ones, and the words of a finding. */
 export type ScanSpec = {
   method: string
-  layer: { file: string; fn: string }
+  /** The file or files that hold the layer function. */
+  layer: { file: string | readonly string[]; fn: string }
   allowed: readonly AllowedCall[]
   /** The noun of one call: `read`, `write`. */
   noun: string
@@ -452,7 +453,7 @@ export function unroutedCalls(sources: Readonly<Record<string, string>>, spec: S
       }
       // Read on code-only lines: a comment line at column 0 that names the layer function never renames the scope.
       const fn = enclosing(codeLines, at)
-      if (file === spec.layer.file && fn === spec.layer.fn && within(fn, at)) {
+      if (([] as readonly string[]).concat(spec.layer.file).includes(file) && fn === spec.layer.fn && within(fn, at)) {
         continue
       }
       const line = lines[at]!.trim()

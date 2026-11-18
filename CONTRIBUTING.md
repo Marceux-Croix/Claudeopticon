@@ -24,7 +24,7 @@ node --import ./scripts/ts-resolve.mjs scripts/check-writes.ts
 - `check-reads.ts` fails on any read of a todo file that does not go through `readTodo`, any read that turns a failure into an empty value, and any way around the `fs.read(` text.
 - `check-writes.ts` fails on any write of a todo file that does not go through `writeIfUnchanged`, and any way around the `fs.write(` text.
 
-Two more checks run by hand, when you change the matching part. `check-modules.ts` fails when a `hooks/*.ts` file is missing from the module list of CONTRIBUTING.md or the table in `docs/how-it-works.md`. `check-versions.ts` fails when `plugin.json` and `marketplace.json` name different versions. `claim-race.ts` races real processes over the ID claim folders (`node --import ./scripts/ts-resolve.mjs scripts/claim-race.ts 300` and `... scripts/claim-race.ts --layouts 200`; each exits 0, and `--old` exits 1 to show that the check finds the defect).
+Two more checks run by hand, when you change the matching part. `check-modules.ts` fails when a `hooks/*.ts` or `hooks/*.tsx` file is missing from the module list of CONTRIBUTING.md or the table in `docs/how-it-works.md`. `check-versions.ts` fails when `plugin.json` and `marketplace.json` name different versions. `claim-race.ts` races real processes over the ID claim folders (`node --import ./scripts/ts-resolve.mjs scripts/claim-race.ts 300` and `... scripts/claim-race.ts --layouts 200`; each exits 0, and `--old` exits 1 to show that the check finds the defect).
 
 The two scripts run on plain Node 22.18 or later. `scripts/ts-resolve.mjs` adds the `.ts` to relative imports, so there is no `npx` and no download. A new read or write of a file that is no todo file goes in the allowed list in `tests/read-scan.ts` or `tests/write-scan.ts`, with its reason.
 
@@ -34,16 +34,24 @@ Add a test for each change in behavior, in the test file of the module you chang
 
 Each file in `hooks/` has one responsibility, which its first line states. Before you add code, find the module for it. Put a new responsibility in a new file, with its own test file.
 
-- `register.tsx` is the hooks module that `hooks.json` loads. It holds the hooks, the tools, every function that calls the engine through `$`, and the session state those functions write. `claude plugin validate` follows `$` only into functions in that file. Never add pure logic to it.
+- `register.tsx` is the hooks module that `hooks.json` loads. It only wires: it registers the hooks and calls into the modules, and it holds the constants that `claude plugin validate` reads only from that file (the tool names and the pane ID). Never add logic to it.
+- A function that calls the engine takes `$` as its first argument and lives in the module of its responsibility. `claude plugin validate` follows `$` into the mod's own files, and it refuses a `$` put in an object or a closure state.
+- Session state that more than one module reads or writes is the object `S` in `state.ts` (a value that one module alone uses stays in that module). Never keep a copy of a value: read `S.name` at the point of use. Keep the imports acyclic.
 - The other modules hold pure logic, types and constants, and never take `$`.
-- Todo text: `todo-markdown.ts`, `markdown-blocks.ts`, `html-blocks.ts`, `example-end.ts`, `todo-read.ts`, `unread-files.ts`, `unread-folders.ts`, `ticket-ids.ts`, `numbering.ts`, `archive-blocks.ts`, `consolidate-text.ts`, `consolidate-marks.ts`, `told-notes.ts`, `duplicate-tickets.ts`, `ticket-boxes.ts`, `ticket-lookup.ts`, `stop-queue.ts`.
+- Todo text: `todo-markdown.ts`, `markdown-blocks.ts`, `html-blocks.ts`, `html-items.ts`, `html-regions.ts`, `item-lines.ts`, `item-tree.ts`, `example-end.ts`, `todo-read.ts`, `unread-files.ts`, `unread-folders.ts`, `ticket-ids.ts`, `numbering.ts`, `archive-blocks.ts`, `consolidate-text.ts`, `consolidate-marks.ts`, `told-notes.ts`, `duplicate-tickets.ts`, `ticket-boxes.ts`, `ticket-lookup.ts`, `stop-queue.ts`.
 - ID claims: `id-blocks.ts`, `block-claim.ts`, `git-file.ts`.
 - Folders, paths and limits: `repo-folders.ts`, `todo-file-names.ts`, `path-forms.ts`, `platform-commands.ts`, `write-lock.ts`, `time-limit.ts`, `backoff.ts`, `key-prune.ts`, `clock-elapsed.ts`.
 - Agents and links: `links.ts`, `claim-score.ts`, `claim-keeping.ts`, `agent-match.ts`, `agent-identity.ts`, `agent-colors.ts`, `agent-respawn.ts`, `agent-ends.ts`, `row-equality.ts`, `progress-report.ts`, `tool-calls.ts`, `secrets.ts`, `peer-sessions.ts`.
-- Notes and prompts for Claude: `claude-notes.ts`, `note-quotes.ts`, `ticket-prompts.ts`, `rules.ts`, `deferred-tickets.ts`, `plugin-version.ts`.
+- Notes and prompts for Claude: `claude-notes.ts`, `note-quotes.ts`, `ticket-prompts.ts`, `rules.ts`, `found-issues.ts`, `deferred-tickets.ts`, `plugin-version.ts`, `status-report.ts`, `status-command.ts`.
 - The view: `view-model.ts`, `categories.ts`, `sort-queue.ts`, `ticket-actions.ts`, `ticket-spaces.ts`, `orchestrator-history.ts`, `terminal-text.ts`, `item-keys.ts`, `normalize.ts`.
 - The store: `kept-records.ts`, `token-usage.ts`.
 - The cards: `card-types.ts`, `card-stage.ts`, `card-text.ts`, `card-format.ts`, `card-parts.ts`, `series.ts`, `card-end-labels.ts`, `card-end-dots.ts`, `hero-card.ts`, `todo-cards.ts`, `agent-cards.ts`, `agent-room.ts`.
+
+- Engine layer, the hooks and the pane: `agent-spawn-hook.ts`, `progress-note.ts`, `progress-tool-hook.ts`, `prompt-submit-hook.ts`, `session-start-hook.ts`, `tool-call-hook.ts`, `tool-definitions.ts`, `turn-hooks.ts`, `pane-clock.ts`, `pane-constants.ts`, `pane-kit.ts`, `pane-redraw.ts`, `terminal-pane.tsx`, `desktop-pane.tsx`, `board-files.tsx`, `pane-render.tsx`, `toasts.ts`, `todo-heading.ts`, `tick-loop.ts`.
+- Engine layer, state and the store: `state.ts`, `store-access.ts`, `kept-store.ts`, `agent-rows.ts`, `session-roster.ts`, `series-trace.ts`, `token-burn.ts`, `pending-notes.ts`, `queued-notes.ts`, `told-store.ts`, `copy-marks.ts`.
+- Engine layer, folders, scans and file access: `fs-bounds.ts`, `global-folders.ts`, `folder-listing.ts`, `session-places.ts`, `todo-folders.ts`, `cut-ids.ts`, `todo-io.ts`, `path-trust.ts`, `todo-scan.ts`, `archive-folder.ts`.
+- Engine layer, todo actions: `archive.ts`, `consolidate.ts`, `consolidate-gates.ts`, `delete-empty.ts`, `delete-duplicates.ts`, `trash-files.ts`, `ticket-move.ts`, `ticket-numbering.ts`, `disk-ids.ts`, `id-claims.ts`, `id-reservations.ts`.
+- Engine layer, agents, peers, categories and tickets: `agent-matching.ts`, `agent-refresh.ts`, `orchestrator-tickets.ts`, `peer-sync.ts`, `category-book.ts`, `category-sort.ts`.
 
 The table in [How it works](docs/how-it-works.md#module-layout) gives the responsibility of each file.
 

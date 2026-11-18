@@ -35,3 +35,13 @@ test('endsInExample finds an open HTML block of types 1 to 5, and no type 6 or 7
   expect(endsInExample('- [ ] #T1 Fix\n\n<span>')).toBe(false)
   expect(endsInExample('- [ ] #T1 Fix\n\n> note')).toBe(false)
 })
+
+// ----------------------------------------------------------------
+
+test('endsInExample: a .html file that ends in an open comment or <pre> at any indent hides what comes after', () => {
+  expect(endsInExample('<ul>\n  <!-- open', 'html')).toBe(true)
+  expect(endsInExample('<ul>\n  <pre>', 'html')).toBe(true)
+  expect(endsInExample('<ul>\n  <!-- closed -->\n</ul>', 'html')).toBe(false)
+  // In a .md file the kind changes nothing.
+  expect(endsInExample('<ul>\n  <!-- open', 'md')).toBe(endsInExample('<ul>\n  <!-- open'))
+})

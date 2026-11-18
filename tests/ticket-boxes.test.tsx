@@ -4,6 +4,7 @@ import { movesNote } from '../hooks/claude-notes'
 import { itemKey } from '../hooks/item-keys'
 import { drawnPlaces, isDrawnLine, linePlaces, setBox, statusNamed, textSum } from '../hooks/ticket-boxes'
 import { parseTodo } from '../hooks/todo-markdown'
+import { HTML_BOX_TAGS } from '../hooks/html-items'
 
 test('setBox sets one item\'s box by its key, and leaves the rest of the file as it was', async () => {
   const file = '# Plan\n\n- [ ] #T1 First\n- [ ] **Second** thing\nprose\n- [~] #T3 Third'
@@ -255,4 +256,48 @@ test('linePlaces reads an indented heading as a section, and a 4-space line as c
   expect(linePlaces('## A\n####### seven\n- [ ] Fix').get('fix')).toBe(linePlaces('## A\n- [ ] Fix').get('fix'))
   // A heading with no text counts.
   expect(linePlaces('#\n- [ ] Fix').get('fix')).not.toBe(linePlaces('- [ ] Fix').get('fix'))
+})
+
+// ----------------------------------------------------------------
+// Property: Mark done, the move buttons and move_ticket write an HTML item's input tag only, to the canonical form;
+// the drawn places and sums of a .html file read HTML items and `<hN>` headings.
+
+const HTML_BOARD = ['<h2>A</h2>', '<li><INPUT TYPE="checkbox" checked="checked"> twin</li>', '<h2>B</h2>', '<li><input type="checkbox"> twin</li>', "<li><input type='checkbox' data-state='queued'/> #T0002 q &amp; a</li>  "].join('\n')
+
+test('setBox rewrites only the input tag of the keyed HTML item, for every status', () => {
+  const items = parseTodo(HTML_BOARD, 'html')
+  const q = items.find(item => item.id === 'T0002')!
+  const want = { pending: ' ', queued: '>', in_progress: '~', completed: 'x' } as const
+  for (const status of ['pending', 'in_progress', 'completed'] as const) {
+    const next = setBox(HTML_BOARD, itemKey(q), status, undefined, 'html')!
+    const lines = next.split('\n')
+    expect(lines[4]).toBe(`<li>${HTML_BOX_TAGS[want[status]].slice(0, -1)}/> #T0002 q &amp; a</li>  `)
+    expect(lines.filter((_, at) => at !== 4)).toEqual(HTML_BOARD.split('\n').filter((_, at) => at !== 4))
+  }
+  // Already queued: no write.
+  expect(setBox(HTML_BOARD, itemKey(q), 'queued', undefined, 'html')).toBeUndefined()
+  // In a .md file the HTML line is no item: nothing to set.
+  expect(setBox(HTML_BOARD, itemKey(q), 'completed', undefined, 'md')).toBeUndefined()
+})
+
+test('the places of a .html file part twins by their <hN> heading, and a stale press is refused', () => {
+  const places = linePlaces(HTML_BOARD, 'html')
+  const twins = parseTodo(HTML_BOARD, 'html').filter(item => item.text === 'twin')
+  expect(twins.map(item => item.status)).toEqual(['completed', 'pending'])
+  const [a, b] = twins.map(item => places.get(itemKey(item))!)
+  expect(a!.split('\u0002')[0]).toBe('\u0001<h2>A</h2>')
+  expect(b!.split('\u0002')[0]).toBe('\u0001<h2>B</h2>')
+  const drawn = drawnPlaces(HTML_BOARD, 'html').get(itemKey(twins[1]!))!
+  expect(isDrawnLine(HTML_BOARD, itemKey(twins[1]!), { text: 'twin', status: 'pending', ...drawn }, 'html')).toBe(true)
+  // The two sections swapped: the line the key names now sits under another heading.
+  const swapped = HTML_BOARD.split('\n')
+  ;[swapped[0], swapped[2]] = [swapped[2]!, swapped[0]!]
+  expect(isDrawnLine(swapped.join('\n'), itemKey(twins[1]!), { text: 'twin', status: 'pending', ...drawn }, 'html')).toBe(false)
+})
+
+test('textSum of a .html file reads every HTML box as open, so a box press keeps the sum', () => {
+  const done = HTML_BOARD.replace('<input type="checkbox"> twin', '<input type="checkbox" checked> twin')
+  expect(textSum(done, 'html')).toBe(textSum(HTML_BOARD, 'html'))
+  expect(textSum(done, 'md')).not.toBe(textSum(HTML_BOARD, 'md'))
+  expect(textSum('- [x] a\n- [ ] b', 'html')).toBe(textSum('- [x] a\n- [ ] b'))
 })

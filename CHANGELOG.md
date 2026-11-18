@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.1.0
+
+### Changes
+
+- The found-issues rule is part of the mod (option `foundIssues`, on by default). When a turn ends with an answer and a ticket made in that turn is still open (not checked off, and no `(blocked: ...)`, `(arch: ...)` or `(noted: ...)` in its line), the mod sends Claude one prompt that names it, at most twice per prompt of yours. It skips an in-progress ticket with an agent note, every ticket of a prompt that asks to add, plan or order tickets, and a ticket the mod only numbered. The snapshot is a fresh scan after your prompt, so a ticket on disk before it never counts (#T00BV, #T00CA to #T00CF).
+- `/claudeopticon-status` reports the loaded version, the project and repo roots, each todo folder and file with its item counts and kind, the option values, the time of the last scan and any unread files: the check after a reload.
+- The rules text is about 4,900 characters (about 1,225 tokens), down from 5,810, with every rule kept.
+- `hooks/register.tsx` is split from 6,628 lines into about 60 modules, one responsibility each; it now only wires the hooks. No behavior change.
+- The test suite runs in about 85 s, down from about 240 s; the timing tests are steady under machine load.
+- A `.html` todo file also reads HTML checkbox items, so it reads well in a browser: one `<li><input type="checkbox"> text</li>` line per item, the box in the tag (`checked` done, `data-state="queued"`, `data-state="in-progress"`). Numbering, the archive (under the same `<h1>` to `<h6>` heading), Consolidate, Delete duplicate tickets, the ticket buttons and move_ticket work on them; a box change rewrites only the input tag, to one canonical form, and keeps the tag's other attributes. A `.md` file never reads an HTML item. Consolidate leaves a `.html` source with HTML items that a central `TODO.md` would not read, and names it.
+
+### Fixes
+
+- Consolidate counted no checkbox line of a CRLF file in the central folder (`itemLines` matched the line with its carriage return): such a file with items was not merged, and its IDs did not count as used.
+- A `.html` line with two `<li>` items read as one item, so a done first box archived an open second ticket with it. A line whose text holds `<li`, `</li>` or `<input` is now no item, and it holds the ticket block it is in.
+- An open HTML subtask whose `<input` tag was split over two lines did not hold back its done parent. A block line that holds `<input`, or `type="checkbox"` with no `<input` before it, and is no done item now counts as open.
+- A prose line right under a done HTML item went to the archive with it, read as wrapped text. An HTML item now ends at its own `</li>`.
+- The usual HTML nesting (`<ul>` at the parent `<li>`'s indent, the child `<li>` deeper) did not hold back a done parent with an open child, and the child was archived as a ticket of its own. Such a `<ul>` or `<ol>` line, and the close that matches it, are now part of the parent's block; Delete duplicate tickets no longer folds such a parent.
+- In a `.html` file, a Markdown checkbox or heading line inside a comment opened mid-line (`text <!--`) read as a live ticket. It is now an example.
+- In a `.html` file, `<!--` or `<pre` inside a quoted attribute value opened a region and hid every later item. A tag is now read to its end, past its quoted values, before the next region search.
+- Consolidate and Delete duplicate tickets renamed an ID inside an HTML comment closed on its line in a `.html` file (a `.md` file left it). They now rename only outside comments and `<pre>`, `<script>`, `<style>` and `<textarea>` elements.
+- A todo file's kind and the todo file test compared the extension with exact case, while the archive name lookup ignored it: the archive `TODO.HTML` of `todo.html` was written as Markdown, with its heading added twice. Both now ignore case, so an `X.MD` or `X.HTML` file is now a todo file that the board scans, numbers and archives.
+- A box change in a `.html` file wrote the tag's other attribute names in lower case and dropped a `/>` end. Names now keep their spelling, and a `/>` end stays.
+- The archive step read the archive's example mask once per heading group: 2,000 headings took 3.35 s. It now reads it a fixed number of times per write, so the work is linear in headings.
+
 ## 1.0.9
 
 ### Changes

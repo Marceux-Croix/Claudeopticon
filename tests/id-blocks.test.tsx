@@ -51,7 +51,7 @@ test('blockIds and firstBlock: IDs of the block only, above every taken ID in or
 // ---------------------------------------------------------------- remainder
 
 /**
- * A model of `freeIds` (register.tsx) with the real block rules, ported from the probe
+ * A model of `freeIds` (id-claims.ts) with the real block rules, ported from the probe
  * nodeprobe/gaps.ts: each session keeps its block and its given IDs; one claim folder, made with an
  * atomic create; every ID given is seen by the other session at once (a store sync or a file).
  */

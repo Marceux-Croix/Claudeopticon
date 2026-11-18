@@ -6,10 +6,14 @@
 
 import type { TodoItem, TodoStatus } from '../types'
 import { itemKey } from './item-keys'
-import { bare, CHECKBOX, exampleMask } from './markdown-blocks'
+import { decodeEntities } from './html-items'
+import { itemParts, lineMask, type ItemParts, type TodoKind } from './item-lines'
+import { bare } from './markdown-blocks'
 
 export { bare, CHECKBOX, exampleMask, expandTabs, FENCE, fenceOpens, HEADING_LINE } from './markdown-blocks'
 export type { Fence } from './markdown-blocks'
+export { headingLevel, indentOf, isItemLine, itemParts, lineMask, looksLikeItem, openedLine, withBox, withLeadingId } from './item-lines'
+export type { ItemParts, TodoKind } from './item-lines'
 
 /**
  * An item ID without its `#`: `T` and a digit, then digits and capital letters (`T12`, `T3C`,
@@ -23,6 +27,14 @@ export const ITEM_ID = new RegExp(`#(${ID_SRC})\\b`)
 /** An item's text as the pane shows it: Markdown bold and strike markers taken out, U+2028 and U+2029 read as spaces, spaces trimmed. */
 export function plainText(markdown: string): string {
   return markdown.replace(/\*\*|__|~~/g, '').replace(/[\u2028\u2029]/g, ' ').trim()
+}
+
+/**
+ * An item's text as the pane shows it, from its parts: a Markdown line's `plainText`; an HTML item's text
+ * with its entities decoded (`&amp; &lt; &gt; &quot; &#39;`), U+2028 and U+2029 read as spaces, trimmed.
+ */
+export function itemText(parts: ItemParts): string {
+  return parts.isHtml ? decodeEntities(parts.text).replace(/[\u2028\u2029]/g, ' ').trim() : plainText(parts.text)
 }
 
 /** The item's leading ID (no `#`): the one right after the box, at the start of its text. */
@@ -120,12 +132,12 @@ function ownId(text: string, owned: ReadonlySet<string>): string | undefined {
  * (or of `extra`, lowercase) leads with it and no earlier line already took it. So a reference line
  * above its ticket has no ID, and two lines that name one ID do not share a key.
  */
-export function lineOwnIds(lines: readonly string[], extra: ReadonlySet<string> = new Set()): (string | undefined)[] {
-  const isFenced = exampleMask(lines)
+export function lineOwnIds(lines: readonly string[], extra: ReadonlySet<string> = new Set(), kind: TodoKind = 'md'): (string | undefined)[] {
+  const isFenced = lineMask(lines, kind)
   const texts = lines.map((line, at) => {
-    const match = isFenced[at] === true ? null : CHECKBOX.exec(line)
+    const parts = isFenced[at] === true ? undefined : itemParts(line, kind)
 
-    return match === null ? undefined : plainText(match[2] ?? '')
+    return parts === undefined ? undefined : itemText(parts)
   })
   const owned = new Set(extra)
   for (const text of texts) {
@@ -161,22 +173,25 @@ export function lineOwnIds(lines: readonly string[], extra: ReadonlySet<string> 
   })
 }
 
-/** The checkbox items of a todo file's lines, each with the index of its line. Code fences and HTML comments hold none. */
-export function itemsAt(rawLines: readonly string[]): { at: number; item: TodoItem }[] {
+/**
+ * The checkbox items of a todo file's lines, each with the index of its line. Code fences and HTML comments
+ * hold none. `kind` is the file's (`todoKind`): a `.html` file also has HTML checkbox items.
+ */
+export function itemsAt(rawLines: readonly string[], kind: TodoKind = 'md'): { at: number; item: TodoItem }[] {
   const lines = rawLines.map(bare)
-  const isFenced = exampleMask(lines)
-  const ids = lineOwnIds(lines)
+  const isFenced = lineMask(lines, kind)
+  const ids = lineOwnIds(lines, new Set(), kind)
   const found: { at: number; item: TodoItem }[] = []
   const seen = new Map<string, number>()
   for (const [at, line] of lines.entries()) {
-    const match = isFenced[at] === true ? null : CHECKBOX.exec(line)
-    if (match === null) {
+    const parts = isFenced[at] === true ? undefined : itemParts(line, kind)
+    if (parts === undefined) {
       continue
     }
-    const box = match[1] ?? ' '
+    const box = parts.box
     const status: TodoStatus =
       box === 'x' || box === 'X' ? 'completed' : box === '~' ? 'in_progress' : box === '>' ? 'queued' : 'pending'
-    const text = plainText(match[2] ?? '')
+    const text = itemText(parts)
     const id = ids[at]
     const item: TodoItem = id === undefined ? { text, status } : { text, status, id }
     // A line whose key an earlier line of the file has gets its place among them: every key names one line.
@@ -190,8 +205,8 @@ export function itemsAt(rawLines: readonly string[]): { at: number; item: TodoIt
 }
 
 /** Reads the checkbox items of one todo file, in the format the RULES block gives Claude. */
-export function parseTodo(markdown: string): TodoItem[] {
-  return itemsAt(markdown.split('\n')).map(one => one.item)
+export function parseTodo(markdown: string, kind: TodoKind = 'md'): TodoItem[] {
+  return itemsAt(markdown.split('\n'), kind).map(one => one.item)
 }
 
 export function count(items: readonly TodoItem[]): { done: number; active: number; total: number } {

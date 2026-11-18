@@ -1,6 +1,6 @@
 /**
  * The source scan of the todo read layer: every `fs.read(` in the hooks must be the read
- * layer's own (`readTodo` in register.tsx) or an allowed read of a file that is no todo file, and no
+ * layer's own (`readTodo` in todo-io.ts) or an allowed read of a file that is no todo file, and no
  * read outside the layer may turn a failure into an empty string or undefined.
  *
  * The plugin test harness gives a test no way to read a source file (`node:fs`, `fetch`, text imports
@@ -16,17 +16,17 @@ import type { AllowedCall } from './fs-scan'
 export type AllowedRead = AllowedCall
 
 /** The one function every todo read goes through. */
-export const LAYER = { file: 'register.tsx', fn: 'readTodo' }
+export const LAYER = { file: 'todo-io.ts', fn: 'readTodo' }
 
 export const ALLOWED: readonly AllowedRead[] = [
-  { file: 'register.tsx', fn: 'findTodoDir', line: "read: path => $.fs.read(at(path)).then(text => (typeof text === 'string' ? text : '')).catch(() => ''),", reason: "reads a worktree's `.git` file for its gitdir line (against the project root after a shell `cd` out of it, #T00B6), no todo file; no text means no line, and the text rule falls back" },
-  { file: 'register.tsx', fn: 'gitFs', line: 'read: path => $.fs.read(path).catch(() => undefined),', reason: "the engine port of the `.git` walk (`gitWhereUp`): reads a `.git` file for its gitdir line, no todo file; no text means the claim folders are unknown, and no ID is given" },
+  { file: 'global-folders.ts', fn: 'findTodoDir', line: "read: path => $.fs.read(at(path)).then(text => (typeof text === 'string' ? text : '')).catch(() => ''),", reason: "reads a worktree's `.git` file for its gitdir line (against the project root after a shell `cd` out of it, #T00B6), no todo file; no text means no line, and the text rule falls back" },
+  { file: 'id-claims.ts', fn: 'gitFs', line: 'read: path => $.fs.read(path).catch(() => undefined),', reason: "the engine port of the `.git` walk (`gitWhereUp`): reads a `.git` file for its gitdir line, no todo file; no text means the claim folders are unknown, and no ID is given" },
   { file: 'git-file.ts', fn: 'gitWhereUp', line: "const text = kind === 'file' ? await fs.read(path) : undefined", reason: "reads a `.git` file for its gitdir line through its port, no todo file; no text means the claim folders are unknown, and no ID is given" },
   { file: 'git-file.ts', fn: 'gitWhereUp', line: 'const linked = hasCommondir ? await fs.read(commondir) : undefined', reason: "reads a git dir's `commondir` file through its port, no todo file; a read that fails means the claim folders are unknown, and no ID is given" },
-  { file: 'register.tsx', fn: 'bookOnDisk', line: 'const text: unknown = await fsBounded($, () => $.fs.read(path))', reason: 'reads categories.json, no todo file, for the book load and the check before each book write; a failed read is undefined, which clears the book folder and skips the write, never an empty book' },
+  { file: 'category-book.ts', fn: 'bookOnDisk', line: 'const text: unknown = await fsBounded($, () => $.fs.read(path))', reason: 'reads categories.json, no todo file, for the book load and the check before each book write; a failed read is undefined, which clears the book folder and skips the write, never an empty book' },
   { file: 'repo-folders.ts', fn: 'mainOf', line: "const set = /^\\s*worktree\\s*=\\s*(.+)$/m.exec(await fs.read(`${common}/config`).catch(() => ''))?.[1]?.trim()", reason: 'reads the git config for core.worktree, no todo file; no text means the key is not set' },
   { file: 'repo-folders.ts', fn: 'mainOf', line: "const named = (await fs.read(`${dir}/commondir`).catch(() => '')).split('\\n')[0]?.replace(/\\r$/, '').trim() ?? ''", reason: "reads a git dir's `commondir` file, no todo file; no text means the git dir is no linked worktree's, as git reads it, so there is no other main checkout" },
-  { file: 'register.tsx', fn: 'readPluginVersion', line: 'const text: unknown = await fsBounded($, () => $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`)).catch(() => undefined)', reason: "reads the mod's own plugin.json for its version, no todo file; a failed read shows no version" },
+  { file: 'pane-redraw.ts', fn: 'readPluginVersion', line: 'const text: unknown = await fsBounded($, () => $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`)).catch(() => undefined)', reason: "reads the mod's own plugin.json for its version, no todo file; a failed read shows no version" },
   { file: 'repo-folders.ts', fn: 'repoTodoDir', line: "const gitdir = /^gitdir:\\s*(.+)$/m.exec(await fs.read(git))?.[1]?.replace(/\\r$/, '').trim()", reason: "reads a worktree's `.git` file, no todo file; a failure throws" },
 ]
 

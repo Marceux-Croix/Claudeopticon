@@ -133,3 +133,44 @@ test('pressToast joins the notes into one bounded toast', () => {
   expect(long.length).toBe(TOAST_MAX)
   expect(long.endsWith('...')).toBe(true)
 })
+
+// ----------------------------------------------------------------
+// Property: Consolidate's text work reads HTML items in a .html file: item lines, renumbering in the text only,
+// references past the leading ID, and the every-item check. itemLines reads a CRLF line too.
+
+test('itemLines reads HTML items only in a .html file, and a CRLF line in either kind', () => {
+  const text = '<li><input type="checkbox"> a</li>\r\n- [ ] b\r\nprose\r\n'
+  expect(itemLines(text, 'html')).toEqual(['<li><input type="checkbox"> a</li>\r', '- [ ] b\r'])
+  expect(itemLines(text, 'md')).toEqual(['- [ ] b\r'])
+  expect(itemLines(text)).toEqual(['- [ ] b\r'])
+})
+
+test('renumberLines renames an HTML item\'s ID in its text and references, never in its tag', () => {
+  const lines = ['<li><input type="checkbox" data-x="#T0001"> #T0001 a</li>', '<li><input type="checkbox"> see #T0001</li>']
+  const out = renumberLines(lines, new Set(['t0001']), new Set(), () => 'T0009', 'html')
+  expect(out.pairs).toEqual([{ from: 'T0001', to: 'T0009' }])
+  expect(out.lines).toEqual(['<li><input type="checkbox" data-x="#T0001"> #T0009 a</li>', '<li><input type="checkbox"> see #T0009</li>'])
+  expect(renameLines(['<!--', '<li><input type="checkbox"> #T0001 a</li>', '-->'], { t0001: 'T0009' }, 'html')).toEqual(['<!--', '<li><input type="checkbox"> #T0001 a</li>', '-->'])
+  expect(applyRefRenames('<li><input type="checkbox"> #T0001 see #T0002</li>\r', { t0001: 'T0008', t0002: 'T0009' }, 'html')).toBe('<li><input type="checkbox"> #T0001 see #T0009</li>\r')
+})
+
+test('keepsEveryItem compares HTML items in a .html file and finds one lost to an open comment', () => {
+  const section = { lines: ['<li><input type="checkbox"> #T0002 b</li>'] }
+  expect(keepsEveryItem('<li><input type="checkbox"> #T0001 a</li>\n', appendSections('<li><input type="checkbox"> #T0001 a</li>\n', [{ place: 'x', lines: section.lines }]), [section], 'html')).toBe(true)
+  expect(keepsEveryItem('<!--\n', '<!--\n## From x\n\n<li><input type="checkbox"> #T0002 b</li>\n', [section], 'html')).toBe(false)
+})
+
+// ----------------------------------------------------------------
+// Property: a rename in a .html file leaves an ID inside a comment or raw element closed on its line, as a .md file
+// leaves the comment line; the ID outside it on the same line is renamed.
+
+test('renumberLines and renameLines leave an ID in a comment or raw element of a .html line', () => {
+  const lines = ['- [ ] #T0001 a', '<!-- e.g. - [ ] #T0001 example -->', '']
+  for (const kind of ['md', 'html'] as const) {
+    expect([kind, renumberLines(lines, new Set(['t0001']), new Set(), undefined, kind).lines]).toEqual([kind, ['- [ ] #T0002 a', '<!-- e.g. - [ ] #T0001 example -->', '']])
+  }
+  const mixed = ['<li><input type="checkbox"> #T0003 see #T0001 <!-- not #T0001 --> and <pre>#T0001</pre> #T0001</li>', '<p>#T0001 <!-- #T0001 --></p>']
+  expect(renameLines(mixed, { t0001: 'T0009' }, 'html')).toEqual(['<li><input type="checkbox"> #T0003 see #T0009 <!-- not #T0001 --> and <pre>#T0001</pre> #T0009</li>', '<p>#T0009 <!-- #T0001 --></p>'])
+  // A carriage return stays.
+  expect(renameLines(['x #T0001 <!-- #T0001 -->\r'], { t0001: 'T0009' }, 'html')).toEqual(['x #T0009 <!-- #T0001 -->\r'])
+})

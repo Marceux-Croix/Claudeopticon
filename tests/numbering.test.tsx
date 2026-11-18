@@ -86,3 +86,21 @@ test('lineHolding names only a checkbox line that holds the ID, never a prose li
   expect(lineHolding('The highest form is #T1ZZZZ.', 'T1ZZZZ')).toBeUndefined()
   expect(lineHolding('- #T1ZZZZ is the end', 'T1ZZZZ')).toBeUndefined()
 })
+
+// ----------------------------------------------------------------
+// Property: numbering puts the ID at the start of an HTML item's text in a .html file, and only there.
+
+test('insertIds numbers HTML items after the input tag, keeps CRLF, and a .md file leaves the HTML line', () => {
+  const text = '<ul>\r\n  <li><input type="checkbox"> Fix &amp; x</li>\r\n- [ ] md\r\n</ul>'
+  expect(insertIds(text, [1, 2], ['T0005', 'T0006'], 'html')).toBe('<ul>\r\n  <li><input type="checkbox"> #T0005 Fix &amp; x</li>\r\n- [ ] #T0006 md\r\n</ul>')
+  expect(insertIds(text, [1], ['T0005'], 'md')).toBe(text)
+})
+
+test('lineIds, textIds and lineHolding read HTML items only in a .html file', () => {
+  const line = '<li><input type="checkbox" checked> #T0007 see #T0009</li>'
+  expect(lineIds(line, 'html')).toEqual(['T0007', 'T0009'])
+  expect(lineIds(line, 'md')).toEqual([])
+  expect(textIds(`${line}\n- [ ] #T0001 a`, 'html').sort()).toEqual(['t0001', 't0007', 't0007', 't0009'])
+  expect(lineHolding(`${line}\n`, 'T0009', 'html')).toBe(line)
+  expect(lineHolding(`${line}\n`, 'T0009', 'md')).toBeUndefined()
+})

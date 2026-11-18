@@ -1,7 +1,7 @@
 /** The Consolidate retry record: which sources a press copied but did not empty, and what a retry does with each. */
 
 import { applyRenames, sectionCount, sectionSpans, stripIds } from './consolidate-text'
-import { CHECKBOX, ID_SRC } from './todo-markdown'
+import { ID_SRC, isItemLine, itemParts, openedLine, type TodoKind } from './todo-markdown'
 
 /**
  * A source a Consolidate press copied into the target, or was about to, and has not emptied. Stored
@@ -35,35 +35,47 @@ export type RetryStep = 'copy' | 'empty' | 'changed'
  * a line since; any other change, a changed ID included, leaves it: never a second copy, never a lost
  * edit.
  */
-export function retryStep(mark: CopyMark | undefined, heading: string, lines: readonly string[], target: string): RetryStep {
+export function retryStep(mark: CopyMark | undefined, heading: string, lines: readonly string[], target: string, kind: TodoKind = 'md'): RetryStep {
   const bodies = sectionSpans(target, heading)
   if (mark === undefined || mark.heading !== heading) {
-    if (bodies.some(body => asLanded(body, lines, false))) {
+    if (bodies.some(body => asLanded(body, lines, false, kind))) {
       return 'empty'
     }
-    const bare = lines.map(idless)
+    const bare = lines.map(line => idless(line, kind))
 
     // An empty body is no copy: a section the archive step emptied must not hold a new source back.
-    return bodies.some(body => body.length > 0 && asLanded(body.map(idless), bare, true)) ? 'changed' : 'copy'
+    return bodies.some(body => body.length > 0 && asLanded(body.map(line => idless(line, kind)), bare, true, kind)) ? 'changed' : 'copy'
   }
   const copied = mark.copied ?? mark.lines.map(line => applyRenames(line, toldRenames(mark.told)))
-  const isThere = sectionCount(target, heading) > mark.sectionsBefore || bodies.some(body => body.length > 0 && asLanded(body, copied, true))
+  const isThere = sectionCount(target, heading) > mark.sectionsBefore || bodies.some(body => body.length > 0 && asLanded(body, copied, true, kind))
   if (!isThere) {
     return 'copy'
   }
 
-  return mark.lines.length === lines.length && mark.lines.every((line, at) => isAsCopied(line, lines[at]!)) ? 'empty' : 'changed'
+  return mark.lines.length === lines.length && mark.lines.every((line, at) => isAsCopied(line, lines[at]!, kind)) ? 'empty' : 'changed'
 }
 
 /** The checkbox and the space after it, then a leading `#ID ` (one numbering may have put there). */
 const LEAD_ID = new RegExp(`^(\\s*[-*+] \\[[ xX~>]\\]\\s+)#${ID_SRC}\\b `)
-const BOX = /^(\s*[-*+] )\[[ xX~>]\]/
+/** An HTML item's leading `#ID ` (one numbering may have put there), at the start of its text. */
+const HTML_LEAD_ID = new RegExp(`^#${ID_SRC}\\b `)
+
+/** The line without a leading `#ID ` and its space: after a Markdown box, or (`.html` file) at the start of an HTML item's text. */
+function withoutLeadId(line: string, kind: TodoKind): string {
+  const html = kind === 'html' ? itemParts(line, kind) : undefined
+  if (html?.isHtml !== true) {
+    return line.replace(LEAD_ID, '$1')
+  }
+  const lead = HTML_LEAD_ID.exec(html.text)?.[0]
+
+  return lead === undefined ? line : `${html.head}${html.text.slice(lead.length)}${html.tail}`
+}
 
 /** The line with no IDs: a leading one taken out with its space, every other one cut to `#`. Two copies of one ticket, renumbered or not, compare equal. */
-const idless = (line: string): string => stripIds(line.replace(LEAD_ID, '$1'))
+const idless = (line: string, kind: TodoKind): string => stripIds(withoutLeadId(line, kind))
 
 /** True when the source line is the copied one: the same, or the same with one ID numbering put in front of its text. */
-const isAsCopied = (copied: string, now: string): boolean => now === copied || now.replace(LEAD_ID, '$1') === copied
+const isAsCopied = (copied: string, now: string, kind: TodoKind): boolean => now === copied || withoutLeadId(now, kind) === copied
 
 /** The renames a mark's renumbering notes name (`- <heading>: #T7 is now`), old (lowercase) to new. */
 function toldRenames(told: readonly string[]): Record<string, string> {
@@ -79,10 +91,8 @@ function toldRenames(told: readonly string[]): Record<string, string> {
 }
 
 /** A target line is the copied line as the mod may have changed it: the same, a box set, or an ID numbering put in front. */
-function isLandedLine(target: string, copied: string): boolean {
-  const open = (line: string) => line.replace(BOX, '$1[ ]')
-
-  return isAsCopied(open(copied), open(target))
+function isLandedLine(target: string, copied: string, kind: TodoKind): boolean {
+  return isAsCopied(openedLine(copied, kind), openedLine(target, kind), kind)
 }
 
 /**
@@ -91,14 +101,14 @@ function isLandedLine(target: string, copied: string): boolean {
  * under it), as the archive step takes closed tickets out. Every body line must stand for a copied
  * line in order: no extra line, no edited one.
  */
-function asLanded(body: readonly string[], copied: readonly string[], mayShorten: boolean): boolean {
+function asLanded(body: readonly string[], copied: readonly string[], mayShorten: boolean, kind: TodoKind): boolean {
   let at = 0
   for (let i = 0; i < copied.length; i += 1) {
-    if (at < body.length && isLandedLine(body[at]!, copied[i]!)) {
+    if (at < body.length && isLandedLine(body[at]!, copied[i]!, kind)) {
       at += 1
       continue
     }
-    if (!mayShorten || !CHECKBOX.test(copied[i]!)) {
+    if (!mayShorten || !isItemLine(copied[i]!, kind)) {
       return false
     }
     // The archive step took this ticket out: its block is the indented and blank lines under it.

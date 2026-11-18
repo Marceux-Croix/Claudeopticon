@@ -2,8 +2,8 @@
 
 import { findMainTodo } from './todo-file-names'
 import { itemKey, storedKey } from './item-keys'
-import { continuesParagraph } from './markdown-blocks'
-import { bare, CHECKBOX, exampleMask, FENCE, HEADING_LINE, itemsAt, parseTodo } from './todo-markdown'
+import { blockEnd, topLevelItems } from './item-tree'
+import { bare, FENCE, headingLevel, indentOf, isItemLine, itemParts, itemsAt, lineMask, looksLikeItem, parseTodo, type TodoKind } from './todo-markdown'
 
 /** A closed ticket is moved once it has been closed this long: a mis-click on Mark done can still be undone. */
 export const ARCHIVE_AFTER_MS = 5000
@@ -12,13 +12,13 @@ export const ARCHIVE_AFTER_MS = 5000
 export type ClosedBlock = { heading?: string; lines: string[]; from: number; to: number }
 
 /** True for a line that is, or looks like, a checkbox that is not done: a line that looks like one but fails the match counts open. */
-function isOpenLine(line: string): boolean {
-  const box = CHECKBOX.exec(line)?.[1]
+function isOpenLine(line: string, kind: TodoKind): boolean {
+  const box = itemParts(line, kind)?.box
   if (box !== undefined) {
     return box.toLowerCase() !== 'x'
   }
 
-  return /^\s*[-*+] \[[^\]]*\]/.test(line)
+  return looksLikeItem(line, kind)
 }
 
 /**
@@ -32,10 +32,15 @@ function isOpenLine(line: string): boolean {
  * example: it never starts or joins a block, and is never a heading. The heading is the
  * last heading line above the block (any level), outside examples. A trailing carriage return is
  * ignored, so a CRLF file reads as an LF one; `lines` are without it.
+ *
+ * A `.html` file (`kind`) also has HTML items: a done one that is a top-level ticket (`topLevelItems`: no
+ * ticket block above holds it, at any indent) leaves with the lines indented past it (`blockEnd`), on the
+ * same terms; an `<hN>` line is a heading there too.
  */
-export function closedBlocks(markdown: string): ClosedBlock[] {
+export function closedBlocks(markdown: string, kind: TodoKind = 'md'): ClosedBlock[] {
   const lines = markdown.split('\n').map(bare)
-  const isExample = exampleMask(lines)
+  const isExample = lineMask(lines, kind)
+  const isTop = kind === 'html' ? topLevelItems(lines, isExample, kind) : []
   const blocks: ClosedBlock[] = []
   let heading: string | undefined
   let i = 0
@@ -46,16 +51,13 @@ export function closedBlocks(markdown: string): ClosedBlock[] {
 
       continue
     }
-    if (HEADING_LINE.test(line)) {
+    const html = isTop[i] === true ? itemParts(line, kind) : undefined
+    if (headingLevel(line, kind) !== undefined) {
       heading = line.trim()
-    } else if (/^[-*+] \[[xX]\]\s+/.test(line)) {
-      // The block ends at its last indented line; blank lines after it are not taken.
-      let end = i + 1
-      // A line that is not indented but goes on the paragraph above it (a wrapped ticket text) is part of the block: an open subtask after it holds the block back.
-      const isInside = (at: number) => lines[at]!.trim() === '' || /^[ \t]+\S/.test(lines[at]!) || continuesParagraph(lines[at - 1]!, lines[at]!)
-      for (let at = i + 1; at < lines.length && isInside(at); at += 1) {
-        end = lines[at]!.trim() === '' ? end : at + 1
-      }
+    } else if (/^[-*+] \[[xX]\]\s+/.test(line) || (html?.isHtml === true && html.box === 'x')) {
+      // The block ends at its last indented line; blank lines after it are not taken. A line that is not indented but
+      // goes on the paragraph above it (a wrapped ticket text) is part of the block: an open subtask after it holds the block back.
+      const end = blockEnd(lines, i, kind)
       const block = lines.slice(i, end)
       // A block that holds an example line (a fence, a comment) or a fence-like line stays whole; the walk goes on line by line.
       if (isExample.slice(i, end).some(is => is === true) || block.some(one => FENCE.test(one))) {
@@ -63,7 +65,7 @@ export function closedBlocks(markdown: string): ClosedBlock[] {
 
         continue
       }
-      if (!block.some(isOpenLine)) {
+      if (!block.some(one => isOpenLine(one, kind))) {
         blocks.push({ ...(heading === undefined ? {} : { heading }), lines: block, from: i, to: end })
       }
       i = end
@@ -122,14 +124,18 @@ function placesOf(index: LineIndex, block: readonly string[]): { want: string[];
   return { want, places }
 }
 
-/** True when `block` stands whole at a place of `index`: in order, and the next non-blank line after it is not indented. */
+/**
+ * True when `block` stands whole at a place of `index`: in order, and the next non-blank line after it is
+ * not indented past the block's first line (not indented at all for a block at indent 0, as before).
+ */
 function standsWhole(index: LineIndex, block: readonly string[]): boolean {
   const { want, places } = placesOf(index, block)
+  const indent = want.length === 0 ? 0 : indentOf(want[0]!)
 
   return places.some(at => {
     const after = index.nextFilled[at + want.length]!
 
-    return after >= index.flat.length || !/^[ \t]/.test(index.flat[after]!)
+    return after >= index.flat.length || (indent === 0 ? !/^[ \t]/.test(index.flat[after]!) : indentOf(index.flat[after]!) <= indent)
   })
 }
 
@@ -152,24 +158,79 @@ export function hasBlock(lines: readonly string[], block: readonly string[]): bo
 }
 
 /**
- * The blank line to put between `before` and a block that starts with `first`, when the block would
- * sit inside an example right after `before` and a blank line ends that example: an HTML block of type
- * 6 or 7 (`<details>`, `<div>`, a lone tag) runs to the next blank line. Else none, so an
- * archive keeps its blocks together as before.
+ * The archive lines indexed once for the heading questions of `addToArchive`: the example mask, the last
+ * line outside examples for each trimmed text, and for each line the next heading line outside examples at or after it.
+ * Built once per call, so each heading group costs its own section, not the whole archive.
  */
-function gapBefore(before: readonly string[], first: string): string[] {
-  return exampleMask([...before, first]).at(-1) === true && exampleMask([...before, '', first]).at(-1) !== true ? [''] : []
+type HeadingIndex = { isExample: boolean[]; lastAt: Map<string, number>; nextHeading: number[] }
+
+function indexHeadings(lines: readonly string[], kind: TodoKind): HeadingIndex {
+  const isExample = lineMask(lines, kind)
+  const lastAt = new Map<string, number>()
+  lines.forEach((line, k) => {
+    if (isExample[k] !== true) {
+      lastAt.set(line.trim(), k)
+    }
+  })
+  const nextHeading = new Array<number>(lines.length + 1)
+  nextHeading[lines.length] = lines.length
+  for (let k = lines.length - 1; k >= 0; k -= 1) {
+    nextHeading[k] = isExample[k] !== true && headingLevel(lines[k]!, kind) !== undefined ? k : nextHeading[k + 1]!
+  }
+
+  return { isExample, lastAt, nextHeading }
 }
 
-/** The lines of the last section of `heading` in `lines` (outside examples; up to the next heading), or none when it has no section. */
-function sectionOf(lines: readonly string[], isExample: readonly boolean[], heading: string): string[] {
-  const at = lines.reduce((last, line, k) => (isExample[k] !== true && line.trim() === heading ? k : last), -1)
-  if (at < 0) {
-    return []
-  }
-  const next = lines.findIndex((line, k) => k > at && isExample[k] !== true && HEADING_LINE.test(line))
+/**
+ * One run of lines `addToArchive` puts in: `lead` (fixed lines before it, a new heading), the block lines, `after`
+ * (a blank line before a next heading). `gap`: `always` a blank line before the lines (an empty section), `ask` one
+ * only when the lines would sit inside an example that a blank line ends (an HTML block of type 6 or 7).
+ */
+type Insert = { lead: string[]; lines: string[]; after: string[]; gap: 'always' | 'ask' | 'never' }
 
-  return lines.slice(at + 1, next < 0 ? lines.length : next)
+/** The archive lines with the inserts: `at` maps a base line to the inserts put before it; `tail` follows the base. */
+function layout(base: readonly string[], at: ReadonlyMap<number, Insert>, tail: readonly Insert[], gaps: ReadonlySet<Insert>): { lines: string[]; firstAt: Map<Insert, number> } {
+  const lines: string[] = []
+  const firstAt = new Map<Insert, number>()
+  const put = (one: Insert) => {
+    lines.push(...one.lead, ...(one.gap === 'always' || gaps.has(one) ? [''] : []))
+    firstAt.set(one, lines.length)
+    lines.push(...one.lines, ...one.after)
+  }
+  for (let k = 0; k <= base.length; k += 1) {
+    const one = at.get(k)
+    if (one !== undefined) {
+      put(one)
+    }
+    if (k < base.length) {
+      lines.push(base[k]!)
+    }
+  }
+  tail.forEach(put)
+
+  return { lines, firstAt }
+}
+
+/**
+ * The gaps the `ask` inserts need, read from two masks of the whole layout: an insert gets a blank line
+ * when its first line is an example without one and no example with one. A per-insert mask of the lines before it
+ * (the old way) cost the archive once per heading.
+ */
+function askedGaps(base: readonly string[], at: ReadonlyMap<number, Insert>, tail: readonly Insert[], kind: TodoKind): Set<Insert> {
+  const asks = [...at.values(), ...tail].filter(one => one.gap === 'ask')
+  if (asks.length === 0) {
+    return new Set()
+  }
+  const plain = layout(base, at, tail, new Set())
+  const plainMask = lineMask(plain.lines, kind)
+  const hidden = new Set(asks.filter(one => plainMask[plain.firstAt.get(one)!] === true))
+  if (hidden.size === 0) {
+    return hidden
+  }
+  const spaced = layout(base, at, tail, hidden)
+  const spacedMask = lineMask(spaced.lines, kind)
+
+  return new Set([...hidden].filter(one => spacedMask[spaced.firstAt.get(one)!] !== true))
 }
 
 /**
@@ -181,11 +242,15 @@ function sectionOf(lines: readonly string[], isExample: readonly boolean[], head
  * none) AND is one of `wrote`, the blocks this mod wrote last for the file: a retry never adds a block
  * twice, and a new block that equals an old archived one, in another section or after a failed write,
  * is added. Lines end with the archive's own line ending (CRLF if it has one), else `eol`.
+ *
+ * Linear in the archive and the blocks: the headings are found once in the archive as it was
+ * (`indexHeadings`), each group's place is decided there, and the lines go in once (`layout`). The lines
+ * put in are closed blocks, which hold no example line, so they move no heading of the archive in or out of
+ * an example; a section's block goes before the next heading, so it never changes where a later section starts.
  */
-export function addToArchive(existing: string, blocks: readonly ClosedBlock[], wrote: readonly (readonly string[])[] = [], eol = '\n'): string {
-  const lines = existing.trim() === '' ? [] : existing.replace(/(\r?\n)+$/, '').split('\n').map(bare)
+export function addToArchive(existing: string, blocks: readonly ClosedBlock[], wrote: readonly (readonly string[])[] = [], eol = '\n', kind: TodoKind = 'md'): string {
+  const base = existing.trim() === '' ? [] : existing.replace(/(\r?\n)+$/, '').split('\n').map(bare)
   const end = existing.includes('\r\n') ? '\r\n' : existing.trim() === '' ? eol : '\n'
-  const base = [...lines]
   const wroteSet = new Set(wrote.map(one => one.join('\n')))
   // Blocks by heading, in the order the headings first occur.
   const byHeading = new Map<string | undefined, ClosedBlock[]>()
@@ -197,43 +262,63 @@ export function addToArchive(existing: string, blocks: readonly ClosedBlock[], w
       own.push(block)
     }
   }
+  // Outside every example: a heading inside a code fence or an HTML comment is no heading, so a block put
+  // under it would sit inside the comment and be no item.
+  const index = indexHeadings(base, kind)
+  /** The lines of the last section of `heading` (up to the next heading), or none when it has no section. */
+  const sectionOf = (heading: string): string[] => {
+    const at = index.lastAt.get(heading)
+
+    return at === undefined ? [] : base.slice(at + 1, index.nextHeading[at + 1])
+  }
   // The archive as it was before this call, for the retry check: a block is skipped only when it stands whole under its own heading.
-  const baseMask = wroteSet.size === 0 ? [] : exampleMask(base)
   const stands = new Map<string | undefined, (block: readonly string[]) => boolean>()
   const standsUnder = (heading: string | undefined, block: readonly string[]): boolean => {
     let find = stands.get(heading)
     if (find === undefined) {
-      find = blockFinder(heading === undefined ? base : sectionOf(base, baseMask, heading))
+      find = blockFinder(heading === undefined ? base : sectionOf(heading))
       stands.set(heading, find)
     }
 
     return find(block)
   }
+  // The inserts before a base line, and the ones after the base: blocks with no heading, and new headings with theirs.
+  const at = new Map<number, Insert>()
+  const tail: Insert[] = []
+  // The place in `tail` of its first new heading, or -1.
+  let tailHeading = -1
+  let isFilled = base.length > 0
   for (const [heading, own] of byHeading) {
     const fresh = own.filter(block => !(wroteSet.has(block.lines.join('\n')) && standsUnder(heading, block.lines))).flatMap(block => block.lines)
     if (fresh.length === 0) {
       continue
     }
-    // Outside every example: a heading inside a code fence or an HTML comment is no heading, so a block put
-    // under it would sit inside the comment and be no item. Read again each turn: the lines grow as blocks go in.
-    const isExample = exampleMask(lines)
-    const at = heading === undefined ? -1 : lines.map((line, k) => (isExample[k] !== true && line.trim() === heading ? k : -1)).reduce((last, k) => Math.max(last, k), -1)
+    const found = heading === undefined ? undefined : index.lastAt.get(heading)
     if (heading === undefined) {
-      lines.push(...gapBefore(lines, fresh[0]!), ...fresh)
-    } else if (at < 0) {
-      lines.push(...(lines.length > 0 ? [''] : []), heading, '', ...fresh)
+      tail.push({ lead: [], lines: fresh, after: [], gap: 'ask' })
+    } else if (found === undefined) {
+      tail.push({ lead: [...(isFilled ? [''] : []), heading, ''], lines: fresh, after: [], gap: 'never' })
+      tailHeading = tailHeading < 0 ? tail.length - 1 : tailHeading
     } else {
-      let stop = lines.findIndex((line, k) => k > at && isExample[k] !== true && HEADING_LINE.test(line))
-      stop = stop < 0 ? lines.length : stop
-      while (stop - 1 > at && lines[stop - 1]!.trim() === '') {
-        stop -= 1
+      const next = index.nextHeading[found + 1]!
+      const hasLoose = (tailHeading < 0 ? tail.length : tailHeading) > 0
+      if (next >= base.length && hasLoose) {
+        // The last section, after blocks with no heading went in at the end: the block follows them, before any new heading.
+        tail.splice(tailHeading < 0 ? tail.length : tailHeading, 0, { lead: [], lines: fresh, after: [], gap: 'ask' })
+        tailHeading = tailHeading < 0 ? tailHeading : tailHeading + 1
+      } else {
+        let stop = next
+        while (stop - 1 > found && base[stop - 1]!.trim() === '') {
+          stop -= 1
+        }
+        // A blank line before the next heading, unless one is there; none at the end (a new heading brings its own).
+        at.set(stop, { lead: [], lines: fresh, after: next < base.length && base[stop]!.trim() !== '' ? [''] : [], gap: stop === found + 1 ? 'always' : 'ask' })
       }
-      const isNext = stop < lines.length
-      lines.splice(stop, 0, ...(stop === at + 1 ? [''] : gapBefore(lines.slice(0, stop), fresh[0]!)), ...fresh, ...(isNext && lines[stop]!.trim() !== '' ? [''] : []))
     }
+    isFilled = true
   }
 
-  return `${lines.join(end)}${end}`
+  return `${layout(base, at, tail, askedGaps(base, at, tail, kind)).lines.join(end)}${end}`
 }
 
 /**
@@ -242,15 +327,15 @@ export function addToArchive(existing: string, blocks: readonly ClosedBlock[], w
  * fence or an HTML comment. The archive move checks its new text with this before the write, so a moved
  * ticket never lands where it is no ticket.
  */
-export function blocksStandAsItems(text: string, blocks: readonly ClosedBlock[]): boolean {
+export function blocksStandAsItems(text: string, blocks: readonly ClosedBlock[], kind: TodoKind = 'md'): boolean {
   const lines = text.split('\n').map(bare)
-  const items = new Set(itemsAt(lines).map(one => one.at))
+  const items = new Set(itemsAt(lines, kind).map(one => one.at))
   const index = indexLines(lines)
 
   return blocks.every(block => {
     const { want, places } = placesOf(index, block.lines)
 
-    return places.some(at => want.every((line, k) => !CHECKBOX.test(line) || items.has(at + k)))
+    return places.some(at => want.every((line, k) => !isItemLine(line, kind) || items.has(at + k)))
   })
 }
 
@@ -275,10 +360,10 @@ export function recordAfterRollback(wrote: readonly (readonly string[])[], back:
  * a done line did too. A block whose line is still there (a box set back, a line typed elsewhere) has
  * not left. The key ignores the box, so a ticket set back to open is still there.
  */
-export function blocksLeft(read: string, now: string, blocks: readonly ClosedBlock[]): ClosedBlock[] {
+export function blocksLeft(read: string, now: string, blocks: readonly ClosedBlock[], kind: TodoKind = 'md'): ClosedBlock[] {
   const counts = (markdown: string) => {
     const out = new Map<string, number>()
-    for (const item of parseTodo(markdown)) {
+    for (const item of parseTodo(markdown, kind)) {
       const key = storedKey(itemKey(item))
       out.set(key, (out.get(key) ?? 0) + 1)
     }
@@ -289,7 +374,7 @@ export function blocksLeft(read: string, now: string, blocks: readonly ClosedBlo
   const taken = new Map<string, number>()
 
   return blocks.filter(block => {
-    const first = parseTodo(block.lines[0] ?? '')[0]
+    const first = parseTodo(block.lines[0] ?? '', kind)[0]
     if (first === undefined) {
       return false
     }

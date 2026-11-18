@@ -178,7 +178,8 @@ for (const [label, at] of [['first', 0], ['in the middle', 30], ['last', 60]] as
       return prompt.includes('poison item') ? 'empty' : assignAll('Code')(prompt)
     })
     await openPane($)
-    for (let i = 0; i < 8640; i += 1) {
+    // Speed: stops once the 60 good items are sorted (the assertions below read the first two calls and the book); the 24 h cap stays.
+    for (let i = 0; i < 8640 && Object.keys(bookItems(files)).length < 60; i += 1) {
       await clock.advance(10_000)
     }
     expect(Object.keys(bookItems(files)).length).toBe(60)

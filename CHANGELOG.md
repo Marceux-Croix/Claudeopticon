@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.9
+
+### Changes
+
+- A `.html` file in `.claude_todo/` is a todo file the same as a `.md` file: the board scans it, the mod numbers its items, archives its closed items to `archive/` under the same name, consolidates it, and the Delete empty todos button takes it when it is empty. `TODO.html` is the main file of a folder that has no `TODO.md`. The rules text names both. A repo may use either or both.
+
 ## 1.0.8
 
 ### Changes

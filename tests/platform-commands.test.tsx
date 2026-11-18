@@ -15,6 +15,10 @@ test('openCommand picks the opener per platform, with no shell, and archiveName 
   expect(archiveName([file('A.md'), file('B.md')], '/r')).toBe('TODO.md')
   expect(archiveName([file('archive/OLD.md', '/r', true)], '/r')).toBe('OLD.md')
   expect(archiveName([file('A.md', '/other')], '/r')).toBe('TODO.md')
+  // a TODO.html is the main file when there is no TODO.md; a lone .html file is the only live file.
+  expect(archiveName([file('A.md'), file('TODO.html')], '/r')).toBe('TODO.html')
+  expect(archiveName([file('TODO.html'), file('todo.md')], '/r')).toBe('todo.md')
+  expect(archiveName([file('PLAN.html')], '/r')).toBe('PLAN.html')
 })
 
 test('trashReason lists each command, and says nothing was tried when none was', () => {

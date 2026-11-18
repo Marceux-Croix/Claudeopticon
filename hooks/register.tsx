@@ -15,6 +15,7 @@ import { respawnedRow } from './agent-respawn'
 import { colorSlots } from './agent-colors'
 import { agentColor, AGENT_COLORS, agentLabel, ORCH, setColorSlots, setLabelBase } from './agent-identity'
 import { MATCH_ITEMS, matchPrompt, readMatchReply } from './agent-match'
+import { findMainTodo, isMainTodoName, isTodoFileName } from './todo-file-names'
 import { addToArchive, ARCHIVE_AFTER_MS, archiveName, blockFinder, blocksLeft, blocksStandAsItems, closedBlocks, recordAfterRollback, removeBlocks } from './archive-blocks'
 import type { ClosedBlock } from './archive-blocks'
 import { addFailure, isRetryDue } from './backoff'
@@ -1458,7 +1459,7 @@ async function saveToldNotes($: EngineInterface): Promise<void> {
   await storeSet($, toldKey(await sessionOf($)), { renames: pendingRenames, numbered: pendingNumbered, removed: pendingRemoved }).catch(() => undefined)
 }
 
-/** The empty `.md` files of the known folders, found by the last scan: the Delete empty todos button's work. */
+/** The empty todo files (`.md` or `.html`) of the known folders, found by the last scan: the Delete empty todos button's work. */
 let emptyFiles: { folder: string; path: string; name: string; rel?: string }[] = []
 /** True when the central target file holds two or more identical tickets: the Delete duplicate tickets button's work. */
 let hasDupTickets = false
@@ -1473,7 +1474,7 @@ function centralFolder(): string | undefined {
 /**
  * True when the Consolidate todos button shows: a repo's main checkout (not a worktree, not the
  * global folder), and more than one file to merge: the top-level todo files on the board, in any
- * folder, and every `.md` file outside the central folder that holds any text, an archive
+ * folder, and every `.md` or `.html` file outside the central folder that holds any text, an archive
  * file or one with no items included; or a source this session copied and did not empty. So the
  * "press Consolidate todos again" a toast asks for after a press that stopped half way has a button,
  * also when only a source archive file is left.
@@ -1484,7 +1485,7 @@ function canConsolidate(): boolean {
   return !centralBlocked && centralRoot !== undefined && (places.size > 1 || copiedNotEmptied.size > 0)
 }
 
-/** True when the Delete empty todos button shows: the same gate, and an empty `.md` file in a known folder. */
+/** True when the Delete empty todos button shows: the same gate, and an empty `.md` or `.html` file in a known folder. */
 function canDeleteEmpty(): boolean {
   return !centralBlocked && centralRoot !== undefined && emptyFiles.length > 0
 }
@@ -1553,7 +1554,7 @@ function projectIds(): string[] {
 }
 
 /**
- * The `.md` files of a folder, top level and archive, as names inside it. An archived name starts with
+ * The todo files (`.md` or `.html`) of a folder, top level and archive, as names inside it. An archived name starts with
  * the archive folder's own name on the disk (`archiveDirOf`): `Archive/x.md` on a disk that
  * ignores case, so a path built from the name is its own real path and the symlink check passes it.
  * A top-level name never holds a `/`, which is how a caller tells the two apart.
@@ -1567,7 +1568,7 @@ async function mdFiles($: EngineInterface, folder: string, isStrict = false): Pr
       continue
     }
     for (const entry of isStrict ? await fsBounded($, () => $.fs.list(dir)) : await fsBounded($, () => $.fs.list(dir)).catch(() => [])) {
-      if (entry.kind === 'file' && entry.name.endsWith('.md')) {
+      if (entry.kind === 'file' && isTodoFileName(entry.name)) {
         names.push(`${prefix}${entry.name}`)
       }
     }
@@ -1730,13 +1731,13 @@ async function writeIfUnchanged($: EngineInterface, path: string, expected: stri
 let isWorking = false
 
 /**
- * The one file the central todo is merged into: `TODO.md` when the central folder has it; else the
- * only top-level `.md` todo file (one with checkbox items) when there is exactly one; else `TODO.md`,
+ * The one file the central todo is merged into: `TODO.md` (else `TODO.html`) when the central folder has it; else the
+ * only top-level `.md` or `.html` todo file (one with checkbox items) when there is exactly one; else `TODO.md`,
  * to be created.
  */
 async function chooseTarget($: EngineInterface, central: string, topNames: readonly string[]): Promise<string> {
-  // Names compare without case, as the disk may: a `todo.md` is the target, by its own name.
-  const main = topNames.find(name => name.toLowerCase() === 'todo.md')
+  // Names compare without case, as the disk may: a `todo.md` (or `todo.html`) is the target, by its own name.
+  const main = findMainTodo(topNames)
   if (main !== undefined) {
     return main
   }
@@ -2273,7 +2274,7 @@ let archiveLink: string | undefined
 
 /**
  * Works out the archive file of the central folder (else the primary one) that the Show completed
- * button opens. The button shows when the folder is trusted and the file is either a plain `.md`
+ * button opens. The button shows when the folder is trusted and the file is either a plain `.md` or `.html`
  * file (its own real path, no symlink) or not there at all. Nothing is created here: a file made
  * during a scan could overwrite an archive move that lands a moment later. `openArchive` creates
  * it, under the writer lock, when the button is pressed.
@@ -2300,9 +2301,9 @@ async function refreshArchiveLink($: EngineInterface): Promise<void> {
   }
 }
 
-/** True for an archive file the mod may open: a plain file (no symlink in it or above it) whose name ends in `.md`. */
+/** True for an archive file the mod may open: a plain file (no symlink in it or above it) whose name ends in `.md` or `.html`. */
 async function isArchiveFile($: EngineInterface, path: string): Promise<boolean> {
-  return path.endsWith('.md') && (await isPlainFile($, path)) && ((await realOf($, path)) ?? '').endsWith('.md')
+  return isTodoFileName(path) && (await isPlainFile($, path)) && isTodoFileName((await realOf($, path)) ?? '')
 }
 
 /** The first time a closed block was seen closed, by file and text: the debounce. */
@@ -2683,7 +2684,7 @@ const skipToasted = new Set<string>()
 const unreadToasted = new Set<string>()
 
 /**
- * Every item ID held by every `.md` file of every known folder (top level and archive), read from the
+ * Every item ID held by every `.md` or `.html` file of every known folder (top level and archive), read from the
  * disk now, lowercase. A folder that will not list is an error. A file that will not read is an error
  * that names it (`TodoReadError`), never an empty file: an ID it holds would be given again.
  * Once a file failed SKIP_AFTER scan passes in a row (for any reason), it is skipped, with one toast, and
@@ -3281,7 +3282,7 @@ async function trashCommands($: EngineInterface, path: string): Promise<string[]
 
 /**
  * Makes sure the archive file can be opened, under the writer lock: the folder must be trusted and
- * archive/ its own real path. An existing file must be a plain `.md` file. A missing one is created
+ * archive/ its own real path. An existing file must be a plain `.md` or `.html` file. A missing one is created
  * empty, with the existence check as the last call before the write, so a file an archive move made
  * a moment ago is never overwritten. Returns why not, or undefined when it is ready.
  */
@@ -3298,7 +3299,7 @@ async function readyArchive($: EngineInterface, path: string): Promise<string | 
   }
   // The existence check is the last call before the write.
   if (await hasEntry($, path)) {
-    return (await isArchiveFile($, path)) ? undefined : 'it is not a plain .md file (a symlink?)'
+    return (await isArchiveFile($, path)) ? undefined : 'it is not a plain .md or .html file (a symlink?)'
   }
   // Made only while still missing or empty: a file an archive move wrote meanwhile is never written over.
   await writeIfUnchanged($, path, '', '', { mayCreate: true }).catch(() => undefined)
@@ -3364,7 +3365,7 @@ async function trashFile($: EngineInterface, path: string): Promise<{ isOk: bool
 }
 
 /**
- * Sends the empty `.md` files the last scan found (top level and archive) to the OS trash: each is
+ * Sends the empty todo files (`.md` or `.html`) the last scan found (top level and archive) to the OS trash: each is
  * read again right before `trashFile` (no shell, no glob, one call per file) and skipped if it holds
  * anything now. Never the central target, never a file in an untrusted folder or behind a symlink,
  * never `categories.json`. A file whose trash call fails is kept and named with the reason; nothing
@@ -3408,7 +3409,7 @@ async function deleteEmptyLocked($: EngineInterface): Promise<void> {
       // The scan names an archived file by the archive folder's disk name, `Archive/` on a disk that ignores case.
       const isArchive = /^archive\/[^/]+$/i.test(name)
       const isTop = !name.includes('/')
-      if ((!isArchive && !isTop) || !name.endsWith('.md') || (file.folder === central && !isArchive && name === target) || !(await isTrustedDir($, file.folder)) || !(await isPlainFile($, file.path))) {
+      if ((!isArchive && !isTop) || !isTodoFileName(name) || (file.folder === central && !isArchive && name === target) || !(await isTrustedDir($, file.folder)) || !(await isPlainFile($, file.path))) {
         kept.push(file.path)
         continue
       }
@@ -3618,14 +3619,14 @@ let unreadPlaces: string[] = []
 /** The folders of the last scan pass, and those of them with a place that did not read: a claim stays only while a folder that could hold it is among them. */
 let scanFolders: ClaimFolder[] = []
 let unreadFolders: ClaimFolder[] = []
-/** The folders of the last scan pass that list a `.md` entry the scan does not read (a symlink): their book keys stay. */
+/** The folders of the last scan pass that list a `.md` or `.html` entry the scan does not read (a symlink): their book keys stay. */
 let linkedFolders = new Set<string>()
 /** The number of the last scan pass started, and the callers waiting for a pass by its number. */
 let passStarted = 0
 let passWaiters: { pass: number; resolve: () => void; reject: (error: unknown) => void }[] = []
 
 /**
- * Rereads the `.md` files of every known folder; a file whose mtime is unchanged keeps its parse.
+ * Rereads the todo files (`.md` or `.html`) of every known folder; a file whose mtime is unchanged keeps its parse.
  * Single-flight: a call while a scan runs asks for one more pass after it (full if any ask was full).
  * The promise a caller gets settles when the first pass that started after its call ends:
  * at most the pass in flight and one more, never the follow-up passes others ask for after it.
@@ -3689,7 +3690,7 @@ function placeOfLine(path: string, key: string): { place?: string; sum?: string 
 }
 
 /**
- * The `.md` files outside the central folder that hold any text, top level and archive, by path
+ * The todo files (`.md` or `.html`) outside the central folder that hold any text, top level and archive, by path
  *: while one is there, Consolidate todos has work left, whether or not the file has items.
  */
 const filledSources = new Set<string>()
@@ -3750,9 +3751,9 @@ async function scanOnce($: EngineInterface, isFull: boolean): Promise<boolean> {
         continue
       }
       for (const entry of entries) {
-        if (entry.kind !== 'file' || !entry.name.endsWith('.md')) {
+        if (entry.kind !== 'file' || !isTodoFileName(entry.name)) {
           // A linked (or other non-file) todo entry is never read, so its tickets are not known to be gone.
-          if (entry.name.endsWith('.md') && entry.kind !== 'dir') {
+          if (isTodoFileName(entry.name) && entry.kind !== 'dir') {
             linked.add(folder.path)
           }
           continue
@@ -3781,7 +3782,7 @@ async function scanOnce($: EngineInterface, isFull: boolean): Promise<boolean> {
           }
         }
         // A file with nothing but blanks is empty; one that would not read is not known to be.
-        if (typeof text === 'string' && text.trim() === '' && !(folder.path === centralFolder() && prefix === '' && entry.name.toLowerCase() === 'todo.md')) {
+        if (typeof text === 'string' && text.trim() === '' && !(folder.path === centralFolder() && prefix === '' && isMainTodoName(entry.name))) {
           empties.push({ folder: folder.path, path: `${dir}/${entry.name}`, name, ...(folder.rel === undefined ? {} : { rel: folder.rel }) })
         }
         if (typeof text === 'string') {

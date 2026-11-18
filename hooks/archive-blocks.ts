@@ -1,5 +1,6 @@
 /** The text work of the archive step: closed blocks, their removal, and where they go in the archive file. */
 
+import { findMainTodo } from './todo-file-names'
 import { itemKey, storedKey } from './item-keys'
 import { continuesParagraph } from './markdown-blocks'
 import { bare, CHECKBOX, exampleMask, FENCE, HEADING_LINE, itemsAt, parseTodo } from './todo-markdown'
@@ -305,13 +306,13 @@ export function blocksLeft(read: string, now: string, blocks: readonly ClosedBlo
 }
 
 /**
- * The name of the archive file the Show completed link opens, for a folder: a `TODO.md` (any case)
- * among its todo or archive files; else its only live file; else its only archive file; else `TODO.md`.
+ * The name of the archive file the Show completed link opens, for a folder: a `TODO.md` (any case), else a
+ * `TODO.html`, among its todo or archive files; else its only live file; else its only archive file; else `TODO.md`.
  */
 export function archiveName(files: readonly { name: string; folder: string; isArchived?: boolean }[], folder: string): string {
   const mine = files.filter(file => file.folder === folder)
   const live = mine.filter(file => file.isArchived !== true).map(file => file.name)
   const old = mine.filter(file => file.isArchived === true).map(file => file.name.slice('archive/'.length))
 
-  return [...live, ...old].find(name => name.toLowerCase() === 'todo.md') ?? (live.length === 1 ? live[0] : old.length === 1 ? old[0] : undefined) ?? 'TODO.md'
+  return findMainTodo([...live, ...old]) ?? (live.length === 1 ? live[0] : old.length === 1 ? old[0] : undefined) ?? 'TODO.md'
 }
